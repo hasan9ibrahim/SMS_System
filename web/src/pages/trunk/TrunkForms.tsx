@@ -433,8 +433,8 @@ export function CustomerTrunkFields({
             label="Allowed host IPs"
             required
             wide
-            placeholder="192.0.2.10, 2001:db8::1"
-            hint="Binds from other addresses are refused"
+            placeholder="192.0.2.10, 192.0.2.0/24, 192.0.2.10-192.0.2.50"
+            hint="An address, a network (IP/prefix, e.g. 192.0.2.0/24) or a range (a-b). Binds from anywhere else are refused"
           />
           <SelectField form={form} path="sslType" label="SSL" required options={SSL} />
           <ReadOnly label="Port" hint="Set by SSL: 2775 without TLS, 2776 with TLS">

@@ -70,7 +70,11 @@ export async function unwrap<T>(call: Promise<{ data?: T; error?: unknown; respo
     const problem = (result.error ?? {}) as Partial<Problem> & Record<string, unknown>;
     throw new ApiError(result.response.status, {
       ...problem,
-      title: problem.title ?? result.response.statusText,
+      // Never an empty message (R9): over HTTP/2 there is no status text.
+      title:
+        problem.title ??
+        (typeof problem.message === "string" ? problem.message : null) ??
+        (result.response.statusText || `Request failed (HTTP ${result.response.status})`),
       status: result.response.status,
     });
   }

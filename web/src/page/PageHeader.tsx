@@ -4,6 +4,7 @@ import { useContext, useEffect, type ReactNode } from "react";
 import type { PageDef } from "../nav/registry";
 import { TabContext, useTabNavigate } from "../shell/tabContext";
 import { canGoBack, useTabs } from "../shell/tabs";
+import { useReloadTab } from "../shell/reload";
 import { Icon } from "../ui/Icon";
 
 /**
@@ -49,6 +50,24 @@ function HelpButton({ topic }: { topic: string }) {
       onClick={() => useTabs.getState().open(`/help?topic=${topic}`, { newTab: true })}
     >
       <Icon name="help" />
+    </button>
+  );
+}
+
+/** Reloads this page only (R9), like the browser's refresh. */
+function ReloadButton() {
+  const tab = useContext(TabContext)?.tab;
+  const reload = useReloadTab();
+  if (!tab) return null;
+  return (
+    <button
+      type="button"
+      className="icon-btn page-help"
+      title="Reload this page (its data and filters, like the browser's refresh)"
+      aria-label="Reload this page"
+      onClick={() => reload(tab.id)}
+    >
+      <Icon name="refresh" />
     </button>
   );
 }
@@ -112,6 +131,7 @@ export function PageHeader({
           <div className="page-title-row">
             {heading ?? <h1>{title ?? page.label}</h1>}
             {page.key !== "help" && <HelpButton topic={helpTopic ?? page.key} />}
+            <ReloadButton />
           </div>
           {meta && <div className="record-chips">{meta}</div>}
         </div>

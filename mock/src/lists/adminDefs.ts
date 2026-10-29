@@ -110,7 +110,8 @@ export const userList: ListDef<UserRow> = {
     passwordState: { sql: stateSql },
     passwordChangedAt: { sql: "u.password_changed_at" },
     passwordDaysLeft: { sql: daysLeftSql("u") },
-    totpEnabled: { sql: "u.totp_enabled" },
+    // "2FA" (R9): on with an e-mailed code, or with the authenticator app once enrolled.
+    totpEnabled: { sql: "(u.otp_method = 'email' OR (u.otp_method = 'authenticator' AND u.totp_enabled))" },
     isAccountManager: { sql: "u.is_account_manager" },
     isTeamLead: { sql: "u.is_team_lead" },
     manager: { sql: fullName("m") },

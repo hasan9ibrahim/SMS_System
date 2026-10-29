@@ -31,9 +31,18 @@ import { countryOptions, PASSWORD_TONE, passwordLabel, USER_TYPE } from "./admin
 import { Kv, openTempPassword, PasswordRules, statusCell } from "./parts";
 import { useUserVisibility } from "../../api/visibility";
 import { EffectiveCard } from "./visibility/VisibilityPage";
+import { QrCode } from "../../ui/QrCode";
 
 const page = pageForPath("/admin/users")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
+
+/** 2FA as the user signs in (R9): code by e-mail, the authenticator app (once enrolled), or off. */
+function twoFactorCell(r: UserRow) {
+  if (r.otpMethod === "email") return "E-mail code";
+  if (r.otpMethod === "authenticator")
+    return r.totpEnabled ? "Authenticator" : <span className="tone-warning">App not enrolled</span>;
+  return <span className="tone-warning">Off</span>;
+}
 
 const blank = (): UserInput => ({
   username: "",
@@ -384,7 +393,7 @@ function TotpDialog({ row, done }: { row: UserRow; done: () => void }) {
   return (
     <Modal
       title={`Enable QR 2FA – ${row.displayName}`}
-      width={520}
+      width={640}
       onClose={done}
       footer={
         <>
@@ -421,11 +430,42 @@ function TotpDialog({ row, done }: { row: UserRow; done: () => void }) {
         <p>A new secret is created for {row.username}. Add it to an authenticator app, then enter the 6-digit code.</p>
       ) : (
         <div className="totp-setup">
-          <p className="muted small">
-            Add this key to the authenticator app, then type the code it shows.
-          </p>
-          <div className="mono-pre selectable">{setup.secret.replace(/(.{4})/g, "$1 ").trim()}</div>
-          <div className="mono-pre small selectable">{setup.otpauthUri}</div>
+          {/* Two ways in (R9): scan the QR code, or type the setup key ("Enter a setup key" in Google Authenticator). */}
+          <div className="totp-ways">
+            <div className="totp-way">
+              <strong>1 · Scan the QR code</strong>
+              <QrCode value={setup.otpauthUri} label={`Authenticator QR code for ${row.username}`} />
+              <span className="muted small">Google Authenticator: + › Scan a QR code</span>
+            </div>
+            <div className="totp-way">
+              <strong>2 · Or enter the key</strong>
+              <span className="muted small">Google Authenticator: + › Enter a setup key</span>
+              <Kv
+                items={[
+                  ["Account", row.username],
+                  [
+                    "Key",
+                    <span key="k" className="mono selectable">
+                      {setup.secret.replace(/(.{4})/g, "$1 ").trim()}
+                    </span>,
+                  ],
+                  ["Type of key", "Time based"],
+                ]}
+              />
+              <Button
+                small
+                icon="copy"
+                onClick={() =>
+                  void navigator.clipboard
+                    ?.writeText(setup.secret)
+                    .then(() => toast({ tone: "good", message: "Key copied" }))
+                }
+              >
+                Copy key
+              </Button>
+            </div>
+          </div>
+          <p className="muted small">Then type the 6-digit code the app shows.</p>
           <label className="field">
             <span>6-digit code</span>
             <input
@@ -613,7 +653,8 @@ export function UsersPage() {
             </span>
           ),
         },
-        totpEnabled: { width: 80, render: (r) => (r.totpEnabled ? "On" : <span className="tone-warning">Off</span>) },
+        // The sign-in code method (R9): an e-mailed code is 2FA too; the app counts once it is enrolled.
+        totpEnabled: { width: 110, render: (r) => twoFactorCell(r) },
         isAccountManager: { width: 90, render: (r) => (r.isAccountManager ? "Yes" : muted("No")) },
         lastLoginAt: { width: 160, render: (r) => (r.lastLoginAt ? fmtWhen(r.lastLoginAt) : muted("never")) },
       }}
@@ -698,7 +739,7 @@ export function UsersPage() {
                   ["Expires", fmtWhen(r.passwordExpiresAt)],
                   ["Temporary until", r.tempPasswordExpiresAt ? fmtWhen(r.tempPasswordExpiresAt) : null],
                   ["QR 2FA (TOTP)", r.totpEnabled ? "Enabled" : <span className="tone-warning">Not enabled</span>],
-                  ["OTP verification", r.otpMethod === "email" ? "Email" : "Off"],
+                  ["OTP verification", twoFactorCell(r)],
                   ["Last login", r.lastLoginAt ? fmtWhen(r.lastLoginAt) : "never"],
                   ["Open sessions", String(r.activeSessions)],
                 ]}

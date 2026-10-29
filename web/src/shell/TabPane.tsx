@@ -7,6 +7,7 @@ import { PageRoutes } from "../pages/PageRoutes";
 import { TabProvider } from "./tabContext";
 import { useTabs, type Tab } from "./tabs";
 import { SplitPaneBar } from "./SplitPaneBar";
+import { useTabReloads } from "./reload";
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state = { error: null as Error | null };
@@ -64,6 +65,7 @@ export const TabPane = memo(function TabPane({
   /** Share of the width the left side takes in split view, 0–1 (dragged by the user, trial round 2). */
   leftShare?: number;
 }) {
+  const reloads = useTabReloads((s) => s.counts[tab.id] ?? 0);
   return (
     <div
       className={`pane${shown ? "" : " hidden"}${focused ? " focused" : ""}${side ? " pane-split" : ""}`}
@@ -82,7 +84,8 @@ export const TabPane = memo(function TabPane({
     >
       {side && <SplitPaneBar side={side} tab={tab} focused={focused} />}
       <TabProvider value={{ tab, active: focused, popout }}>
-        <TabErrorBoundary>
+        {/* A new key on Reload (R9) mounts the page again, as a browser refresh would. */}
+        <TabErrorBoundary key={reloads}>
           <AccessGuard path={tab.path}>
             <PageRoutes path={tab.path} />
           </AccessGuard>

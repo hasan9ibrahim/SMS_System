@@ -50,6 +50,7 @@ import {
   archiveUser,
   changeMyPassword,
   sendMyPasswordCode,
+  sendMyCredentialCode,
   checkPassword,
   cloneAccessGroup,
   cloneEmailTemplate,
@@ -246,6 +247,8 @@ import {
   MIGRATION_VERSION,
   activateMigrationTrunks,
   applyMigrationImport,
+  deleteMigrationImport,
+  runningApplies,
   createMigrationExport,
   createMigrationImport,
   createMigrationLink,
@@ -790,8 +793,13 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   createMigrationImport,
   getMigrationImport,
   revalidateMigrationImport,
-  applyMigrationImport: (request, reply) =>
-    Promise.resolve(applyMigrationImport(request, reply)).finally(clearRouteCaches),
+  // Apply runs in the background (R9): the routing caches are cleared when it ends.
+  applyMigrationImport: async (request, reply) => {
+    const answer = await applyMigrationImport(request, reply);
+    void runningApplies.get(Number((request.params as { id: number }).id))?.finally(clearRouteCaches);
+    return answer;
+  },
+  deleteMigrationImport,
   activateMigrationTrunks,
 
   // Route rules (§6.3, §13.8–13.11, §13.27, §15.4)
@@ -1139,6 +1147,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveUser,
   changeMyPassword: (request, reply) => Promise.resolve(changeMyPassword(request, reply)).finally(invalidateGate),
   sendMyPasswordCode,
+  sendMyCredentialCode,
   checkPassword,
   cloneAccessGroup,
   cloneEmailTemplate,

@@ -36,6 +36,7 @@ export const STATUS: Record<
   { label: string; tone: "good" | "warning" | "error" | "neutral" }
 > = {
   validated: { label: "Dry run", tone: "warning" },
+  applying: { label: "Applying…", tone: "warning" },
   applied: { label: "Applied", tone: "good" },
   rolled_back: { label: "Rolled back", tone: "neutral" },
   failed: { label: "Failed", tone: "error" },
@@ -117,10 +118,14 @@ export function fmtBytes(n: number | null): string {
 
 /** What the import button does next, for the detail panel. */
 export function nextStep(i: MigrationImport): string {
+  if (i.status === "applying") return "Applying in the background: this updates by itself when it is done.";
   if (i.status === "validated")
     return i.report.canApply
       ? "Review the report, then apply. Apply writes exactly this as one change in History."
-      : "Fix the files and re-run the dry run: errors block apply.";
+      : i.report.entities.some((e) => e.errors)
+        ? "Fix the files and re-run the dry run: errors block apply."
+        : // Every row skipped (R9): e.g. an earlier import already wrote these records.
+          "Nothing to apply: every row is already in the system as in the files (Skip). Change the files, or delete this import.";
   if (i.status === "applied")
     return i.inactiveTrunks
       ? `${i.inactiveTrunks} imported trunks wait inactive: go live per partner when ready.`

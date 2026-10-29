@@ -5,7 +5,7 @@
 // - Exports: one encrypted package with every entity and a manifest; credentials only with 2FA;
 //   downloads through single-use links that expire after 15 minutes.
 // - Column mappings: the old system's column names per template field, saved per source system.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import type {
   MigrationConflict,
@@ -25,6 +25,8 @@ import {
   useCreateExport,
   useCreateImport,
   useCreateLink,
+  useDeleteImport,
+  sendCredentialCode,
   useMigrationEntities,
   useMigrationExports,
   useMigrationImport,
@@ -34,6 +36,7 @@ import {
   useSaveMapping,
 } from "../../../api/migration";
 import { useMe } from "../../../api/hooks";
+import { useMyPasswordStatus } from "../../../api/security";
 import { useUndo } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { PageHeader } from "../../../page/PageHeader";
@@ -66,6 +69,62 @@ import {
 const page = pageForPath("/admin/migration")!;
 const fail = (e: unknown) => toast({ tone: "error", message: problemText(e) });
 const int = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-US"));
+
+/**
+ * The 2FA code for credentials (§13.22): the authenticator app's, or for an admin without the app a code e-mailed on
+ * request (R9: the e-mailed code is the account's second factor, as at sign-in).
+ */
+function CredentialCode({
+  value,
+  onChange,
+  label = "Your 2FA code",
+  note,
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+  note?: string;
+  autoFocus?: boolean;
+}) {
+  const status = useMyPasswordStatus();
+  const app = status.data?.totpEnabled ?? false;
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const send = () => {
+    setSending(true);
+    void sendCredentialCode()
+      .then((r) => {
+        setSentTo(r.sentTo);
+        toast({ tone: "good", message: `Code sent to ${r.sentTo}` });
+      })
+      .catch(fail)
+      .finally(() => setSending(false));
+  };
+  return (
+    <label className="field narrow">
+      <span>{app ? label : "Code sent to your e-mail"}</span>
+      <span className="mig-code">
+        <input
+          inputMode="numeric"
+          maxLength={6}
+          value={value}
+          autoFocus={autoFocus}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+        />
+        {!app && (
+          <Button icon="mail" disabled={sending} onClick={send}>
+            {sentTo ? "Send again" : "Send code"}
+          </Button>
+        )}
+      </span>
+      <small>
+        {app ? "From your authenticator app." : sentTo ? `Sent to ${sentTo}; valid 10 minutes.` : "We e-mail you a 6-digit code."}
+        {note ? ` ${note}` : ""}
+      </small>
+    </label>
+  );
+}
 
 function useMigNav() {
   const location = useLocation();
@@ -174,16 +233,11 @@ function ExportDialog({ done }: { done: (x: MigrationExport | null) => void }) {
           Also include passwords
         </label>
         {d.includeCredentials && (
-          <label className="field narrow">
-            <span>Your 2FA code</span>
-            <input
-              inputMode="numeric"
-              maxLength={6}
-              value={d.totpCode ?? ""}
-              onChange={(e) => set({ totpCode: e.target.value.replace(/\D/g, "") })}
-            />
-            <small>Logged in the audit trail; the other admins get an e-mail.</small>
-          </label>
+          <CredentialCode
+            value={d.totpCode ?? ""}
+            onChange={(v) => set({ totpCode: v })}
+            note="Logged in the audit trail; the other admins get an e-mail."
+          />
         )}
         {!isAdmin && <p className="small muted">Only administrators can include credentials.</p>}
       </fieldset>
@@ -231,17 +285,12 @@ function LinkDialog({ x, done }: { x: MigrationExport; done: (v: boolean | null)
         Single-use link, expires after 15 minutes. {fmtBytes(x.sizeBytes)}.
       </p>
       {x.includesCredentials && (
-        <label className="field narrow">
-          <span>Your 2FA code</span>
-          <input
-            inputMode="numeric"
-            maxLength={6}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            autoFocus
-          />
-          <small>This package holds credentials: the download is audited and the other admins are told.</small>
-        </label>
+        <CredentialCode
+          value={code}
+          onChange={setCode}
+          autoFocus
+          note="This package holds credentials: the download is audited and the other admins are told."
+        />
       )}
     </Modal>
   );
@@ -596,16 +645,12 @@ function ImportDialog({
           <input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> Create trunks
           inactive (go live per partner later)
         </label>
-        <label className="field narrow">
-          <span>2FA code</span>
-          <input
-            inputMode="numeric"
-            maxLength={6}
-            value={totp}
-            onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
-          />
-          <small>Needed when the data holds trunk credentials (admins only).</small>
-        </label>
+        <CredentialCode
+          value={totp}
+          onChange={setTotp}
+          label="2FA code"
+          note="Needed when the data holds trunk credentials (admins only)."
+        />
       </div>
     </Modal>
   );
@@ -662,11 +707,21 @@ function ActivateDialog({ i, done }: { i: MigrationImport; done: (v: boolean | n
   );
 }
 
-function ImportPanel({ id }: { id: number }) {
+function ImportPanel({ id, closed }: { id: number; closed: () => void }) {
   const q = useMigrationImport(id);
   const apply = useApplyImport();
+  const remove = useDeleteImport();
   const undo = useUndo();
   const i = q.data;
+  // The background apply ending (R9): say how it went.
+  const was = useRef(i?.status);
+  useEffect(() => {
+    if (was.current === "applying" && i?.status === "applied")
+      toast({ tone: "good", message: `Import #${i.id} applied as change #${i.changeId}` });
+    if (was.current === "applying" && i?.status === "validated" && i.applyError)
+      toast({ tone: "error", message: `Import #${i.id} was not applied: ${i.applyError}` });
+    was.current = i?.status;
+  }, [i]);
   const [onlyErrors, setOnlyErrors] = useState(false);
   const issues = useMemo(
     () => (i?.report.issues ?? []).filter((x) => !onlyErrors || x.severity === "error"),
@@ -735,8 +790,10 @@ function ImportPanel({ id }: { id: number }) {
                     (yes) =>
                       yes &&
                       apply.mutate(i.id, {
-                        onSuccess: (r) =>
-                          toast({ tone: "good", message: `Import #${r.id} applied as change #${r.changeId}` }),
+                        onSuccess: (r) => {
+                          was.current = r.status;
+                          toast({ tone: "info", message: `Applying import #${r.id} in the background…` });
+                        },
                         onError: fail,
                       }),
                   )
@@ -771,7 +828,38 @@ function ImportPanel({ id }: { id: number }) {
               Roll back
             </Button>
           )}
+          {i.status !== "applying" && (
+            <Button
+              icon="trash"
+              onClick={() =>
+                void confirmDialog({
+                  title: `Delete import #${i.id}?`,
+                  message:
+                    i.status === "applied"
+                      ? "It leaves the list and its files are deleted. The records it wrote stay; its change in History can still be undone there."
+                      : "It leaves the list and its uploaded files are deleted. Nothing in the system changes.",
+                  ok: "Delete",
+                  danger: true,
+                }).then(
+                  (yes) =>
+                    yes &&
+                    remove.mutate(i.id, {
+                      onSuccess: () => {
+                        toast({ tone: "warning", message: `Import #${i.id} deleted` });
+                        closed();
+                      },
+                      onError: fail,
+                    }),
+                )
+              }
+            >
+              Delete
+            </Button>
+          )}
         </div>
+        {i.applyError && i.status === "validated" && (
+          <div className="small tone-error">Last apply wrote nothing: {i.applyError}</div>
+        )}
       </div>
       <div className="team-card">
         <table className="mig-table">
@@ -831,7 +919,7 @@ function ImportPanel({ id }: { id: number }) {
   );
 }
 
-function ImportsView({ id, select }: { id: number | null; select: (id: number) => void }) {
+function ImportsView({ id, select }: { id: number | null; select: (id: number | null) => void }) {
   const q = useMigrationImports();
   const rows = q.data ?? [];
   const columns: VColumn<MigrationImport>[] = [
@@ -871,7 +959,7 @@ function ImportsView({ id, select }: { id: number | null; select: (id: number) =
       </div>
       <aside className="team-side">
         {id ? (
-          <ImportPanel key={id} id={id} />
+          <ImportPanel key={id} id={id} closed={() => select(null)} />
         ) : (
           <div className="team-card small">
             <strong>How an import works</strong>

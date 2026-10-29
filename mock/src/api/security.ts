@@ -107,7 +107,11 @@ export function updateSecuritySettings(request: FastifyRequest, reply: FastifyRe
 const PORTAL_STATE = STATE_SQL;
 
 async function counts(c: Db, table: "users" | "customer_portal_users"): Promise<PasswordStateCounts> {
-  const twoFa = table === "users" ? "count(*) FILTER (WHERE NOT u.totp_enabled)::int" : "0";
+  // Without 2FA (R9): no sign-in code at all; an e-mailed code counts, the app once enrolled.
+  const twoFa =
+    table === "users"
+      ? "count(*) FILTER (WHERE NOT (u.otp_method = 'email' OR (u.otp_method = 'authenticator' AND u.totp_enabled)))::int"
+      : "0";
   const { rows } = await c.query(
     `SELECT count(*)::int AS total, ${twoFa} AS without2fa,
             count(*) FILTER (WHERE st = 'ok')::int AS ok, count(*) FILTER (WHERE st = 'expiring')::int AS expiring,

@@ -19,6 +19,7 @@
     "@tanstack/react-virtual": "^3.14.20",
     "echarts": "^5.6.0",
     "openapi-fetch": "^0.17.0",
+    "qrcode-generator": "2.0.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router": "^7.18.4",

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.111.0
+  version: 0.112.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14425,17 +14425,41 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '503':
           $ref: '#/components/responses/Unavailable'
+    delete:
+      tags:
+      - admin
+      operationId: deleteMigrationImport
+      summary: Delete an import (R9)
+      description: >-
+        Removes the import from the list and deletes its stored files. Records an applied import wrote stay: its change
+        in History remains, and undoing it there still rolls the import back. Refused while it is applying.
+      parameters: *id001
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /migration/imports/{id}/apply:
     post:
       tags:
       - admin
       operationId: applyMigrationImport
       summary: Apply the import
-      description: Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back.
+      description: >-
+        Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back.
+        Runs in the background (R9: large files outlast the web request): the answer is the import with status
+        `applying`; poll getMigrationImport until it is `applied`, or back to `validated` with `applyError` set (nothing
+        was written).
       parameters: *id001
       responses:
-        '200':
-          description: Applied
+        '202':
+          description: Applying
           content:
             application/json:
               schema:
@@ -14584,6 +14608,34 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /me/credential-code:
+    post:
+      tags:
+      - session
+      operationId: sendMyCredentialCode
+      summary: E-mail a code for a credential export or import (§13.22, R9)
+      description: >-
+        For admins without an authenticator app: e-mails a 6-digit code to their own address, valid 10 minutes and for
+        5 tries, to enter as `totpCode` of a Migration export or import that includes credentials. The e-mailed code is
+        the account's second factor as at sign-in (§13.28). Users with the app get 409 and use its code. At most one per
+        minute; it replaces any earlier code.
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordCodeSent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
         '503':
@@ -17005,14 +17057,15 @@ components:
         hostIps:
           type: array
           minItems: 1
-          maxItems: 50
-          description: Allowed client IP addresses.
+          maxItems: 256
+          description: >-
+            Allowed client addresses (§5.4, R9): an address (192.0.2.10, 2001:db8::1), a network (192.0.2.0/24) or a
+            range (192.0.2.10-192.0.2.50, or 192.0.2.10-50). A range is saved as the networks that cover exactly it, so
+            the trunk shows those networks afterwards. At most 50 entries typed; at most 256 after ranges are split.
           items:
-            anyOf:
-              - type: string
-                format: ipv4
-              - type: string
-                format: ipv6
+            type: string
+            minLength: 2
+            maxLength: 100
         username:
           type: string
           minLength: 1
@@ -32014,7 +32067,9 @@ components:
           - string
           - 'null'
           pattern: ^[0-9]{6}$
-          description: 2FA code; required whenever credentials are included (§13.22).
+          description: >-
+            2FA code; required whenever credentials are included (§13.22): the authenticator app's, or for an admin
+            without the app the code e-mailed by sendMyCredentialCode (R9).
     MigrationExport:
       type: object
       required:
@@ -32207,7 +32262,7 @@ components:
         issueCount: *id002
         canApply:
           type: boolean
-          description: 'No errors: applying writes exactly what the dry run shows.'
+          description: 'No errors and something to create or update: applying writes exactly what the dry run shows. False with no errors means every row is already in the system as in the file (skip).'
     MigrationImport:
       type: object
       required:
@@ -32225,6 +32280,7 @@ components:
       - changeId
       - inactiveTrunks
       - report
+      - applyError
       properties:
         id: *id004
         sourceSystem:
@@ -32233,9 +32289,16 @@ components:
           type: string
           enum:
           - validated
+          - applying
           - applied
           - rolled_back
           - failed
+          description: applying = being written in the background (R9).
+        applyError:
+          type:
+          - string
+          - 'null'
+          description: Why the last apply wrote nothing (R9); null otherwise.
         files:
           type: array
           items:

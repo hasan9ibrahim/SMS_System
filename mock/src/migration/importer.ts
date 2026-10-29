@@ -5,6 +5,7 @@
 // (entity type "migration"), so undoing that change rolls the whole import back.
 import { randomBytes } from "node:crypto";
 import type pg from "pg";
+import { hostNetworks } from "../ipRanges.js";
 import type {
   MigrationConflict,
   MigrationEntityReport,
@@ -520,7 +521,14 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       v.password = r.password?.trim() || (m.action === "create" ? randomBytes(6).toString("base64url") : undefined);
       if (!r.password?.trim() && m.action === "create")
         p.issue(entity, line, "password", "No password in the file: a random one is set", "warning");
-      v.host_ips = r.hostIps?.trim() ? list(r.hostIps) : m.action === "create" ? [] : undefined;
+      // Addresses, networks and ranges, checked here (R9): a bad one used to pass the dry run and fail Apply.
+      if (r.hostIps?.trim()) {
+        const hosts = hostNetworks(list(r.hostIps));
+        for (const e of hosts.errors)
+          p.issue(entity, line, "hostIps", `"${list(r.hostIps)[e.index]}": ${e.message}`);
+        if (hosts.errors.length) return void (pr.action = "error");
+        v.host_ips = hosts.networks;
+      } else v.host_ips = m.action === "create" ? [] : undefined;
       // The port is not imported: it follows the SSL type (2775 / 2776, migration 070).
       v.ssl_type = r.sslType?.trim().toLowerCase() || (m.action === "create" ? "none" : undefined);
     } else {

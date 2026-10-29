@@ -3,6 +3,7 @@
 // with undo (§13.10). Both kinds share one implementation driven by a field map.
 import { rebindVendorTrunk } from "./network.js";
 import { isIP } from "node:net";
+import { hostNetworks, inetText } from "../ipRanges.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -72,7 +73,7 @@ const CUSTOMER_SPECS: FieldSpec[] = [
   { api: "considerHlrRate", col: "consider_hlr_rate" },
   { api: "serviceTypeRouting", col: "service_type_routing" },
   { api: "partWiseRouting", col: "part_wise_routing" },
-  { api: "hostIps", col: "host_ips", read: "ARRAY(SELECT host(x) FROM unnest(t.host_ips) x)", cast: "::inet[]" },
+  { api: "hostIps", col: "host_ips", read: `ARRAY(SELECT ${inetText("x")} FROM unnest(t.host_ips) x)`, cast: "::inet[]" },
   { api: "dlrPushUrl", col: "dlr_push_url" },
   { api: "moPushUrl", col: "mo_push_url" },
   { api: "delayedSubmit", col: "delayed_submit" },
@@ -267,9 +268,12 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
 
   if (k.kind === "customer") {
     const c = input as CustomerTrunkInput;
-    c.hostIps.forEach((ip, i) => {
-      if (!isIP(ip)) errors.push({ path: `/hostIps/${i}`, message: "not an IP address" });
-    });
+    // Addresses, networks and ranges (R9); a range is saved as the networks that cover it, as the switch matches.
+    const hosts = hostNetworks(c.hostIps);
+    for (const e of hosts.errors) errors.push({ path: `/hostIps/${e.index}`, message: e.message });
+    if (hosts.networks.length > 256)
+      errors.push({ path: "/hostIps", message: "at most 256 networks after the ranges are split" });
+    if (!hosts.errors.length) c.hostIps = hosts.networks;
     if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null))
       errors.push({ path: "/revenueLimitPeriod", message: "set both the limit and its period, or neither" });
     const ids = c.rateTableIds ?? [];

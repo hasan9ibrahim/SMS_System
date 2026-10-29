@@ -104,7 +104,7 @@ export async function exportRouteRules(query: Pick<ListQuery, "filter" | "search
   });
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
-    throw new ApiError(res.status, { ...problem, title: problem.title ?? res.statusText, status: res.status });
+    throw new ApiError(res.status, { ...problem, title: problem.title ?? (res.statusText || `Request failed (HTTP ${res.status})`), status: res.status });
   }
   const blob = await res.blob();
   const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "route-rules.csv";

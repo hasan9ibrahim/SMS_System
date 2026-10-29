@@ -1,5 +1,6 @@
 // SQL side of each list: FROM clause, an expression per catalogue field, and the
 // mapping from database row to the contract's row schema.
+import { inetText } from "../ipRanges.js";
 import {
   accessGroupList,
   auditList,
@@ -2470,10 +2471,12 @@ export const NETWORK_FROM = `(
            -- Allowed IPs and any bound IP, each with its sessions now (team trial round 4).
            (SELECT coalesce(jsonb_agg(jsonb_build_object('ip', x.ip, 'sessions', x.n) ORDER BY x.n DESC, x.ip), '[]')
               FROM (SELECT ips.addr AS ip, count(s.session_id)::int AS n
-                      FROM (SELECT host(a) AS addr FROM unnest(t.host_ips) a
+                      -- An allowed network (R9) counts the sessions from inside it.
+                      FROM (SELECT ${inetText("a")} AS addr FROM unnest(t.host_ips) a
                             UNION SELECT host(s2.ip) FROM bind_sessions s2
-                             WHERE s2.side = 'customer' AND s2.trunk_id = t.id) ips
-                      LEFT JOIN bind_sessions s ON s.side = 'customer' AND s.trunk_id = t.id AND host(s.ip) = ips.addr
+                             WHERE s2.side = 'customer' AND s2.trunk_id = t.id
+                               AND NOT EXISTS (SELECT 1 FROM unnest(t.host_ips) a2 WHERE s2.ip <<= a2)) ips
+                      LEFT JOIN bind_sessions s ON s.side = 'customer' AND s.trunk_id = t.id AND s.ip <<= ips.addr::inet
                      GROUP BY ips.addr) x) AS ip_sessions
       FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
       JOIN trunk_binds tb ON tb.side = 'customer' AND tb.trunk_id = t.id

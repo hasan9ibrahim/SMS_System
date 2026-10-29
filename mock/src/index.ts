@@ -29,6 +29,7 @@ import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
 import { startSwitchJobs } from "./jobs/switchJobs.js";
 import { encryptStoredTotp } from "./admin/passwords.js";
+import { resetStuckImports } from "./api/migration.js";
 
 const host = process.env.MOCK_HOST ?? "127.0.0.1";
 const port = Number(process.env.MOCK_PORT ?? 4010);
@@ -57,6 +58,8 @@ whenLeader(() => {
   app.log.info(production ? "this server runs the background jobs" : "background jobs started");
   // Authenticator secrets written before they were encrypted (backend step 12).
   void encryptStoredTotp(db()).catch((err: Error) => app.log.warn(`authenticator secrets: ${err.message}`));
+  // Migration imports left applying by a restart wrote nothing (R9).
+  void resetStuckImports().catch((err: Error) => app.log.warn(`migration imports: ${err.message}`));
   startBestBuyRefresh();
   startRouteTrafficRefresh();
   startQbrRefresh();

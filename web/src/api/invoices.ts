@@ -92,7 +92,7 @@ export async function downloadInvoicePdf(id: number) {
   const res = await apiFetch(`/api/v1/invoices/${id}/pdf`);
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
-    throw new Error(problem.detail ?? problem.title ?? res.statusText);
+    throw new Error(problem.detail ?? problem.title ?? (res.statusText || `Request failed (HTTP ${res.status})`));
   }
   const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "invoice.pdf";
   const url = URL.createObjectURL(await res.blob());

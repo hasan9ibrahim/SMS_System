@@ -14,7 +14,7 @@ import { closeDb, db, dbReady } from "../src/db.js";
 import { decryptSecret, totpCode } from "../src/admin/passwords.js";
 import { parseCsv, pgArray, toCsv } from "../src/migration/csv.js";
 import { PACKAGE_DIR, PackageError, readPackage, writePackage } from "../src/migration/package.js";
-import { runningExports } from "../src/api/migration.js";
+import { runningApplies, runningExports } from "../src/api/migration.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -29,10 +29,6 @@ cleanup.push(async () => {
   for (const r of rows) if (r.file_path) await rm(r.file_path, { force: true });
   await db().query("DELETE FROM migration_links WHERE export_id = ANY($1)", [madeExports]);
   await db().query("DELETE FROM migration_exports WHERE id = ANY($1)", [madeExports]);
-  const { rows: imp } = await db().query("SELECT input->>'blob' AS blob FROM migration_imports WHERE id = ANY($1)", [
-    madeImports,
-  ]);
-  for (const r of imp) if (r.blob) await rm(r.blob, { force: true });
   await db().query("DELETE FROM migration_refs WHERE import_id = ANY($1)", [madeImports]);
   await db().query("DELETE FROM migration_imports WHERE id = ANY($1)", [madeImports]);
 });
@@ -50,7 +46,7 @@ function check(operationId: string, res: LightMyRequestResponse) {
   if (validate && /json/.test(String(res.headers["content-type"])))
     assert.ok(validate(res.json()), `${operationId} ${status}: ${JSON.stringify(validate.errors)}`);
 }
-const call = (method: "GET" | "POST" | "PUT", url: string, payload?: unknown) =>
+const call = (method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: unknown) =>
   app.inject({ method, url: `${API_PREFIX}${url}`, ...(payload !== undefined ? { payload: payload as object } : {}) });
 async function ok(operationId: string, res: Promise<LightMyRequestResponse>, status = 200) {
   const r = await res;
@@ -252,7 +248,7 @@ describe("migration center", { skip }, () => {
       maps.find((m: { builtIn: boolean; entity: string }) => m.builtIn && m.entity === entity).id;
     const ent = `Legacy Ent ${run}`;
     const csv = (rows: string[][]) => toCsv(rows);
-    const files = (mcc: string, totp?: string) => ({
+    const files = (mcc: string, totp?: string, ips = "192.0.2.1;192.0.2.2") => ({
       sourceSystem: `Legacy ${run}`,
       trunksInactive: true,
       conflicts: {},
@@ -299,7 +295,7 @@ describe("migration center", { skip }, () => {
               "TPS",
               "Product Category",
             ],
-            ["C1", "E1", `LEG_C_${run}`, `leg_${run}`, "pw-example", "192.0.2.1;192.0.2.2", "20", "OTP"],
+            ["C1", "E1", `LEG_C_${run}`, `leg_${run}`, "pw-example", ips, "20", "OTP"],
           ]),
         },
         {
@@ -360,7 +356,7 @@ describe("migration center", { skip }, () => {
 
     const dry = await ok(
       "createMigrationImport",
-      call("POST", "/migration/imports", files("999", await myTotp())),
+      call("POST", "/migration/imports", files("999", await myTotp(), "192.0.2.1;192.0.2.300")),
       201,
     );
     madeImports.push(dry.id);
@@ -370,11 +366,18 @@ describe("migration center", { skip }, () => {
     assert.ok(
       dry.report.issues.some((i: { field: string; message: string }) => i.field === "mccmnc" && /999/.test(i.message)),
     );
+    // A bad trunk address is a dry-run error (R9: it used to pass and fail Apply in the database).
+    assert.ok(
+      dry.report.issues.some(
+        (i: { field: string; severity: string; message: string }) =>
+          i.field === "hostIps" && i.severity === "error" && /192\.0\.2\.300/.test(i.message),
+      ),
+    );
     await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
 
     const fixed = await ok(
       "revalidateMigrationImport",
-      call("PUT", `/migration/imports/${dry.id}`, files("424", await myTotp())),
+      call("PUT", `/migration/imports/${dry.id}`, files("424", await myTotp(), "192.0.2.10-192.0.2.13;198.51.100.0/24")),
     );
     assert.equal(fixed.report.canApply, true, JSON.stringify(fixed.report.issues));
     const by = (e: string) => fixed.report.entities.find((x: { entity: string }) => x.entity === e);
@@ -393,8 +396,13 @@ describe("migration center", { skip }, () => {
     // The dry run wrote nothing.
     assert.equal((await db().query("SELECT 1 FROM enterprises WHERE name = $1", [ent])).rows.length, 0);
 
-    const applied = await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`));
-    assert.equal(applied.status, "applied");
+    // Apply runs in the background (R9): applying at once, then applied.
+    const applying = await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+    assert.equal(applying.status, "applying");
+    await runningApplies.get(dry.id);
+    const applied = await ok("getMigrationImport", call("GET", `/migration/imports/${dry.id}`));
+    assert.equal(applied.status, "applied", applied.applyError);
+    assert.equal(applied.applyError, null);
     assert.ok(applied.changeId);
     assert.equal(applied.inactiveTrunks, 2);
     await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
@@ -411,6 +419,11 @@ describe("migration center", { skip }, () => {
       [`LEG_V_${run} USD`],
     );
     assert.equal(lines.length, 3);
+    // The range is stored as the networks that cover it (R9).
+    const { rows: ips } = await db().query("SELECT host_ips::text[] AS ips FROM customer_trunks WHERE name = $1", [
+      `LEG_C_${run}`,
+    ]);
+    assert.deepEqual(ips[0].ips, ["192.0.2.10/31", "192.0.2.12/31", "198.51.100.0/24"]);
     assert.equal(new Date(lines[0].valid_to).toISOString(), "2026-06-01T00:00:00.000Z");
     const { rows: refs } = await db().query("SELECT entity, external_id FROM migration_refs WHERE import_id = $1", [
       dry.id,
@@ -457,6 +470,48 @@ describe("migration center", { skip }, () => {
     );
     const list = await ok("getMigrationImports", call("GET", "/migration/imports"));
     assert.ok(list.some((i: { id: number }) => i.id === dry.id));
+
+    // Delete (R9): off the list, files gone.
+    await ok("deleteMigrationImport", call("DELETE", `/migration/imports/${dry.id}`), 204);
+    await fails("getMigrationImport", call("GET", `/migration/imports/${dry.id}`), 404);
+    const { rows: del } = await db().query("SELECT deleted_at, files_enc FROM migration_imports WHERE id = $1", [dry.id]);
+    assert.ok(del[0].deleted_at);
+    assert.equal(del[0].files_enc, null);
+  });
+
+  test("an apply whose stored files are gone writes nothing and says why", async () => {
+    const dry = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Gone ${run}`,
+        trunksInactive: true,
+        files: [
+          {
+            entity: "users",
+            fileName: "users.csv",
+            content: toCsv([
+              ["externalId", "username", "firstName", "lastName", "email"],
+              ["G1", `gone.${run}`, "Gone", "User", `gone.${run}@example.com`],
+            ]),
+          },
+        ],
+      }),
+      201,
+    );
+    madeImports.push(dry.id);
+    assert.equal(dry.report.canApply, true, JSON.stringify(dry.report.issues));
+    await db().query("UPDATE migration_imports SET files_enc = NULL WHERE id = $1", [dry.id]);
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+    await runningApplies.get(dry.id);
+    const back = await ok("getMigrationImport", call("GET", `/migration/imports/${dry.id}`));
+    assert.equal(back.status, "validated");
+    assert.match(back.applyError, /Fix and re-run/);
+    assert.equal((await db().query("SELECT 1 FROM users WHERE username = $1", [`gone.${run}`])).rows.length, 0);
+  });
+
+  test("the e-mailed credential code is for admins without the authenticator app", async () => {
+    // The test admin has the app: its code is the one to use.
+    await fails("sendMyCredentialCode", call("POST", "/me/credential-code"), 409);
   });
 
   test("a package from this system dry-runs to skips: nothing is duplicated", async () => {

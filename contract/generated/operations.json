@@ -3113,6 +3113,17 @@
  },
  {
   "method": "POST",
+  "path": "/me/credential-code",
+  "operationId": "sendMyCredentialCode",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/me/page-views",
   "operationId": "recordPageView",
   "tag": "system",
@@ -3315,7 +3326,18 @@
   "operationId": "createMigrationImport",
   "tag": "admin",
   "module": "migration",
-  "action": "view",
+  "action": "import",
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
+ },
+ {
+  "method": "DELETE",
+  "path": "/migration/imports/{id}",
+  "operationId": "deleteMigrationImport",
+  "tag": "admin",
+  "module": "migration",
+  "action": "import",
   "readChecked": true,
   "admin": true,
   "alsoOn": []
@@ -3337,7 +3359,7 @@
   "operationId": "revalidateMigrationImport",
   "tag": "admin",
   "module": "migration",
-  "action": "view",
+  "action": "import",
   "readChecked": true,
   "admin": true,
   "alsoOn": []
@@ -3348,7 +3370,7 @@
   "operationId": "activateMigrationTrunks",
   "tag": "admin",
   "module": "migration",
-  "action": "view",
+  "action": "import",
   "readChecked": true,
   "admin": true,
   "alsoOn": []
@@ -3359,7 +3381,7 @@
   "operationId": "applyMigrationImport",
   "tag": "admin",
   "module": "migration",
-  "action": "view",
+  "action": "import",
   "readChecked": true,
   "admin": true,
   "alsoOn": []
