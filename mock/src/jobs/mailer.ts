@@ -5,7 +5,7 @@
 //     host, port, security and login; platform e-mails without a company sender (sign-in codes, password reminders)
 //     use the platform mailbox (SMTP_URL / SMTP_FROM);
 //   * the designed body goes out as sent (CSS inlined), uploaded images and the company logo embedded inline (cid),
-//     with the e-mail's attachments;
+//     with the e-mail's attachments; the platform's own plain-text e-mails get the Xpert logo and footer (round 11);
 //   * a mail server that is down or answers 4xx is tried again after 1, 5, 15 and 60 minutes; a 5xx answer, or the
 //     last try, marks the e-mail failed with the server's answer. Sent e-mails drop their attachment copies.
 //
@@ -15,7 +15,9 @@ import nodemailer, { type Transporter } from "nodemailer";
 import type pg from "pg";
 import { decryptSecret } from "../admin/passwords.js";
 import { db } from "../db.js";
-import { embedImages } from "../email/html.js";
+import { embedImages, isHtml } from "../email/html.js";
+import { platformDocument, platformLogoPart } from "../email/platform.js";
+import { forgetLinkToken, LINK_PLACEHOLDER, linkForEmail } from "../api/passwordLinks.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -169,6 +171,7 @@ export async function deliver(
       tries,
       error,
     ]);
+    if (row.email_type === "password_setup") await forgetLinkToken(c, id);
     return "failed" as const;
   };
   const mailbox = await mailboxFor(c, (row.sender as string | null) ?? null);
@@ -179,7 +182,20 @@ export async function deliver(
         : "No platform mailbox: set SMTP_URL and SMTP_FROM",
       false,
     );
-  const html = (row.body_html as string | null) ?? null;
+  // A set-password e-mail gets its link only now: the logged copy never holds a working link (team trial round 11).
+  let body = String(row.body ?? "");
+  if (row.email_type === "password_setup" && body.includes(LINK_PLACEHOLDER)) {
+    const link = await linkForEmail(c, id);
+    if (!link) {
+      await forgetLinkToken(c, id);
+      return fail("The link was replaced or used before this e-mail went out: send a new one from Users", false);
+    }
+    body = body.replace(LINK_PLACEHOLDER, link);
+  }
+  // The platform's own plain-text e-mails go out with the Xpert logo (team trial round 11); the text stays as the
+  // text part. Designed e-mails and company mailboxes keep their own design.
+  const branded = mailbox.id === null && body.trim() !== "" && !isHtml(body);
+  const html = branded ? null : ((row.body_html as string | null) ?? null);
   const inline = html ? await inlineImages(c, html) : null;
   const { rows: att } = await c.query(
     "SELECT file_name, content_type, content FROM email_attachments WHERE email_log_id = $1 ORDER BY id",
@@ -190,9 +206,14 @@ export async function deliver(
     to: row.to_addresses as string[],
     cc: (row.cc_addresses as string[] | null) ?? [],
     subject: String(row.subject),
-    ...(inline ? { html: inline.html } : { text: String(row.body ?? "") }),
+    ...(inline
+      ? { html: inline.html }
+      : branded
+        ? { text: body, html: platformDocument(body) }
+        : { text: String(row.body ?? "") }),
     attachments: [
       ...(inline?.files ?? []),
+      ...(branded ? [platformLogoPart()] : []),
       ...att.map((a) => ({ filename: String(a.file_name), contentType: String(a.content_type), content: a.content as Buffer })),
     ],
   };
@@ -204,6 +225,7 @@ export async function deliver(
       [id, tries, info.messageId ?? null, mailbox.email],
     );
     await c.query("DELETE FROM email_attachments WHERE email_log_id = $1", [id]);
+    if (row.email_type === "password_setup") await forgetLinkToken(c, id);
     return "sent";
   } catch (err) {
     return fail(errorText(err), !permanent(err));

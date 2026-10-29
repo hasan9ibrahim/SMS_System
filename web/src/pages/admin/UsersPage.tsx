@@ -26,6 +26,7 @@ import { isAdminUser, ListLookup, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
+import { openPasswordLinks } from "./PasswordLinks";
 import { fmtWhen, RecordActions, RecordDialog } from "../reference/shared";
 import { countryOptions, PASSWORD_TONE, passwordLabel, USER_TYPE } from "./adminModel";
 import { Kv, openTempPassword, PasswordRules, statusCell } from "./parts";
@@ -573,6 +574,13 @@ export function UsersPage() {
             ),
         },
         {
+          label: "E-mail password link…",
+          icon: "mail",
+          disabled: !!r.archivedAt || r.status !== "active",
+          hint: deleted(r) ?? (r.status !== "active" ? "Inactive user" : "A link to choose their own password (72 hours)"),
+          onSelect: () => void openPasswordLinks([r.id], r.username),
+        },
+        {
           label: "Force change",
           icon: "lock",
           disabled: !!r.archivedAt || r.mustChangePassword || force.isPending,
@@ -663,6 +671,12 @@ export function UsersPage() {
       selection={{
         summary: (_rows, ids) => `${ids.size} user${ids.size === 1 ? "" : "s"} selected`,
         bulk: (ids, clear) => [
+          {
+            // Team trial round 11: e.g. users just imported, so each picks their own password.
+            label: `E-mail password links (${ids.length})`,
+            icon: "mail",
+            onSelect: () => void openPasswordLinks(ids, `${ids.length} users`).then(clear),
+          },
           {
             label: `Force a password change (${ids.length})`,
             icon: "lock",

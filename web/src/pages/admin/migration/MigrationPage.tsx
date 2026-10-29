@@ -44,6 +44,7 @@ import { ListLookup } from "../../../records/parts";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { ask, confirmDialog, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
+import { openPasswordLinks } from "../PasswordLinks";
 import { VirtualTable, type VColumn } from "../../lookup/VirtualTable";
 import { fmtWhen } from "../../reference/shared";
 import { problemText } from "../../routing/dialogs";
@@ -453,7 +454,10 @@ function ImportDialog({
   const [pkgPassword, setPkgPassword] = useState("");
   const [totp, setTotp] = useState("");
   const systems = [...new Set((mappings.data ?? []).map((m) => m.sourceSystem))];
-  const creds = Object.values(slots).some((s) => s && headerHasCredentials(s.content));
+  const creds = ENTITY_ORDER.some((e) => {
+    const s = slots[e];
+    return !!s && headerHasCredentials(e, s.content);
+  });
   const files: MigrationFileInput[] = ENTITY_ORDER.flatMap((e) => {
     const s = slots[e];
     return s ? [{ entity: e, fileName: s.fileName, content: s.content, mappingId: s.mappingId }] : [];
@@ -810,6 +814,20 @@ function ImportPanel({ id, closed }: { id: number; closed: () => void }) {
               onClick={() => void ask<boolean>((done) => <ActivateDialog i={i} done={done} />)}
             >
               Go live
+            </Button>
+          )}
+          {i.status === "applied" && i.newUserIds.length > 0 && (
+            // Team trial round 11: imported users pick their own password from an e-mailed link.
+            <Button
+              icon="mail"
+              onClick={() =>
+                void openPasswordLinks(
+                  i.newUserIds,
+                  i.newUserIds.length === 1 ? "The imported user" : `The ${i.newUserIds.length} imported users`,
+                )
+              }
+            >
+              E-mail password links ({i.newUserIds.length})
             </Button>
           )}
           {i.status === "applied" && i.changeId && (

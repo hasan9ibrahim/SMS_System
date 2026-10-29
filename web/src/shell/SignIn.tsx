@@ -104,7 +104,9 @@ export function SignInScreen() {
               Sign in
             </Button>
           </div>
-          <p className="muted small">Forgot your password? Ask an administrator for a temporary one.</p>
+          <p className="muted small">
+            Forgot your password? Ask an administrator for a temporary one or an e-mailed set-password link.
+          </p>
         </form>
       ) : (
         <form className="pw-gate-card signin-card" onSubmit={submitCode}>

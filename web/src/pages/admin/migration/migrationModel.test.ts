@@ -26,9 +26,13 @@ test("export form: password, confirmation, credentials need 2FA", () => {
 });
 
 test("credential columns in a file header", () => {
-  assert.ok(headerHasCredentials("Customer Trunk Name,System ID,TPS\nA,b,1"));
-  assert.ok(headerHasCredentials('"name";"password"\n'));
-  assert.ok(!headerHasCredentials("name,tps,category\n"));
+  assert.ok(headerHasCredentials("customer_trunks", "Customer Trunk Name,System ID,TPS\nA,b,1"));
+  assert.ok(headerHasCredentials("vendor_trunks", '"name";"password"\n'));
+  assert.ok(headerHasCredentials("customer_trunks", "name,SYSTEM_ID,tps\n"));
+  assert.ok(!headerHasCredentials("customer_trunks", "name,tps,category\n"));
+  // A users file's Username is a login name, not a trunk credential (team trial round 11).
+  assert.ok(!headerHasCredentials("users", "username,firstName,lastName,email\n"));
+  assert.ok(!headerHasCredentials("users", "User name,Password\n"));
 });
 
 test("report totals and the list line", () => {

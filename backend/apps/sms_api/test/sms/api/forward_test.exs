@@ -74,6 +74,19 @@ defmodule Sms.Api.ForwardTest do
              build_conn() |> post("/api/v1/enterprises/query") |> json_response(401)
   end
 
+  test "a set-password link's calls go through without a session, as nobody (team trial round 11)" do
+    for path <- ["/api/v1/password-setup/check", "/api/v1/password-setup"] do
+      conn =
+        build_conn()
+        |> put_req_header("content-type", "application/json")
+        |> post(path, ~s({"token": "t"}))
+
+      assert conn.status == 200
+      assert_received {:mock_request, "POST", ^path, _, headers, _}
+      refute Enum.any?(headers, fn {k, _} -> k == "x-sms-user" end)
+    end
+  end
+
   test "bodies go through; large answers are streamed; empty answers stay empty" do
     conn = signed("/api/v1/enterprises/query", :post, ~s({"limit": 5}))
     assert conn.status == 200

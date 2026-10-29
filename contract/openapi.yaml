@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.113.0
+  version: 0.114.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -10632,6 +10632,98 @@ paths:
           $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /users/password-links:
+    post:
+      tags:
+      - admin
+      operationId: sendPasswordLinks
+      summary: E-mail users a link to set their own password (§13.28)
+      description: >-
+        Team trial round 11. Each user gets an e-mail from the platform mailbox (with the Xpert logo) holding a
+        single-use link that works for 72 hours. The link opens the Set Password screen: the user picks a password
+        under the usual rules, then signs in as usual, 2FA included. The link never signs anyone in, and a new link
+        replaces the user's earlier ones. Deleted or inactive users, users without an e-mail address, and
+        administrators (unless you are one) are skipped. sharedEmails lists the addresses that got links for more than
+        one user: whoever reads that mailbox can set those users' passwords.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLinksInput'
+      responses:
+        '200':
+          description: The links sent and the users skipped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordLinksResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /password-setup/check:
+    post:
+      tags:
+      - session
+      operationId: checkPasswordSetup
+      summary: Open a set-password link and check a password against the rules (§13.28)
+      description: >-
+        No sign-in (team trial round 11): the link's token is the proof. Answers who the link is for and, when a
+        password is sent, which rules it meets. 404 when the link is unknown, used or expired.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordSetupCheckInput'
+      responses:
+        '200':
+          description: The link is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordSetupInfo'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /password-setup:
+    post:
+      tags:
+      - session
+      operationId: completePasswordSetup
+      summary: Set my password from a set-password link (§13.28)
+      description: >-
+        No sign-in (team trial round 11). Sets the password when it meets the rules and uses the link up; the user then
+        signs in on the sign-in screen (2FA included). Any open sessions of the user end.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordSetupInput'
+      responses:
+        '200':
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordSetupDone'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '503':
           $ref: '#/components/responses/Unavailable'
   /users/force-password-change:
@@ -24483,8 +24575,8 @@ components:
     # ------------------------------------------------------------- Switch utilities (§8)
     EmailType:
       type: string
-      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert, am_handover, rn_reminder]
-      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
+      enum: [send_rate, send_tech_info, invoice, check_smtp, bind_down_alert, otp, forgot_password, auto_upload_rate, credit_alert, balance_alert, schedule_report_alert, traffic_alert, auto_upload_rejected, daily_report, broadcast, trouble_ticket, send_soa, payment_confirmation, invoice_acceptance, invoice_rejection, monitoring_alert, cleanup_summary, credential_transfer, password_reminder, template_test, currency_alert, am_handover, rn_reminder, password_setup]
+      description: The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) currency_alert (an exchange rate moved past an alert, team trial round 2) and password_setup (a set-password link, team trial round 11).
 
     EmailLogRow:
       type: object
@@ -27467,6 +27559,144 @@ components:
           minLength: 1
           maxLength: 200
           writeOnly: true
+    PasswordLinksInput:
+      type: object
+      additionalProperties: false
+      required:
+      - ids
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+    PasswordLinksResult:
+      type: object
+      required:
+      - sent
+      - skipped
+      - sharedEmails
+      - expiresAt
+      properties:
+        sent:
+          type: integer
+          minimum: 0
+        skipped:
+          type: array
+          items:
+            type: object
+            required:
+            - userId
+            - username
+            - reason
+            properties:
+              userId:
+                type: integer
+                format: int64
+              username:
+                type: string
+              reason:
+                type: string
+        sharedEmails:
+          type: array
+          description: Addresses that got links for more than one user.
+          items:
+            type: object
+            required:
+            - email
+            - usernames
+            properties:
+              email:
+                type: string
+              usernames:
+                type: array
+                items:
+                  type: string
+        expiresAt:
+          type: string
+          format: date-time
+    PasswordSetupCheckInput:
+      type: object
+      additionalProperties: false
+      required:
+      - token
+      properties:
+        token:
+          type: string
+          minLength: 20
+          maxLength: 200
+          writeOnly: true
+        password:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          writeOnly: true
+    PasswordSetupInfo:
+      type: object
+      required:
+      - username
+      - firstName
+      - expiresAt
+      - rules
+      properties:
+        username:
+          type: string
+        firstName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        rules:
+          type: array
+          description: The rules and whether the password sent meets each; none met when no password was sent.
+          items:
+            type: object
+            required:
+            - key
+            - label
+            - met
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              met:
+                type: boolean
+    PasswordSetupInput:
+      type: object
+      additionalProperties: false
+      required:
+      - token
+      - password
+      - confirmPassword
+      properties:
+        token:
+          type: string
+          minLength: 20
+          maxLength: 200
+          writeOnly: true
+        password:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+        confirmPassword:
+          type: string
+          minLength: 1
+          maxLength: 200
+          writeOnly: true
+    PasswordSetupDone:
+      type: object
+      required:
+      - username
+      properties:
+        username:
+          type: string
     ForcePasswordChangeInput:
       type: object
       additionalProperties: false
@@ -32308,7 +32538,16 @@ components:
       - inactiveTrunks
       - report
       - applyError
+      - newUserIds
       properties:
+        newUserIds:
+          type: array
+          description: >-
+            Users this import created or restored, while it stays applied (team trial round 11): for E-mail password
+            links. Empty otherwise.
+          items:
+            type: integer
+            format: int64
         id: *id004
         sourceSystem:
           type: string

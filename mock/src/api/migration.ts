@@ -457,9 +457,27 @@ async function inactiveTrunks(c: Db, changeId: number | null, enterpriseIds: num
   return out;
 }
 
+/** Users an applied import created or restored that are still there (team trial round 11: E-mail password links). */
+async function importedUsers(c: Db, changeId: number | null): Promise<number[]> {
+  if (changeId == null) return [];
+  const { rows } = await c.query(
+    `SELECT DISTINCT (e->>'entity_id')::bigint AS id
+       FROM changes ch, jsonb_array_elements(ch.diff) e
+      WHERE ch.id = $1 AND e->>'table' = 'users'
+        AND (e->>'field' = '*' OR (e->>'field' = 'row' AND e->'before'->>'deleted_at' IS NOT NULL))`,
+    [changeId],
+  );
+  if (!rows.length) return [];
+  const { rows: live } = await c.query("SELECT id FROM users WHERE id = ANY($1) AND deleted_at IS NULL ORDER BY id", [
+    rows.map((r) => Number(r.id)),
+  ]);
+  return live.map((r) => Number(r.id));
+}
+
 async function mapImport(c: Db, r: Record<string, unknown>): Promise<MigrationImport> {
   const input = r.input as StoredInput;
   const changeId = r.change_id == null ? null : Number(r.change_id);
+  const live = r.status === "applied" && !r.rolled_back;
   return {
     id: Number(r.id),
     sourceSystem: r.source_system as string,
@@ -473,9 +491,10 @@ async function mapImport(c: Db, r: Record<string, unknown>): Promise<MigrationIm
     validatedAt: iso(r.validated_at)!,
     appliedAt: iso(r.applied_at),
     changeId,
-    inactiveTrunks: r.status === "applied" && !r.rolled_back ? (await inactiveTrunks(c, changeId)).length : 0,
+    inactiveTrunks: live ? (await inactiveTrunks(c, changeId)).length : 0,
     report: r.report as MigrationReport,
     applyError: (r.apply_error as string | null) ?? null,
+    newUserIds: live ? await importedUsers(c, changeId) : [],
   };
 }
 async function loadImport(c: Db, id: number) {

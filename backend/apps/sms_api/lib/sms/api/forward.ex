@@ -3,8 +3,8 @@ defmodule Sms.Api.Forward do
   Forwards every contract call the Elixir API has not ported yet to the mock server (product owner 2026-10-25: the
   API in front, the screens keep one address). The signed-in user goes along as `X-Sms-User` / `X-Sms-Session` with
   the shared secret `X-Sms-Proxy-Secret` (MOCK_PROXY_SECRET), which the mock checks (mock/src/auth/user.ts); such
-  headers from the browser are dropped. Without a session only the health check is forwarded; anything else is
-  answered 401 `sign_in_required`. The customer portal (/portal) has its own sign-in: its calls go through with the
+  headers from the browser are dropped. Without a session only the health check and the set-password link's calls
+  are forwarded; anything else is answered 401 `sign_in_required`. The customer portal (/portal) has its own sign-in: its calls go through with the
   portal's cookie.
 
   Before a call goes on, the password gate (`Sms.Api.PasswordGate`) and the user's access group
@@ -20,7 +20,12 @@ defmodule Sms.Api.Forward do
 
   # Hop-by-hop headers and the ones this API sets itself.
   @dropped ~w(connection keep-alive proxy-connection transfer-encoding te trailer upgrade host content-length cookie)
-  @public [{"GET", "/api/v1/health"}]
+  # Also the set-password link's two calls (team trial round 11): the link's token is the proof, never a session.
+  @public [
+    {"GET", "/api/v1/health"},
+    {"POST", "/api/v1/password-setup/check"},
+    {"POST", "/api/v1/password-setup"}
+  ]
 
   @impl true
   def init(opts), do: opts

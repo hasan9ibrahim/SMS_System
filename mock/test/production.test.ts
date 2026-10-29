@@ -254,4 +254,34 @@ describe("with the database (backend step 11)", { skip }, () => {
     assert.equal(await deliver(pool, orphan, async () => ({})), "failed");
     if (saved) process.env.SMTP_URL = saved;
   });
+
+  test("the platform's own plain-text e-mails go out with the Xpert logo; company e-mails keep theirs (round 11)", async () => {
+    const pool = db();
+    const saved = process.env.SMTP_URL;
+    process.env.SMTP_URL = "smtp://platform%40example.test:pw@127.0.0.1:2525";
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO email_logs (email_type, status, to_addresses, subject, body, sender, next_try_at)
+         VALUES ('otp', 'queued', ARRAY['a@example.test'], 'Your sign-in code', $1, NULL, now()) RETURNING *`,
+        ["Hello Testa,\n\nYour sign-in code is 123456.\n\nOpen https://xpert.example.test to sign in."],
+      );
+      cleanup.push(() => pool.query("DELETE FROM email_logs WHERE id = $1", [rows[0].id]));
+      let message: { html?: unknown; text?: unknown; attachments?: { cid?: string; contentType?: string }[] } = {};
+      assert.equal(
+        await deliver(pool, rows[0], async (_m, m) => {
+          message = m as typeof message;
+          return { messageId: "<2@test>" };
+        }),
+        "sent",
+      );
+      assert.match(String(message.text), /123456/);
+      assert.match(String(message.html), /cid:xpert-logo@xpert/);
+      assert.match(String(message.html), /123456/);
+      assert.match(String(message.html), /<a href="https:\/\/xpert\.example\.test"/);
+      assert.ok(message.attachments!.some((a) => a.cid === "xpert-logo@xpert" && a.contentType === "image/png"));
+    } finally {
+      if (saved) process.env.SMTP_URL = saved;
+      else delete process.env.SMTP_URL;
+    }
+  });
 });

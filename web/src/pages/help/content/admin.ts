@@ -392,6 +392,16 @@ export const topics: HelpTopic[] = [
               'Their Password column shows "Must change at next login". Their current password still works, but only to reach the Change Password screen.',
             ],
           },
+          {
+            kind: "steps",
+            title: "Let users choose their own password (e-mailed link)",
+            items: [
+              "For one user: open the row's **More** menu and choose **E-mail password link…**. For several: tick their rows and choose **E-mail password links (N)** from the selection bar. After a Migration Center import, **E-mail password links** on the import does it for the users it created.",
+              "Click **E-mail the link**. Each user gets an e-mail with the Xpert logo and a link that works once, for 72 hours; a new link replaces the earlier one.",
+              "The link opens the **Set your password** screen: the user types a password until every rule ticks, then signs in as usual with the sign-in code. The link never signs anyone in.",
+              "The result lists the users skipped (deleted, inactive, no e-mail, or an administrator when you are not one) and any address that got links for several users: whoever reads a shared mailbox can set those passwords, so give each user their own address or set a temporary password instead.",
+            ],
+          },
         ],
       },
       {
@@ -1940,7 +1950,7 @@ export const topics: HelpTopic[] = [
               { name: "Next step", what: "What to do next, in words." },
               {
                 name: "Buttons",
-                what: "**Fix and re-run** and **Apply** on a dry run; **Go live** when imported trunks wait inactive; **Roll back** on an applied import.",
+                what: "**Fix and re-run** and **Apply** on a dry run; **Go live** when imported trunks wait inactive; **E-mail password links** when the import created users (each picks their own password); **Roll back** on an applied import.",
               },
               {
                 name: "Counts table",
@@ -2005,12 +2015,14 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Export each entity from the old platform as CSV, or fill in our templates.",
-              "If their column names differ, pick the ready mapping or save your own under **Column mappings**.",
+              "Column names are matched loosely: case, spaces, dashes and underscores do not matter, and the usual other names work (\"User name\" or \"Login\" for Username, \"E-mail\" for Email…). A template downloaded here imports back unchanged, whatever mapping is picked. If the old system's names are different again, pick the ready mapping or save your own under **Column mappings**.",
+              "Choices are read the way people write them: \"Active\", \"Tier 1\", \"Bilateral\", \"TLS 1.2\" or \"Yes\" work; a word the field does not know is listed by the dry run.",
               "Click **New import**, type the **Source system**, choose the files, mappings and what to do if a record exists.",
               "Click **Run dry run**. It writes nothing and lists every problem by file and row.",
               "Fix the files, click **Fix and re-run**, and repeat until there are no errors.",
               "Click **Apply** and confirm. Everything is written as one change in [[change-history]].",
               "Trunks arrive inactive: click **Go live**, then **Activate this partner** for one enterprise or **Activate all**. Activating is also one undoable change.",
+              "Imported users have no password anyone knows: click **E-mail password links** so each picks their own, or set a temporary password per user in [[users]].",
               "To undo the whole import, click **Roll back** and confirm: created records are archived and updated fields go back.",
             ],
           },
