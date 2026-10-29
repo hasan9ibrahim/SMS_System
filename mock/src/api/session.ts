@@ -56,9 +56,16 @@ export const demoUser: CurrentUser = {
   hiddenTabs: [],
 };
 
+/**
+ * SQL: whether the user of alias `u` is an administrator: the first administrator (users.is_admin, from the bootstrap)
+ * or a user whose access group is an administrator group (team trial round 10).
+ */
+export const adminSql = (u = "u") =>
+  `(${u}.is_admin OR coalesce((SELECT ag.is_admin FROM access_groups ag WHERE ag.id = ${u}.access_group_id), false))`;
+
 export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser | null> {
   const { rows } = await pool.query(
-    `SELECT u.id, u.username, u.first_name, u.last_name, u.is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings, u.alert_sounds, u.analytics_settings, u.favourite_pages,
+    `SELECT u.id, u.username, u.first_name, u.last_name, ${adminSql()} AS is_admin, u.theme, u.open_in_new_tab, u.animations, u.dashboard_settings, u.alert_sounds, u.analytics_settings, u.favourite_pages,
             g.name AS access_group, g.permissions, g.hidden_tabs, u.permission_overrides, u.tab_overrides,
             bc.name AS business_company
        FROM users u

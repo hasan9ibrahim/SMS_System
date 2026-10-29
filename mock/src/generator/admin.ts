@@ -19,10 +19,16 @@ export const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin"];
 
 // Permission keys are page keys of the menu (admin/catalog.ts, §11).
-export const ACCESS_GROUPS: { name: string; description: string; permissions: Record<string, string[]> }[] = [
+export const ACCESS_GROUPS: {
+  name: string;
+  description: string;
+  permissions: Record<string, string[]>;
+  administrator?: boolean;
+}[] = [
   {
     name: "Administrator",
-    description: "Every page and button",
+    description: "Every page and button, the Admin pages included",
+    administrator: true,
     permissions: {
       "*": [
         "view",
@@ -169,6 +175,7 @@ export async function generateAdmin(world: World, rng: Rng, sink: TableSink, pro
       status: "active",
       permissions: json(g.permissions),
       description: g.description,
+      is_admin: !!g.administrator,
     });
   }
 

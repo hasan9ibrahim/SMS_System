@@ -85,6 +85,8 @@ interface Lookups {
   countries: Map<string, number>;
   mccmnc: Map<string, number>;
   users: Map<string, number>;
+  /** Users that are deleted: a file row with one of their usernames brings the user back (team trial round 10). */
+  deletedUsers: Set<number>;
   enterprises: Map<string, number>;
   customerTrunks: Map<string, number>;
   customerUsernames: Map<string, number>;
@@ -129,6 +131,9 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     mccmnc: await map("SELECT mccmnc AS k, id FROM mccmnc WHERE deleted_at IS NULL"),
     // Usernames are unique across archived users too.
     users: await map("SELECT lower(username) AS k, id FROM users"),
+    deletedUsers: new Set(
+      (await c.query("SELECT id FROM users WHERE deleted_at IS NOT NULL")).rows.map((r) => Number(r.id)),
+    ),
     enterprises: await map(
       "SELECT lower(name) AS k, min(id) AS id FROM enterprises WHERE deleted_at IS NULL GROUP BY 1",
     ),
@@ -252,7 +257,17 @@ class Planner {
 const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   users: {
     table: "users",
-    columns: ["first_name", "last_name", "email", "department_id", "access_group_id", "is_account_manager", "status"],
+    // deleted_at: only a restored user's row carries it (null), see planUsers.
+    columns: [
+      "first_name",
+      "last_name",
+      "email",
+      "department_id",
+      "access_group_id",
+      "is_account_manager",
+      "status",
+      "deleted_at",
+    ],
   },
   enterprises: {
     table: "enterprises",
@@ -348,9 +363,22 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       return void (pr.action = "error");
     }
     seen.add(uname);
-    const m = p.match("users", line, ext, p.lk.users.get(uname) ?? null);
+    const existing = p.lk.users.get(uname) ?? null;
+    // A deleted user keeps its username (history and audit refer to it), so the row cannot create a new one. Skipping
+    // it would leave the user deleted while the import says it is already there (team trial round 10): the import
+    // restores the user with the file's details instead, whatever the setting for existing users.
+    const restore = existing != null && p.lk.deletedUsers.has(existing);
+    const m = restore ? { action: "update" as const, id: existing } : p.match("users", line, ext, existing);
     pr.action = m.action;
     pr.existingId = m.id;
+    if (restore)
+      p.issue(
+        "users",
+        line,
+        "username",
+        `User "${r.username}" was deleted: the import restores it with the file's details`,
+        "warning",
+      );
     if (m.action === "create" && p.lk.users.has(uname)) {
       p.issue("users", line, "username", `Username "${r.username}" is taken: choose skip or update for users`);
       return void (pr.action = "error");
@@ -370,6 +398,7 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       access_group_id: group,
       is_account_manager: yes(r.isAccountManager),
       status: r.status?.trim() || "active",
+      ...(restore ? { deleted_at: null } : {}),
     };
   });
   out.forEach((r, i) => r.action !== "error" && p.index("users", i, r.externalId, lower(String(r.values.username))));

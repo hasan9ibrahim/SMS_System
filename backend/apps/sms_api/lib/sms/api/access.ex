@@ -4,7 +4,8 @@ defmodule Sms.Api.Access do
   call is checked, reads too (a read needs the page's View, a change its action), so a page the user may not open is
   not reached from another page either; other pages pick its records by name through `/lookups`. Admin pages are for
   administrators only, unless the group or the user's own override names that page itself: the group's Every page
-  grant (`*`) never covers them. Administrators may do everything. AM visibility (§13.17) still masks and hides data
+  grant (`*`) never covers them. Administrators may do everything: the first administrator (`users.is_admin`) and
+  the users of an administrator access group (`access_groups.is_admin`, team trial round 10). AM visibility (§13.17) still masks and hides data
   on top.
 
   The user's pages and actions are the group's, with the user's own overrides on top (an empty list = no access to
@@ -136,7 +137,8 @@ defmodule Sms.Api.Access do
     %{rows: rows} =
       Repo.query!(
         """
-        SELECT u.is_admin, coalesce(g.permissions, '{}'::jsonb), u.permission_overrides
+        SELECT u.is_admin OR coalesce(g.is_admin, false), coalesce(g.permissions, '{}'::jsonb),
+               u.permission_overrides
           FROM users u LEFT JOIN access_groups g ON g.id = u.access_group_id
          WHERE u.id = $1
         """,

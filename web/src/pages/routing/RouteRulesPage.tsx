@@ -484,7 +484,10 @@ export function RouteRulesPage() {
   const sectionState = useState<string | null>(null);
   const openRule = useRef<((row: RouteRuleRow) => void) | null>(null);
   const [, setSection] = sectionState;
-  const win = (state.columns.window?.value as TrafficWindow | undefined) ?? "24h";
+  // The traffic window, picked in its header box or as a quick-search pill (both filter, team trial round 10).
+  const win =
+    ((state.columns.window ?? state.pills?.window ?? state.switches?.window)?.value as TrafficWindow | undefined) ??
+    "24h";
 
   const loadRule = useCallback(
     (id: number) =>

@@ -9,7 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { EdrRow, EmailPreview, EmailTemplateRow, FieldDescriptor, ListQuery, TrunkListRow } from "@sms/contract";
 import { fetchPickPage, fetchListPage, useListFields, type ListPage } from "../../api/hooks";
 import { previewTroubleTicket, useEdrTemplates, useRepush, useSendTroubleTicket } from "../../api/observation";
-import type { GridState } from "../../grid/filterModel";
+import { switchOf, withSwitch, type GridState } from "../../grid/filterModel";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { ListLookup } from "../../records/parts";
@@ -22,6 +22,7 @@ import { problemText } from "../routing/dialogs";
 import { toBase64 } from "../switch/tools/toolsModel";
 import {
   EDR_SECTIONS,
+  EDR_SWITCH_FIELDS,
   fieldText,
   fmtSeconds,
   msgStatusTone,
@@ -128,9 +129,9 @@ function StatusChip({
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const statuses = fields.data?.fields.find((f) => f.field === "msgStatus")?.enumValues ?? [];
-  const c = state.columns.msgStatus;
+  const c = switchOf(state, "msgStatus");
   const picked = c?.values?.map(String) ?? (c?.value !== undefined ? [String(c.value)] : []);
-  const final = state.columns.isFinalAttempt?.value === true;
+  const final = switchOf(state, "isFinalAttempt")?.value === true;
   const label =
     picked.length === 0 ? "All" : picked.length === 1 ? picked[0] || "(none yet)" : `${picked.length} statuses`;
   const toggle = (v: string) => {
@@ -177,19 +178,15 @@ function StatusChip({
 
 /**
  * EDR search filters (design refresh, team trial round 2): one box for numbers, senders and message IDs, the
- * period as a chip, Destinations and Status chips, and the column template.
+ * period as a chip, Destinations and Status chips, and the column template. Page switches (team trial round 10): the
+ * header boxes and pills on the same columns filter on their own.
  */
 function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
   const templates = useEdrTemplates();
-  const bounds = timeBounds(state.columns.startTime);
-  const set = (field: string, c: GridState["columns"][string] | null) => {
-    const columns = { ...state.columns };
-    if (c) columns[field] = c;
-    else delete columns[field];
-    setState({ ...state, columns });
-  };
+  const bounds = timeBounds(switchOf(state, "startTime"));
+  const set = (field: string, c: GridState["columns"][string] | null) => setState(withSwitch(state, field, c));
   const ids = (field: string) => {
-    const c = state.columns[field];
+    const c = switchOf(state, field);
     return c?.op === "in" ? (c.values ?? []).join(", ") : c?.op === "eq" ? String(c.value) : "";
   };
   const setIds = (field: string, text: string) => {
@@ -201,7 +198,7 @@ function EdrToolbar({ state, setState }: { state: GridState; setState: (s: GridS
   };
   const today = new Date().toISOString().slice(0, 10);
   const isToday = bounds.from.startsWith(today) && (bounds.to === "" || bounds.to.startsWith(today));
-  const dest = state.columns.customerMccmnc;
+  const dest = switchOf(state, "customerMccmnc");
   const destCount = dest?.values?.length ?? (dest?.value !== undefined ? 1 : 0);
   return (
     <>
@@ -590,9 +587,9 @@ export function EdrSearchPage() {
       fetchPage={fetchEdrs}
       toolbar={(state, setState) => <EdrToolbar state={state} setState={setState} />}
       // Opens on today (UTC) when the tab has no filters of its own (team trial round 2).
-      initialState={{ columns: { startTime: todayCondition() } }}
+      initialState={{ switches: { startTime: todayCondition() } }}
       noQuickSearch
-      toolbarFields={["startTime", "numberOrMsgId", "customerMccmnc", "msgStatus", "isFinalAttempt"]}
+      toolbarFields={EDR_SWITCH_FIELDS}
       noRecordBar
       autoFit
       exportPrimary

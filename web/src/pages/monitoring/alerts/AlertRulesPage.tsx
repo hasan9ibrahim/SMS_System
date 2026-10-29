@@ -485,7 +485,7 @@ function useRuleHandlers() {
     },
     incidents: (r: AlertRuleRow) =>
       navigate(
-        `/monitoring/incidents?g=${encodeState({ ...emptyState(), columns: { ruleName: { field: "ruleName", op: "eq", value: r.name } } })}`,
+        `/monitoring/incidents?g=${encodeState({ ...emptyState(), switches: { ruleName: { field: "ruleName", op: "in", values: [r.name] } } })}`,
       ),
   };
 }
@@ -537,7 +537,7 @@ function OpenIncidentsButton() {
       className="btn btn-default open-inc-btn"
       onClick={() =>
         navigate(
-          `/monitoring/incidents?g=${encodeState({ ...emptyState(), columns: { state: { field: "state", op: "in", values: ["open"] } } })}`,
+          `/monitoring/incidents?g=${encodeState({ ...emptyState(), switches: { state: { field: "state", op: "in", values: ["open"] } } })}`,
         )
       }
     >

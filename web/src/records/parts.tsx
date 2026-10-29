@@ -537,7 +537,8 @@ export function ChildGrid<Row extends { id: number }>({
   toolbar?: ReactNode | ((selected: Row[], clear: () => void) => ReactNode);
 }) {
   const fields = useListFields(list);
-  const [state, setState] = useState<GridState>(() => ({ ...emptyState(), columns: { ...fixed } }));
+  // The record's own rows (`fixed`) are switches: the header boxes stay free (team trial round 10).
+  const [state, setState] = useState<GridState>(() => ({ ...emptyState(), switches: { ...fixed } }));
   const [active, setActive] = useState<Row | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [rows, setRows] = useState<Row[]>([]);
@@ -560,8 +561,8 @@ export function ChildGrid<Row extends { id: number }>({
       <DataGrid<Row>
         list={list}
         fields={fields.data}
-        state={{ ...state, visible: state.visible ?? visible, columns: { ...state.columns, ...fixed } }}
-        onStateChange={(s) => setState({ ...s, columns: { ...s.columns, ...fixed } })}
+        state={{ ...state, visible: state.visible ?? visible, switches: { ...state.switches, ...fixed } }}
+        onStateChange={(s) => setState({ ...s, switches: { ...s.switches, ...fixed } })}
         {...(columns ? { columns } : {})}
         activeId={active?.id ?? null}
         onActiveChange={setActive}

@@ -276,7 +276,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Under the header, list pages show a filter card: the quick search box (with a pill for every column filter), the page's own controls, **Show deleted** where the list has archived records and **Clear all**; on the right **Save as view**, **Views**, the selection summary and **Columns**. The grid follows straight after; its footer gives the row count, for example **Showing 400 of 12,480 records · scroll for more**. See [[grids-and-filters]].",
+            text: "Under the header, list pages show a filter card: the quick search box (with its field pills), the page's own switches (for example Customer / Vendor, the period, **State: All**), **Show deleted** where the list has archived records and **Clear all**; on the right **Save as view**, **Views**, the selection summary and **Columns**. The grid follows straight after; its footer gives the row count, for example **Showing 400 of 12,480 records · scroll for more**. See [[grids-and-filters]].",
           },
         ],
       },
@@ -555,7 +555,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Every column filter shows as a pill in the quick search box, for example `Type = Customer, Vendor` or `Margin = <0`, and also under its column header. All pills apply together (AND). Click × on a pill to remove that filter, or press **Backspace** in the empty box to remove the last pill. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes every filter and the quick search but keeps your sort and columns; a page with a default filter (e.g. EDR search's today) goes back to it.",
+            text: "A list has three kinds of filter, and each works on its own: the **field pills** in the quick search box (for example `Type = Customer, Vendor` or `Margin = <0`), the **boxes under the column headers**, and the **page's switches** (Customer / Vendor on Rate manager, the period and status on EDR search, State on Incidents, Show deleted…). Setting or clearing one never fills or clears another, even on the same column; they all apply together (AND), so a header box narrows what a pill or switch already picked. Click × on a pill to remove it, or press **Backspace** in the empty box to remove the last pill. Conditions from the filter builder show as one chip such as **All of 3 conditions**; click it to edit them. **Clear all** removes the pills, header boxes, builder and quick search, and puts the switches back to the page's defaults (e.g. EDR search's today, Rate manager's Customer); it keeps your sort and columns, and shows only when there is something to clear.",
           },
         ],
       },

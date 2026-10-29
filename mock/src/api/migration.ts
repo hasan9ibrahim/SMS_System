@@ -36,7 +36,7 @@ import { PACKAGE_DIR, PackageError, readPackage, writePackage } from "../migrati
 import { logEmail } from "./emailLog.js";
 import type { DiffEntry } from "./records.js";
 import { iso, recordChange } from "./records.js";
-import { getCurrentUser } from "./session.js";
+import { adminSql, getCurrentUser } from "./session.js";
 import { checkEmailCode } from "./admin.js";
 import { inTransaction } from "./views.js";
 
@@ -70,7 +70,7 @@ async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: st
 
 /** Tells the other admins that credentials left or entered the system. */
 async function notifyAdmins(c: Db, me: CurrentUser, subject: string, body: string) {
-  const { rows } = await c.query("SELECT email FROM users WHERE is_admin AND deleted_at IS NULL AND id <> $1", [me.id]);
+  const { rows } = await c.query(`SELECT email FROM users u WHERE ${adminSql()} AND deleted_at IS NULL AND id <> $1`, [me.id]);
   await logEmail(c, {
     type: "credential_transfer",
     to: rows.map((r) => r.email as string),

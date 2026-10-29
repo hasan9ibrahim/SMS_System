@@ -9,6 +9,7 @@ import type {
   ReportPeriod,
 } from "@sms/contract";
 import { emptyState, encodeState, type GridState } from "../../grid/filterModel";
+import { edrFilters } from "../monitoring/monitorModel";
 
 export const DIMENSIONS: ReportDimension[] = [
   "second",
@@ -198,7 +199,7 @@ export function edrGridState(
       else columns[field] = { field, op: "eq", value: INTEGER_EDR.has(field) ? Number(id) : String(id) };
     }
   columns.startTime = { field: "startTime", op: "between", values: [start, end] };
-  return { ...emptyState(), columns };
+  return { ...emptyState(), ...edrFilters(columns) };
 }
 
 /** EDR Search for the messages behind a row, in the report window (UTC hours for an hour row). */

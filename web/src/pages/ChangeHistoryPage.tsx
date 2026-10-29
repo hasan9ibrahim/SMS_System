@@ -38,7 +38,8 @@ export function ChangeHistoryPage() {
       list="changes"
       page={page}
       title={mine ? "My changes" : "Change history"}
-      initialState={mine && me ? { columns: { userId: { field: "userId", op: "eq", value: me.id } } } : {}}
+      // My changes: a page switch, so the User header box stays free (team trial round 10).
+      initialState={mine && me ? { switches: { userId: { field: "userId", op: "eq", value: me.id } } } : {}}
       rowActions={(c) => [
         {
           label: "Undo",

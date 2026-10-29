@@ -193,7 +193,7 @@ export function IncidentsPage() {
       // state and severity as pills, scope over its rule, start → end, duration with a bar, the peak.
       rowHeight={60}
       initialState={{
-        columns: { startedAt: todayCondition() },
+        switches: { startedAt: todayCondition() },
         visible: ["id", "state", "severity", "entityName", "message", "startedAt", "durationSeconds", "peakValue"],
       }}
       toolbar={(state, setState) => <IncidentFilters state={state} setState={setState} />}

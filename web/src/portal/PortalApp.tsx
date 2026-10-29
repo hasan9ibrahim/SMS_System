@@ -7,7 +7,7 @@ import type { PortalMessageRow, PortalRateRow, PortalTrafficQuery } from "@sms/c
 import { ApiError } from "../api/client";
 import type { ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride } from "../grid/DataGrid";
-import { emptyState, toListQuery, type GridState } from "../grid/filterModel";
+import { emptyState, switchOf, toListQuery, withSwitch, type GridState } from "../grid/filterModel";
 import { Chart, useChartColors } from "../ui/Chart";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
@@ -407,13 +407,10 @@ function Rates() {
       fetchPage={fetchRates}
       columns={RATE_COLUMNS}
       toolbar={(state, setState, total) => {
-        const st = state.columns.state?.values?.[0] as string | undefined;
-        const setSt = (v: string | null) => {
-          const columns = { ...state.columns };
-          if (v) columns.state = { field: "state", op: "in", values: [v] };
-          else delete columns.state;
-          setState({ ...state, columns });
-        };
+        // All / Current / Upcoming: a page switch, apart from the header boxes (team trial round 10).
+        const st = switchOf(state, "state")?.values?.[0] as string | undefined;
+        const setSt = (v: string | null) =>
+          setState(withSwitch(state, "state", v ? { field: "state", op: "in", values: [v] } : null));
         return (
           <>
             <SearchBox
@@ -467,7 +464,7 @@ function Messages() {
   const [period, setPeriod] = useState<Period>("today");
   const initial = useMemo(() => {
     const [a, b] = periodRange("today");
-    return { columns: { submitTime: { field: "submitTime", op: "between" as const, values: [a, b] } } };
+    return { switches: { submitTime: { field: "submitTime", op: "between" as const, values: [a, b] } } };
   }, []);
   return (
     <ListPage<PortalMessageRow & { id: number }>
@@ -499,10 +496,7 @@ function Messages() {
                 onClick={() => {
                   setPeriod(v);
                   const [a, b] = periodRange(v);
-                  setState({
-                    ...state,
-                    columns: { ...state.columns, submitTime: { field: "submitTime", op: "between", values: [a, b] } },
-                  });
+                  setState(withSwitch(state, "submitTime", { field: "submitTime", op: "between", values: [a, b] }));
                 }}
               >
                 {label}

@@ -46,6 +46,23 @@ export function timeCondition(field: string, from: string, to: string): FilterCo
   if (to) return { field, op: "lte", value: fromLocalInput(to) };
   return null;
 }
+/** EDR search's toolbar filters (period, numbers or IDs, destinations, status, final attempt): page switches there. */
+export const EDR_SWITCH_FIELDS = ["startTime", "numberOrMsgId", "customerMccmnc", "msgStatus", "isFinalAttempt"];
+
+/**
+ * Conditions for a list of EDRs opened from elsewhere (reports, Live analytics): the toolbar's fields as its switches,
+ * the others in their header boxes (team trial round 10).
+ */
+export function edrFilters(conditions: Record<string, FilterCondition>): {
+  columns: Record<string, FilterCondition>;
+  switches: Record<string, FilterCondition>;
+} {
+  const columns: Record<string, FilterCondition> = {};
+  const switches: Record<string, FilterCondition> = {};
+  for (const [k, c] of Object.entries(conditions)) (EDR_SWITCH_FIELDS.includes(k) ? switches : columns)[k] = c;
+  return { columns, switches };
+}
+
 export function timeBounds(c: FilterCondition | undefined): { from: string; to: string } {
   if (!c) return { from: "", to: "" };
   if (c.op === "between") return { from: toLocalInput(String(c.values?.[0])), to: toLocalInput(String(c.values?.[1])) };

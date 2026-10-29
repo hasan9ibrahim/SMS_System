@@ -10765,6 +10765,10 @@ export type components = {
       sort?: components["schemas"]["SortKey"][];
       /** @description Visible columns in display order (field names). */
       columns?: string[];
+      /** @description The page's own switches (period, Customer / Vendor, State, Show deleted…) by switch key, kept apart from the column filters and pills in `filter` so the view restores each in its place; all apply together (AND). Team trial round 10 (§13.25). */
+      switches?: {
+        [key: string]: components["schemas"]["FilterCondition"];
+      };
       /** @description Master Report views (list master_report) - the report settings (§13.15). */
       report?: components["schemas"]["MasterReportSettings"];
     };
@@ -16297,6 +16301,11 @@ export type components = {
       name: string;
       status: components["schemas"]["RecordStatus"];
       description: string | null;
+      /**
+       * @description Full administrator (team trial round 10). Its users see every page, the Admin pages included, and may do what only administrators may (restore archived records, credential exports, overrides); the permissions below do not limit them. Only an administrator can turn it on, change such a group or give it to a user.
+       * @default false
+       */
+      administrator: boolean;
       /**
        * @description Tabs and sections the group does not see ("page.tab" keys from the catalogue; team trial round 2).
        * @default []
@@ -29939,6 +29948,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -29994,6 +30004,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       /** @description Blocked by dependencies that must be settled first */
       409: {
@@ -30060,6 +30071,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -30554,6 +30566,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -30609,6 +30622,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       /** @description Blocked by dependencies that must be settled first */
       409: {

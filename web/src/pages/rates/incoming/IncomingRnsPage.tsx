@@ -22,7 +22,7 @@ import {
   useVendorRnSettings,
 } from "../../../api/rn";
 import { DataGrid, type ColumnOverride } from "../../../grid/DataGrid";
-import { emptyState, type GridState } from "../../../grid/filterModel";
+import { emptyState, switchOf, withSwitch, type GridState } from "../../../grid/filterModel";
 import { useNotifySaved } from "../../../history/undo";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
@@ -749,19 +749,15 @@ function RnQueue() {
       }}
       toolbarFields={["status"]}
       toolbar={(state, setState) => {
-        const set = (field: string, c: FilterCondition | null) => {
-          const columns = { ...state.columns };
-          if (c) columns[field] = c;
-          else delete columns[field];
-          setState({ ...state, columns });
-        };
-        const flagged = state.columns.flagged;
+        // Page switches (team trial round 10): apart from the header boxes and the pills.
+        const set = (field: string, c: FilterCondition | null) => setState(withSwitch(state, field, c));
+        const flagged = switchOf(state, "flagged");
         return (
           <div className="incident-filters">
             <ChecklistChip
               label="Status"
               field="status"
-              condition={state.columns.status}
+              condition={switchOf(state, "status")}
               options={Object.entries(STATUS).map(([value, v]) => ({ value, label: v.label }))}
               onChange={(c) => set("status", c)}
             />
@@ -1078,7 +1074,8 @@ function RnReview({ id }: { id: number }) {
   const gridState: GridState = useMemo(
     () => ({
       ...grid,
-      columns: { ...grid.columns, rnId: { field: "rnId", op: "eq", value: id } },
+      // The RN's own lines: a fixed switch, so the header boxes and pills stay the user's (team trial round 10).
+      switches: { ...grid.switches, rnId: { field: "rnId", op: "eq", value: id } },
       visible: grid.visible ?? [
         "country",
         "network",

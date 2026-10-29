@@ -5,7 +5,7 @@
 import { HoverList } from "../../ui/HoverList";
 import { useLocation } from "react-router";
 import type { RateTableRow } from "@sms/contract";
-import type { GridState } from "../../grid/filterModel";
+import { switchOf, withSwitch, type GridState } from "../../grid/filterModel";
 import { useMe } from "../../api/hooks";
 import { useReference, useRestore } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
@@ -78,14 +78,13 @@ const KINDS: { value: Kind; label: string }[] = [
 
 /**
  * Customer (sell) tables by default; vendor tables are also shown in each vendor trunk (team trial
- * round 1). The switch keeps its Type condition under its own key: it applies and travels in the URL like any
- * filter, but does not fill the Type box under the header (team trial round 7).
+ * round 1). The switch is a page switch: it applies and travels in the URL like any filter, but does not fill the
+ * Type box under the header (team trial round 7; every page's switches since round 10).
  */
-const KIND_KEY = "kindSwitch";
 const kindCondition = (kind: Kind) => ({ field: "kind", op: "in" as const, values: [kind] });
 
 function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
-  const c = state.columns[KIND_KEY];
+  const c = switchOf(state, "kind");
   const list = c?.values ?? (c?.value !== undefined ? [c.value] : []);
   // Neither is lit when the Type filter was cleared or set to both from the filter bar.
   const kind: Kind | null = list.length === 1 ? (list[0] as Kind) : null;
@@ -98,7 +97,7 @@ function KindSwitch({ state, setState }: { state: GridState; setState: (s: GridS
           className={kind === k.value ? "on" : ""}
           aria-pressed={kind === k.value}
           onClick={() => {
-            setState({ ...state, columns: { ...state.columns, [KIND_KEY]: kindCondition(k.value) } });
+            setState(withSwitch(state, "kind", kindCondition(k.value)));
           }}
         >
           {k.label}
@@ -210,20 +209,23 @@ function FullList({ compact = false }: { compact?: boolean }) {
         ],
       }}
       primary={{ label: "New rate table", onClick: () => void newRateTable((id) => open(id)) }}
-      initialState={{ columns: { [KIND_KEY]: kindCondition("customer") } }}
+      initialState={{ switches: { kind: kindCondition("customer") } }}
       toolbar={(state, setState) => {
-        const c = state.columns.accountManagerId;
+        const c = switchOf(state, "accountManagerId");
         return (
           <>
             <KindSwitch state={state} setState={setState} />
             <AmFilter
               value={c ? Number(c.value) : null}
-              onChange={(id) => {
-                const columns = { ...state.columns };
-                if (id === null) delete columns.accountManagerId;
-                else columns.accountManagerId = { field: "accountManagerId", op: "eq", value: id };
-                setState({ ...state, columns });
-              }}
+              onChange={(id) =>
+                setState(
+                  withSwitch(
+                    state,
+                    "accountManagerId",
+                    id === null ? null : { field: "accountManagerId", op: "eq", value: id },
+                  ),
+                )
+              }
             />
           </>
         );

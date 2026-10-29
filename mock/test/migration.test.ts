@@ -509,6 +509,57 @@ describe("migration center", { skip }, () => {
     assert.equal((await db().query("SELECT 1 FROM users WHERE username = $1", [`gone.${run}`])).rows.length, 0);
   });
 
+  test("a deleted user in the file is restored, not skipped (team trial round 10)", async () => {
+    const username = `back.${run}`;
+    const users = (source: string, first: string) => ({
+      sourceSystem: source,
+      trunksInactive: true,
+      files: [
+        {
+          entity: "users",
+          fileName: "users.csv",
+          content: toCsv([
+            ["externalId", "username", "firstName", "lastName", "email"],
+            ["B1", username, first, "User", `${username}@example.com`],
+          ]),
+        },
+      ],
+    });
+    const first = await ok("createMigrationImport", call("POST", "/migration/imports", users(`Back ${run}`, "Back")), 201);
+    madeImports.push(first.id);
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${first.id}/apply`), 202);
+    await runningApplies.get(first.id);
+    const { rows } = await db().query("SELECT id FROM users WHERE username = $1", [username]);
+    const id = Number(rows[0].id);
+    cleanup.push(async () => {
+      await db().query("DELETE FROM migration_refs WHERE entity = 'users' AND record_id = $1", [id]);
+      await db().query("DELETE FROM users WHERE id = $1", [id]);
+    });
+    // Deleted (as a rollback leaves them): the username stays taken, so a second import used to skip the row.
+    await db().query("UPDATE users SET deleted_at = now() WHERE id = $1", [id]);
+    const again = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", users(`Back again ${run}`, "Again")),
+      201,
+    );
+    madeImports.push(again.id);
+    const counts = again.report.entities.find((e: { entity: string }) => e.entity === "users");
+    assert.equal(counts.update, 1, JSON.stringify(counts));
+    assert.equal(again.report.canApply, true, JSON.stringify(again.report.issues));
+    assert.ok(again.report.issues.some((i: { message: string }) => /was deleted: the import restores it/.test(i.message)));
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${again.id}/apply`), 202);
+    await runningApplies.get(again.id);
+    const back = await db().query("SELECT deleted_at, first_name FROM users WHERE id = $1", [id]);
+    assert.equal(back.rows[0].deleted_at, null);
+    assert.equal(back.rows[0].first_name, "Again");
+    // Undo of that import deletes the user again, with its old details.
+    const restored = await ok("getMigrationImport", call("GET", `/migration/imports/${again.id}`));
+    await ok("undoChange", call("POST", `/changes/${restored.changeId}/undo`, {}));
+    const undone = await db().query("SELECT deleted_at, first_name FROM users WHERE id = $1", [id]);
+    assert.notEqual(undone.rows[0].deleted_at, null);
+    assert.equal(undone.rows[0].first_name, "Back");
+  });
+
   test("the e-mailed credential code is for admins without the authenticator app", async () => {
     // The test admin has the app: its code is the one to use.
     await fails("sendMyCredentialCode", call("POST", "/me/credential-code"), 409);

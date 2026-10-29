@@ -59,3 +59,15 @@ test("an OR filter saved elsewhere opens in the builder", () => {
     ],
   });
 });
+
+test("a view keeps the page's switches apart from its filters (team trial round 10)", () => {
+  const state: GridState = {
+    ...emptyState(),
+    columns: { kind: { field: "kind", op: "in", values: ["vendor", "customer"] } },
+    switches: { kind: { field: "kind", op: "in", values: ["customer"] } },
+  };
+  const saved = toViewState(state);
+  assert.deepEqual(saved.switches, state.switches);
+  assert.deepEqual(saved.filter, { logic: "and", conditions: [state.columns.kind] });
+  assert.deepEqual(fromViewState(view(saved)), { ...state, viewId: 3 });
+});
