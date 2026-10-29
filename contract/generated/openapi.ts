@@ -10765,6 +10765,10 @@ export type components = {
       sort?: components["schemas"]["SortKey"][];
       /** @description Visible columns in display order (field names). */
       columns?: string[];
+      /** @description The page's own switches (period, Customer / Vendor, State, Show deleted…) by switch key, kept apart from the column filters and pills in `filter` so the view restores each in its place; all apply together (AND). Team trial round 10 (§13.25). */
+      switches?: {
+        [key: string]: components["schemas"]["FilterCondition"];
+      };
       /** @description Master Report views (list master_report) - the report settings (§13.15). */
       report?: components["schemas"]["MasterReportSettings"];
     };

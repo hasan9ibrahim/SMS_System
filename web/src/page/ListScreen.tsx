@@ -20,7 +20,16 @@ import { DataGrid, type ColumnOverride, type GridMeta } from "../grid/DataGrid";
 import { FilterBuilder } from "../grid/FilterBuilder";
 import { PillSearch } from "../grid/PillSearch";
 import { SaveViewButton, ViewsMenu } from "../grid/ViewsMenu";
-import { countConditions, decodeState, emptyState, encodeState, isFiltered, type GridState } from "../grid/filterModel";
+import {
+  countConditions,
+  decodeState,
+  emptyState,
+  encodeState,
+  isFiltered,
+  switchOf,
+  withSwitch,
+  type GridState,
+} from "../grid/filterModel";
 import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "../history/undo";
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
@@ -115,6 +124,10 @@ export interface ListScreenProps<Row extends { id: number }> {
 }
 
 /** Grid state in the tab URL: ?g=<encoded>. Filter changes replace, not push. */
+/** The filters of a state, to tell whether Clear all would change anything. */
+const filtersOf = (s: GridState) =>
+  JSON.stringify([s.columns, s.pills ?? {}, s.switches ?? {}, countConditions(s.builder) ? s.builder : null, s.search]);
+
 export function useGridUrlState(initial?: Partial<GridState>): [GridState, (s: GridState) => void] {
   const location = useLocation();
   const navigate = useTabNavigate();
@@ -180,20 +193,19 @@ function ColumnsMenu({
   );
 }
 
-/** "Show deleted" (§13.29): lists archived rows next to live ones, greyed out. */
+/** "Show deleted" (§13.29): lists archived rows next to live ones, greyed out. A page switch (team trial round 10). */
 export function ShowDeleted({ state, onChange }: { state: GridState; onChange: (s: GridState) => void }) {
-  const on = !!state.columns.archived;
+  const on = !!switchOf(state, "archived");
   return (
     <label className="toggle-inline">
       <input
         type="checkbox"
         checked={on}
-        onChange={(e) => {
-          const columns = { ...state.columns };
-          if (e.target.checked) columns.archived = { field: "archived", op: "in", values: [true, false] };
-          else delete columns.archived;
-          onChange({ ...state, columns });
-        }}
+        onChange={(e) =>
+          onChange(
+            withSwitch(state, "archived", e.target.checked ? { field: "archived", op: "in", values: [true, false] } : null),
+          )
+        }
       />
       Show deleted
     </label>
@@ -606,10 +618,19 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   }, [rows, selectId]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new filter or search changes the rows: drop a selection the user can no longer see,
   // so the selection actions never act on hidden rows.
-  const filterKey = JSON.stringify([state.columns, state.pills, state.builder, state.search]);
+  const filterKey = JSON.stringify([state.columns, state.pills, state.switches, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
   const builderCount = countConditions(state.builder);
+  // Clear all: the page's own filters and switches, the columns and sort as they are.
+  const cleared: GridState = {
+    ...emptyState(),
+    ...initialState,
+    columns: { ...(initialState?.columns ?? {}) },
+    switches: { ...(initialState?.switches ?? {}) },
+    visible: state.visible,
+    sort: state.sort,
+  };
 
   // Quick search with field pills (team trial round 3): replaces Add filter and the filter chips.
   const pills = (
@@ -749,20 +770,12 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             </span>
           )}
           {byName.has("archived") && <ShowDeleted state={state} onChange={setState} />}
-          {isFiltered(state) && (
+          {isFiltered(state) && filtersOf(state) !== filtersOf(cleared) && (
             <button
               type="button"
               className="btn btn-ghost btn-sm"
               // Back to the page's own defaults (e.g. EDR search's today), not to nothing (team trial round 2).
-              onClick={() =>
-                setState({
-                  ...emptyState(),
-                  ...initialState,
-                  columns: { ...(initialState?.columns ?? {}) },
-                  visible: state.visible,
-                  sort: state.sort,
-                })
-              }
+              onClick={() => setState(cleared)}
             >
               Clear all
             </button>

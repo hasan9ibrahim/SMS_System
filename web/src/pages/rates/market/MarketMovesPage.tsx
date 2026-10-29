@@ -26,6 +26,7 @@ import {
   useScanMoves,
   useSendDigest,
 } from "../../../api/market";
+import { switchOf, withSwitch } from "../../../grid/filterModel";
 import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { useTabNavigate } from "../../../shell/tabContext";
@@ -725,32 +726,28 @@ export function MarketMovesPage() {
       rowHeight={62}
       detailBelow
       initialState={{
-        columns: { state: { field: "state", op: "in", values: ["open"] } },
+        switches: { state: { field: "state", op: "in", values: ["open"] } },
         visible: ["country", "avgChangePct", "firstEffective", "newCost", "affectedClients", "state"],
       }}
       toolbarFields={["state", "direction", "urgent", "amUserId"]}
       toolbar={(state, setState) => {
-        const set = (field: string, c: FilterCondition | null) => {
-          const columns = { ...state.columns };
-          if (c) columns[field] = c;
-          else delete columns[field];
-          setState({ ...state, columns });
-        };
-        const am = state.columns.amUserId;
-        const urgent = state.columns.urgent;
+        // Page switches (team trial round 10): apart from the header boxes and the pills.
+        const set = (field: string, c: FilterCondition | null) => setState(withSwitch(state, field, c));
+        const am = switchOf(state, "amUserId");
+        const urgent = switchOf(state, "urgent");
         return (
           <div className="incident-filters">
             <ChecklistChip
               label="State"
               field="state"
-              condition={state.columns.state}
+              condition={switchOf(state, "state")}
               options={Object.entries(STATE_LABEL).map(([value, label]) => ({ value, label }))}
               onChange={(c) => set("state", c)}
             />
             <ChecklistChip
               label="Direction"
               field="direction"
-              condition={state.columns.direction}
+              condition={switchOf(state, "direction")}
               options={[
                 { value: "up", label: "↑ Increases" },
                 { value: "down", label: "↓ Decreases" },

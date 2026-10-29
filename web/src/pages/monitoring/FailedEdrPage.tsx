@@ -4,7 +4,7 @@
 import { useCan } from "../../api/access";
 import type { FailedEdrRow, ListQuery } from "@sms/contract";
 import { fetchListPage, type ListPage } from "../../api/hooks";
-import type { GridState } from "../../grid/filterModel";
+import { switchOf, withSwitch, type GridState } from "../../grid/filterModel";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { RepushDialog } from "./EdrSearchPage";
@@ -36,15 +36,10 @@ function Tabs() {
   return <ViewTabs label="Failed EDRs" views={[...VIEWS]} value={view} onChange={go} />;
 }
 
+/** The period: a page switch, apart from the Start Time header box (team trial round 10). */
 function TimeBoxes({ state, setState }: { state: GridState; setState: (s: GridState) => void }) {
-  const b = timeBounds(state.columns.startTime);
-  const set = (from: string, to: string) => {
-    const columns = { ...state.columns };
-    const c = timeCondition("startTime", from, to);
-    if (c) columns.startTime = c;
-    else delete columns.startTime;
-    setState({ ...state, columns });
-  };
+  const b = timeBounds(switchOf(state, "startTime"));
+  const set = (from: string, to: string) => setState(withSwitch(state, "startTime", timeCondition("startTime", from, to)));
   return <RangeChip withTime from={b.from} to={b.to} suffix="UTC" empty="Pick From and To *" onChange={set} />;
 }
 

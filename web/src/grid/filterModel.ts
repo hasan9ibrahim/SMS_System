@@ -11,6 +11,12 @@ export interface GridState {
    * header box narrows the rows a pill on the same field already picked.
    */
   pills?: Record<string, FilterCondition>;
+  /**
+   * The page's own switches and toolbar filters (Customer / Vendor, period, State: All, Show deleted…), keyed by
+   * switch, kept apart from the header boxes and the pills (team trial round 10, as Rate manager since round 7): all
+   * three apply (AND), and changing one never fills or clears another.
+   */
+  switches?: Record<string, FilterCondition>;
   /** Multi-field builder (AND/OR groups); null when unused. */
   builder: FilterGroup | null;
   search: string;
@@ -24,6 +30,7 @@ export interface GridState {
 export const emptyState = (): GridState => ({
   columns: {},
   pills: {},
+  switches: {},
   builder: null,
   search: "",
   sort: [],
@@ -253,9 +260,26 @@ export function countConditions(g: FilterGroup | null): number {
   return g.conditions.reduce((n, c) => n + ("logic" in c ? countConditions(c) : 1), 0);
 }
 
-/** Column filters AND the builder tree, as one contract filter. */
-export function buildFilter(state: Pick<GridState, "columns" | "builder" | "pills">): FilterGroup | undefined {
-  const conditions: FilterGroup["conditions"] = [...Object.values(state.pills ?? {}), ...Object.values(state.columns)];
+/** A page switch's condition (undefined when the switch shows All). */
+export const switchOf = (state: GridState, key: string): FilterCondition | undefined => state.switches?.[key];
+
+/** The state with one page switch set, or cleared with null; the header boxes and pills stay as they are. */
+export function withSwitch(state: GridState, key: string, c: FilterCondition | null | undefined): GridState {
+  const switches = { ...(state.switches ?? {}) };
+  if (c) switches[key] = c;
+  else delete switches[key];
+  return { ...state, switches };
+}
+
+/** Switches, pills, header boxes AND the builder tree, as one contract filter. */
+export function buildFilter(
+  state: Pick<GridState, "columns" | "builder" | "pills" | "switches">,
+): FilterGroup | undefined {
+  const conditions: FilterGroup["conditions"] = [
+    ...Object.values(state.switches ?? {}),
+    ...Object.values(state.pills ?? {}),
+    ...Object.values(state.columns),
+  ];
   if (state.builder && countConditions(state.builder) > 0) conditions.push(state.builder);
   return conditions.length ? { logic: "and", conditions } : undefined;
 }
@@ -282,6 +306,7 @@ export function isFiltered(state: GridState): boolean {
   return (
     Object.keys(state.columns).length > 0 ||
     Object.keys(state.pills ?? {}).length > 0 ||
+    Object.keys(state.switches ?? {}).length > 0 ||
     countConditions(state.builder) > 0 ||
     state.search.trim() !== ""
   );
@@ -293,6 +318,7 @@ export function encodeState(state: GridState): string {
   const compact = {
     ...(Object.keys(state.columns).length ? { c: state.columns } : {}),
     ...(Object.keys(state.pills ?? {}).length ? { p: state.pills } : {}),
+    ...(Object.keys(state.switches ?? {}).length ? { x: state.switches } : {}),
     ...(state.builder && countConditions(state.builder) ? { b: state.builder } : {}),
     ...(state.search ? { q: state.search } : {}),
     ...(state.sort.length ? { s: state.sort } : {}),
@@ -315,15 +341,25 @@ export function decodeState(encoded: string | null): GridState {
     const o = JSON.parse(json) as {
       c?: GridState["columns"];
       p?: GridState["columns"];
+      x?: GridState["columns"];
       b?: FilterGroup;
       q?: string;
       s?: SortKey[];
       v?: string[];
       w?: number;
     };
+    // A column entry not keyed by its field was a page switch before switches had their own place (Rate manager's
+    // "kindSwitch", round 7): it moves there.
+    const columns: GridState["columns"] = {};
+    const switches: GridState["columns"] = { ...(o.x ?? {}) };
+    for (const [k, c] of Object.entries(o.c ?? {})) {
+      if (c.field === k) columns[k] = c;
+      else switches[k === "kindSwitch" ? c.field : k] = c;
+    }
     return {
-      columns: o.c ?? {},
+      columns,
       pills: o.p ?? {},
+      switches,
       builder: o.b ?? null,
       search: o.q ?? "",
       sort: o.s ?? [],

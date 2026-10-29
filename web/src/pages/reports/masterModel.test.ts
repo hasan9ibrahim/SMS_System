@@ -71,5 +71,7 @@ test("drill-down conditions and the EDRs behind a row", () => {
   const g = decodeState(new URLSearchParams(path.split("?")[1]).get("g")!);
   assert.deepEqual(g.columns.customerEnterpriseId, { field: "customerEnterpriseId", op: "eq", value: 436 });
   assert.deepEqual(g.columns.causeCode, { field: "causeCode", op: "in", values: ["88"] });
-  assert.deepEqual(g.columns.startTime!.values, ["2026-10-15T07:00:00.000Z", "2026-10-15T08:00:00.000Z"]);
+  // The period is EDR search's period switch, not its Start Time header box (team trial round 10).
+  assert.equal(g.columns.startTime, undefined);
+  assert.deepEqual(g.switches!.startTime!.values, ["2026-10-15T07:00:00.000Z", "2026-10-15T08:00:00.000Z"]);
 });

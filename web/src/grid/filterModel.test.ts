@@ -11,8 +11,11 @@ import {
   encodeState,
   formatColumnFilter,
   nextSort,
+  isFiltered,
   parseColumnFilter,
+  switchOf,
   toListQuery,
+  withSwitch,
 } from "./filterModel";
 
 const TEXT = ["like", "not_like", "eq", "neq", "in", "not_in", "empty", "not_empty", "regex"] as const;
@@ -200,4 +203,31 @@ test("pills and header boxes on the same field both apply (team trial round 7)",
     conditions: [state.pills!.customer, state.columns.customer],
   });
   assert.deepEqual(decodeState(encodeState(state)), state);
+});
+
+test("switches, pills and header boxes are three separate filters that all apply (team trial round 10)", () => {
+  const kind = { field: "kind", op: "in" as const, values: ["customer"] };
+  const box = { field: "kind", op: "in" as const, values: ["vendor", "customer"] };
+  const pill = { field: "kind", op: "in" as const, values: ["customer"] };
+  let state: GridState = { ...emptyState(), columns: { kind: box }, pills: { kind: pill } };
+  state = withSwitch(state, "kind", kind);
+  // Setting the switch leaves the header box and the pill alone...
+  assert.deepEqual(state.columns, { kind: box });
+  assert.deepEqual(state.pills, { kind: pill });
+  assert.deepEqual(switchOf(state, "kind"), kind);
+  assert.deepEqual(buildFilter(state), { logic: "and", conditions: [kind, pill, box] });
+  assert.deepEqual(decodeState(encodeState(state)), state);
+  // ...and clearing it does too.
+  const cleared = withSwitch(state, "kind", null);
+  assert.equal(switchOf(cleared, "kind"), undefined);
+  assert.deepEqual(cleared.columns, { kind: box });
+  assert.ok(isFiltered(withSwitch(emptyState(), "kind", kind)));
+});
+
+test("a tab saved before switches had their own place keeps them as switches", () => {
+  // Rate manager kept its switch in the columns under "kindSwitch" (round 7).
+  const old = { ...emptyState(), columns: { kindSwitch: { field: "kind", op: "in" as const, values: ["vendor"] } } };
+  const g = decodeState(encodeState(old));
+  assert.deepEqual(g.columns, {});
+  assert.deepEqual(g.switches, { kind: { field: "kind", op: "in", values: ["vendor"] } });
 });

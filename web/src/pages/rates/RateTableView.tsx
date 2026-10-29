@@ -11,7 +11,7 @@ import { useListFields } from "../../api/hooks";
 import { useChangeRateLines, usePlatformCurrency, useRateTable } from "../../api/records";
 import { downloadCsv } from "../../api/masterData";
 import { DataGrid, type ColumnOverride } from "../../grid/DataGrid";
-import { emptyState, toListQuery, type GridState } from "../../grid/filterModel";
+import { emptyState, switchOf, toListQuery, withSwitch, type GridState } from "../../grid/filterModel";
 import { problemText } from "../routing/dialogs";
 import { useNotifySaved } from "../../history/undo";
 import { RateChangeLog } from "./RateChangeLog";
@@ -434,13 +434,14 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     shortcuts: "Click a sell rate to edit · Space select · Enter keeps the edit · Esc cancels",
   });
   // A new view or filter shows other rows: the selection follows what is visible.
-  useEffect(() => setSelected(new Set()), [view, grid.columns, grid.search]);
+  useEffect(() => setSelected(new Set()), [view, grid.columns, grid.pills, grid.switches, grid.search]);
 
   const gridState: GridState = useMemo(
     () => ({
       ...grid,
-      columns: {
-        ...grid.columns,
+      // The table and its view are fixed switches; the header boxes stay the user's (team trial round 10).
+      switches: {
+        ...grid.switches,
         rateTableId: { field: "rateTableId", op: "eq", value: id },
         view: { field: "view", op: "eq", value: view === "log" ? "current" : view },
       },
@@ -734,14 +735,11 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
     scheduled: t.summary.scheduledChanges,
     closed: t.summary.closedLines,
   };
-  const changeFilter = grid.columns.changeType?.values?.[0] as string | undefined;
-  const senderFilter = grid.columns.senderId ? (grid.columns.senderId.op === "empty" ? "none" : "with") : "any";
-  const setColumn = (field: string, cond: GridState["columns"][string] | null) => {
-    const columns = { ...grid.columns };
-    if (cond) columns[field] = cond;
-    else delete columns[field];
-    setGrid({ ...grid, columns });
-  };
+  // Change, Sender ID and Negative margin are page switches, apart from the header boxes (team trial round 10).
+  const changeFilter = switchOf(grid, "changeType")?.values?.[0] as string | undefined;
+  const sender = switchOf(grid, "senderId");
+  const senderFilter = sender ? (sender.op === "empty" ? "none" : "with") : "any";
+  const setSwitch = (field: string, cond: GridState["columns"][string] | null) => setGrid(withSwitch(grid, field, cond));
   const selectedRows = [...selected];
 
   return (
@@ -851,7 +849,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 <select
                   value={changeFilter ?? ""}
                   onChange={(e) =>
-                    setColumn(
+                    setSwitch(
                       "changeType",
                       e.target.value ? { field: "changeType", op: "in", values: [e.target.value] } : null,
                     )
@@ -869,7 +867,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 <select
                   value={senderFilter}
                   onChange={(e) =>
-                    setColumn(
+                    setSwitch(
                       "senderId",
                       e.target.value === "any"
                         ? null
@@ -883,12 +881,12 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 </select>
               </label>
               {t.kind === "customer" && (
-                <label className={`toggle-inline${grid.columns.negativeMargin ? " tone-error" : ""}`}>
+                <label className={`toggle-inline${switchOf(grid, "negativeMargin") ? " tone-error" : ""}`}>
                   <input
                     type="checkbox"
-                    checked={!!grid.columns.negativeMargin}
+                    checked={!!switchOf(grid, "negativeMargin")}
                     onChange={(e) =>
-                      setColumn(
+                      setSwitch(
                         "negativeMargin",
                         e.target.checked ? { field: "negativeMargin", op: "eq", value: true } : null,
                       )

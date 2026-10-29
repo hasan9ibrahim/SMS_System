@@ -11,9 +11,12 @@ import { Button, Modal, Popover } from "../ui/primitives";
 import { buildFilter, type GridState } from "./filterModel";
 
 export function toViewState(state: GridState): ViewState {
-  const filter = buildFilter(state);
+  // The page's switches are kept on their own, so the view lights them again (team trial round 10).
+  const filter = buildFilter({ ...state, switches: {} });
+  const switches = state.switches ?? {};
   return {
     ...(filter ? { filter } : {}),
+    ...(Object.keys(switches).length ? { switches } : {}),
     ...(state.search ? { search: state.search } : {}),
     ...(state.sort.length ? { sort: state.sort } : {}),
     ...(state.visible ? { columns: state.visible } : {}),
@@ -41,6 +44,7 @@ export function fromViewState(view: SavedView): GridState {
   return {
     columns,
     pills: {},
+    switches: { ...(view.state.switches ?? {}) },
     builder,
     search: view.state.search ?? "",
     sort: view.state.sort ?? [],

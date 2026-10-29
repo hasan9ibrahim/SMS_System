@@ -1,9 +1,10 @@
 // Incident filter bar (team trial round 4): quick periods, the range as a chip, and Rule / Severity / State as
-// "Rule: All" chips that open a checklist. Each one is a column filter, so the list stays filtered on the server.
+// "Rule: All" chips that open a checklist. Each one is a page switch (team trial round 10): filtered on the server, and
+// kept apart from the header boxes and the quick-search pills.
 import { useQuery } from "@tanstack/react-query";
 import type { AlertRuleRow, FilterCondition } from "@sms/contract";
 import { fetchPickPage } from "../../../api/hooks";
-import type { GridState } from "../../../grid/filterModel";
+import { switchOf, withSwitch, type GridState } from "../../../grid/filterModel";
 import { PeriodTabs, RangeChip } from "../../../ui/DateRange";
 import { ChecklistChip } from "../../../ui/ChecklistChip";
 import { timeBounds, timeCondition } from "../monitorModel";
@@ -39,13 +40,8 @@ export function IncidentFilters({ state, setState }: { state: GridState; setStat
     queryFn: () => fetchPickPage<AlertRuleRow>("alert_rules", { limit: 200, withTotal: false }),
     staleTime: 60_000,
   });
-  const set = (field: string, c: FilterCondition | null) => {
-    const columns = { ...state.columns };
-    if (c) columns[field] = c;
-    else delete columns[field];
-    setState({ ...state, columns });
-  };
-  const bounds = timeBounds(state.columns.startedAt);
+  const set = (field: string, c: FilterCondition | null) => setState(withSwitch(state, field, c));
+  const bounds = timeBounds(switchOf(state, "startedAt"));
   const period = PERIODS.find((p) => {
     const b = periodBounds(p.key);
     // "Last hour" moves every minute: matched by its missing To and a From within the last hour.
@@ -74,14 +70,14 @@ export function IncidentFilters({ state, setState }: { state: GridState; setStat
       <ChecklistChip
         label="Rule"
         field="ruleName"
-        condition={state.columns.ruleName}
+        condition={switchOf(state, "ruleName")}
         options={(rules.data?.rows ?? []).map((r) => ({ value: r.name, label: r.name }))}
         onChange={(c) => set("ruleName", c)}
       />
       <ChecklistChip
         label="Severity"
         field="severity"
-        condition={state.columns.severity}
+        condition={switchOf(state, "severity")}
         options={[
           { value: "critical", label: "Critical" },
           { value: "warning", label: "Warning" },
@@ -92,7 +88,7 @@ export function IncidentFilters({ state, setState }: { state: GridState; setStat
       <ChecklistChip
         label="State"
         field="state"
-        condition={state.columns.state}
+        condition={switchOf(state, "state")}
         options={[
           { value: "open", label: "Open" },
           { value: "acknowledged", label: "Acknowledged" },
