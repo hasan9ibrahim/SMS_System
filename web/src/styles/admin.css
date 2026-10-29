@@ -36,6 +36,28 @@
   display: grid;
   gap: 8px;
 }
+/* QR code or setup key side by side (R9); one above the other on a phone. */
+.totp-ways {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.totp-way {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.qr-code {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+@media (max-width: 640px) {
+  .totp-ways {
+    grid-template-columns: 1fr;
+  }
+}
 .selectable {
   user-select: all;
   word-break: break-all;
@@ -409,6 +431,15 @@
 .mig-foot {
   margin-right: auto;
 }
+/* The code box with Send code beside it (R9). */
+.mig-code {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.mig-code input {
+  width: 110px;
+}
 .mig-steps {
   margin: 6px 0 0;
   padding-left: 18px;
@@ -458,8 +489,8 @@
   margin: 0;
 }
 .pw-gate-brand {
-  font-weight: 600;
-  color: var(--color-text-secondary);
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 .pw-gate-actions {
   display: flex;

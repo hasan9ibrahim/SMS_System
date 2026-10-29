@@ -1,5 +1,5 @@
 // Builds the Fastify app: one route per contract operation, validated against the contract.
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
 import { operations, type ContractOperation } from "./contract.js";
 import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
@@ -36,6 +36,20 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
   if (options.socket !== false) await registerSocket(app);
+
+  // Every error answers as a problem with a title (R9): Fastify's own body has none, and over HTTP/2 (nginx with TLS)
+  // the browser has no status text either, so the screens showed an empty message. Set before the routes, which
+  // take the handler in force when they are registered.
+  app.setErrorHandler((err: FastifyError, request, reply) => {
+    const status = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
+    if (status >= 500) {
+      request.log.error({ err }, "request failed");
+      return sendProblem(reply, status, "The server could not finish this request", {
+        detail: `Try again; if it keeps failing, give the administrator this reference: ${request.id}.`,
+      });
+    }
+    return sendProblem(reply, status, err.message || "The request was refused");
+  });
 
   await app.register(
     async (api) => {

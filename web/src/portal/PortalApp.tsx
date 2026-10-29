@@ -9,6 +9,7 @@ import type { ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride } from "../grid/DataGrid";
 import { emptyState, toListQuery, type GridState } from "../grid/filterModel";
 import { Chart, useChartColors } from "../ui/Chart";
+import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Button } from "../ui/primitives";
 import {
@@ -69,9 +70,7 @@ function SignIn() {
     <div className="portal-center">
       <form className="portal-card portal-signin" onSubmit={submit}>
         <div className="portal-brand">
-          <span className="portal-logo">
-            <Icon name="send" size={18} />
-          </span>
+          <BrandLogo height={30} />
           <div>
             <strong>Customer portal</strong>
             <span className="muted small">Your balance, rates and traffic</span>
@@ -114,9 +113,7 @@ function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?:
     <div className="portal-center">
       <form className="portal-card portal-signin" onSubmit={submit}>
         <div className="portal-brand">
-          <span className="portal-logo">
-            <Icon name="send" size={18} />
-          </span>
+          <BrandLogo height={30} />
           <div>
             <strong>Sign-in code</strong>
             <span className="muted small">We e-mailed a 6-digit code{sentTo ? ` to ${sentTo}` : ""}.</span>
@@ -691,9 +688,8 @@ function Shell({ name, enterprise }: { name: string; enterprise: string }) {
     <div className="portal">
       <header className="portal-top">
         <span className="portal-brand small-brand">
-          <span className="portal-logo">
-            <Icon name="send" size={15} />
-          </span>
+          <BrandLogo height={24} />
+          <span className="portal-brand-sep" aria-hidden />
           <strong>{enterprise}</strong>
         </span>
         <nav className="portal-nav">
@@ -747,7 +743,7 @@ export default function PortalApp() {
   useTheme();
   const session = usePortalSession();
   useEffect(() => {
-    document.title = "Customer portal";
+    document.title = "Customer portal · Xpert";
   }, []);
   if (session.isLoading) return <div className="portal-center muted">Loading…</div>;
   const s = session.data;

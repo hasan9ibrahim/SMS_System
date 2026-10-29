@@ -47,7 +47,7 @@ export async function exportMatrix(body: RateMatrixRequest) {
   });
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { title?: string; detail?: string };
-    throw new ApiError(res.status, { ...problem, title: problem.title ?? res.statusText, status: res.status });
+    throw new ApiError(res.status, { ...problem, title: problem.title ?? (res.statusText || `Request failed (HTTP ${res.status})`), status: res.status });
   }
   const name = /filename="?([^";]+)"?/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "rate-lookup.csv";
   downloadBlob(await res.blob(), name);
@@ -87,7 +87,7 @@ export function useDeleteLookup() {
     mutationFn: async (id: number) => {
       const r = await api.DELETE("/rate-lookups/{id}", { params: { path: { id } } });
       if (!r.response.ok)
-        throw new ApiError(r.response.status, { title: r.response.statusText, status: r.response.status });
+        throw new ApiError(r.response.status, { title: r.response.statusText || `Request failed (HTTP ${r.response.status})`, status: r.response.status });
     },
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["lookup", "saved"] }),
   });

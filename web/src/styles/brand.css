@@ -1,0 +1,21 @@
+/* The Xpert logo (team trial round 9): the navy version on light backgrounds, the white one on dark backgrounds
+   (the dark theme, and the navy top bar of the blue-grey theme). */
+.brand-logo {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+.brand-logo img {
+  display: block;
+  height: 100%;
+  width: auto;
+}
+.brand-logo .brand-on-dark,
+:root[data-theme="dark"] .brand-logo .brand-on-light,
+:root[data-theme="bluegrey"] .topbar .brand-logo .brand-on-light {
+  display: none;
+}
+:root[data-theme="dark"] .brand-logo .brand-on-dark,
+:root[data-theme="bluegrey"] .topbar .brand-logo .brand-on-dark {
+  display: block;
+}

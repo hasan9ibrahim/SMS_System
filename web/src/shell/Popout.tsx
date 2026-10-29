@@ -39,7 +39,7 @@ export function Popout() {
   const asWorkspaceTab = (): WorkspaceTab => ({ id: tab.id, path: tab.path, title: tab.title, pinned: false });
 
   useEffect(() => {
-    document.title = `${title} · SMS Platform`;
+    document.title = `${title} · Xpert`;
     history.replaceState(null, "", `/popout?${new URLSearchParams({ path, title, id: tabId })}`);
   }, [path, title]);
   useEffect(() => (me ? startLiveRelay(me.id) : undefined), [me]);

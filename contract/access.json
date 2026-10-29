@@ -630,6 +630,21 @@
     },
     "updateVendorRnSettings": {
       "module": "incoming-rns"
+    },
+    "createMigrationImport": {
+      "action": "import"
+    },
+    "revalidateMigrationImport": {
+      "action": "import"
+    },
+    "applyMigrationImport": {
+      "action": "import"
+    },
+    "deleteMigrationImport": {
+      "action": "import"
+    },
+    "activateMigrationTrunks": {
+      "action": "import"
     }
   },
   "lookups": {

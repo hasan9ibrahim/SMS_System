@@ -9784,7 +9784,11 @@ export type paths = {
      */
     put: operations["revalidateMigrationImport"];
     post?: never;
-    delete?: never;
+    /**
+     * Delete an import (R9)
+     * @description Removes the import from the list and deletes its stored files. Records an applied import wrote stay: its change in History remains, and undoing it there still rolls the import back. Refused while it is applying.
+     */
+    delete: operations["deleteMigrationImport"];
     options?: never;
     head?: never;
     patch?: never;
@@ -9801,7 +9805,7 @@ export type paths = {
     put?: never;
     /**
      * Apply the import
-     * @description Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back.
+     * @description Writes exactly what the dry run shows as one change in History; undoing that change rolls the whole import back. Runs in the background (R9: large files outlast the web request): the answer is the import with status `applying`; poll getMigrationImport until it is `applied`, or back to `validated` with `applyError` set (nothing was written).
      */
     post: operations["applyMigrationImport"];
     delete?: never;
@@ -9908,6 +9912,26 @@ export type paths = {
      * @description For users without an authenticator app (decided 2026-10-24, R6): e-mails a 6-digit code to the user's own address, valid 10 minutes and for 5 tries. A new code replaces the previous one; at most one per minute. Users with 2FA on get 409 and use their authenticator code instead.
      */
     post: operations["sendMyPasswordCode"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/me/credential-code": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail a code for a credential export or import (§13.22, R9)
+     * @description For admins without an authenticator app: e-mails a 6-digit code to their own address, valid 10 minutes and for 5 tries, to enter as `totpCode` of a Migration export or import that includes credentials. The e-mailed code is the account's second factor as at sign-in (§13.28). Users with the app get 409 and use its code. At most one per minute; it replaces any earlier code.
+     */
+    post: operations["sendMyCredentialCode"];
     delete?: never;
     options?: never;
     head?: never;
@@ -11180,7 +11204,7 @@ export type components = {
       considerHlrRate?: boolean;
       serviceTypeRouting?: boolean;
       partWiseRouting?: boolean;
-      /** @description Allowed client IP addresses. */
+      /** @description Allowed client addresses (§5.4, R9): an address (192.0.2.10, 2001:db8::1), a network (192.0.2.0/24) or a range (192.0.2.10-192.0.2.50, or 192.0.2.10-50). A range is saved as the networks that cover exactly it, so the trunk shows those networks afterwards. At most 50 entries typed; at most 256 after ranges are split. */
       hostIps?: string[];
       /** @description SMPP system_id. */
       username?: string;
@@ -17947,7 +17971,7 @@ export type components = {
       rateLines: "current" | "all" | "none";
       /** @description Encrypts the package (AES-256-GCM, key from scrypt). */
       password: string;
-      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      /** @description 2FA code; required whenever credentials are included (§13.22): the authenticator app's, or for an admin without the app the code e-mailed by sendMyCredentialCode (R9). */
       totpCode?: string | null;
     };
     MigrationExport: {
@@ -17965,7 +17989,7 @@ export type components = {
       manifest: components["schemas"]["MigrationManifest"] | null;
     };
     MigrationLinkInput: {
-      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      /** @description 2FA code; required whenever credentials are included (§13.22): the authenticator app's, or for an admin without the app the code e-mailed by sendMyCredentialCode (R9). */
       totpCode?: string | null;
     };
     MigrationLink: {
@@ -17997,7 +18021,7 @@ export type components = {
       };
       /** @description Staged go-live: imported trunks start inactive. */
       trunksInactive: boolean;
-      /** @description 2FA code; required whenever credentials are included (§13.22). */
+      /** @description 2FA code; required whenever credentials are included (§13.22): the authenticator app's, or for an admin without the app the code e-mailed by sendMyCredentialCode (R9). */
       totpCode?: string | null;
     };
     MigrationEntityReport: {
@@ -18024,14 +18048,19 @@ export type components = {
       entities: components["schemas"]["MigrationEntityReport"][];
       issues: components["schemas"]["MigrationIssue"][];
       issueCount: number;
-      /** @description No errors: applying writes exactly what the dry run shows. */
+      /** @description No errors and something to create or update: applying writes exactly what the dry run shows. False with no errors means every row is already in the system as in the file (skip). */
       canApply: boolean;
     };
     MigrationImport: {
       id: components["schemas"]["Id"];
       sourceSystem: string;
-      /** @enum {string} */
-      status: "validated" | "applied" | "rolled_back" | "failed";
+      /**
+       * @description applying = being written in the background (R9).
+       * @enum {string}
+       */
+      status: "validated" | "applying" | "applied" | "rolled_back" | "failed";
+      /** @description Why the last apply wrote nothing (R9); null otherwise. */
+      applyError: string | null;
       files: {
         entity: string;
         fileName: string;
@@ -34015,6 +34044,30 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  deleteMigrationImport: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components["responses"]["Unauthorized"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   applyMigrationImport: {
     parameters: {
       query?: never;
@@ -34026,8 +34079,8 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Applied */
-      200: {
+      /** @description Applying */
+      202: {
         headers: {
           [name: string]: unknown;
         };
@@ -34187,6 +34240,31 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendMyCredentialCode: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Sent */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordCodeSent"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };

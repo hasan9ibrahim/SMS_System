@@ -56,7 +56,11 @@ export function periodSource(now: number, ...windows: { from: Date; to: Date }[]
 
 /** Money in exact decimals for multiplying by a rate or factor: sums then agree on edr_all and on the totals. */
 export const dec = (col: string) => `toDecimal128(${col}, 6)`;
-/** A platform-currency factor (sysToPlatformFactor) as a decimal. */
-export const decFactor = (factor: string) => `toDecimal128(${factor}, 8)`;
+/**
+ * A platform-currency factor (sysToPlatformFactor) as a decimal. Materialised: with no business company yet (a new
+ * server) the factor is the constant 1.0, and ClickHouse 24.8 rejects sum(decimal column × constant decimal)
+ * ("Unexpected literal type in function"), which failed every EDR report until a company existed (R9).
+ */
+export const decFactor = (factor: string) => `materialize(toDecimal128(${factor}, 8))`;
 /** The row's revenue below its cost: per row on edr_all, kept as neg_margin in the totals. */
 export const negMargin = (src: EdrSource) => (src === "edr_all" ? "revenue_sys < cost_sys" : "neg_margin = 1");

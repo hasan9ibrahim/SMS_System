@@ -579,9 +579,32 @@ export const maskEmail = (e: string) => {
   return `${local.slice(0, 1)}***@${domain}`;
 };
 
-export function sendMyPasswordCode(_request: FastifyRequest, reply: FastifyReply) {
+export const sendMyPasswordCode = (_request: FastifyRequest, reply: FastifyReply) => sendCode(reply, "password");
+
+/** A code for a Migration export or import with credentials (§13.22, R9): admins without the authenticator app. */
+export const sendMyCredentialCode = (_request: FastifyRequest, reply: FastifyReply) => sendCode(reply, "credentials");
+
+const CODE_MAIL = {
+  password: {
+    subject: "Your code to change your password",
+    body: (name: string, code: string) =>
+      `Hello ${name},\n\nYour code to change your password is ${code}. It works for ${CODE_TTL_MIN} minutes.\n\n` +
+      `If you did not ask to change your password, ignore this e-mail and tell your administrator.`,
+  },
+  credentials: {
+    subject: "Your code to export or import credentials",
+    body: (name: string, code: string) =>
+      `Hello ${name},\n\nYour code to export or import trunk credentials in the Migration Center is ${code}. ` +
+      `It works for ${CODE_TTL_MIN} minutes.\n\nIf you did not ask for it, tell your administrator now.`,
+  },
+};
+
+/** E-mails a 6-digit code to the signed-in user (one at a time, at most one a minute). */
+function sendCode(reply: FastifyReply, purpose: keyof typeof CODE_MAIL) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
+    if (purpose === "credentials" && !me.permissions.includes("*"))
+      return sendProblem(reply, 403, "Credentials can be exported and imported by admins only (§13.22)");
     const { rows } = await pool.query(
       `SELECT first_name, email, totp_enabled, password_code_sent_at > now() - make_interval(secs => $2) AS too_soon
          FROM users WHERE id = $1 AND deleted_at IS NULL`,
@@ -606,10 +629,8 @@ export function sendMyPasswordCode(_request: FastifyRequest, reply: FastifyReply
       await logEmail(c, {
         type: "otp",
         to: [u.email as string],
-        subject: "Your code to change your password",
-        body:
-          `Hello ${u.first_name},\n\nYour code to change your password is ${code}. It works for ${CODE_TTL_MIN} minutes.\n\n` +
-          `If you did not ask to change your password, ignore this e-mail and tell your administrator.`,
+        subject: CODE_MAIL[purpose].subject,
+        body: CODE_MAIL[purpose].body(u.first_name as string, code),
       });
     });
     return { sentTo: maskEmail(u.email as string), expiresAt: expiresAt.toISOString() };
@@ -617,13 +638,18 @@ export function sendMyPasswordCode(_request: FastifyRequest, reply: FastifyReply
 }
 
 /** Checks an e-mailed code; a wrong code uses up one of the tries. */
-async function checkEmailCode(pool: pg.Pool, userId: number, code: string | null | undefined): Promise<string | null> {
+export async function checkEmailCode(
+  pool: pg.Pool,
+  userId: number,
+  code: string | null | undefined,
+  missing = "enter the code we e-mailed you (Send code)",
+): Promise<string | null> {
   const { rows } = await pool.query(
     "SELECT password_code_hash, password_code_expires_at > now() AS live, password_code_tries FROM users WHERE id = $1",
     [userId],
   );
   const r = rows[0];
-  if (!code) return "enter the code we e-mailed you (Send code)";
+  if (!code) return missing;
   if (!r?.password_code_hash || !r.live) return "the code has expired; send a new one";
   if (Number(r.password_code_tries) >= CODE_TRIES) return "too many wrong codes; send a new one";
   const want = Buffer.from(r.password_code_hash as string, "hex");

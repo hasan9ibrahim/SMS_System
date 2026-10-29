@@ -13,6 +13,7 @@ import type {
   MigrationLink,
   MigrationMapping,
   MigrationMappingInput,
+  PasswordCodeSent,
 } from "@sms/contract";
 import { api, apiFetch, unwrap } from "./client";
 
@@ -50,10 +51,15 @@ export function useMigrationExports() {
     refetchInterval: (q) => (q.state.data?.some((x) => x.status === "running") ? 2000 : false),
   });
 }
+/** While an import is applying in the background (R9), it is fetched every 2 s until it ends. */
+const whileApplying = (rows: MigrationImport[] | MigrationImport | undefined) =>
+  (Array.isArray(rows) ? rows : rows ? [rows] : []).some((i) => i.status === "applying") ? 2000 : false;
+
 export function useMigrationImports() {
   return useQuery<MigrationImport[]>({
     queryKey: ["record", "migration", "imports"],
     queryFn: () => unwrap(api.GET("/migration/imports")),
+    refetchInterval: (q) => whileApplying(q.state.data),
   });
 }
 export function useMigrationImport(id: number | null) {
@@ -61,6 +67,7 @@ export function useMigrationImport(id: number | null) {
     queryKey: ["record", "migration", "import", id],
     queryFn: () => unwrap(api.GET("/migration/imports/{id}", path(id!))),
     enabled: id !== null,
+    refetchInterval: (q) => whileApplying(q.state.data),
   });
 }
 
@@ -82,6 +89,12 @@ export const useRevalidateImport = () =>
   );
 export const useApplyImport = () =>
   useWrite((id: number): Promise<MigrationImport> => unwrap(api.POST("/migration/imports/{id}/apply", path(id))));
+export const useDeleteImport = () =>
+  useWrite(async (id: number): Promise<void> => {
+    await unwrap(api.DELETE("/migration/imports/{id}", path(id)));
+  });
+/** A code by e-mail for credentials, for admins without the authenticator app (R9). */
+export const sendCredentialCode = (): Promise<PasswordCodeSent> => unwrap(api.POST("/me/credential-code"));
 export const useActivateTrunks = () =>
   useWrite(({ id, body }: { id: number; body: MigrationActivate }): Promise<MigrationActivateResult> =>
     unwrap(api.POST("/migration/imports/{id}/activate", { ...path(id), body })),

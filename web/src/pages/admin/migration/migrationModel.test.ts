@@ -44,7 +44,16 @@ test("views, sizes and the next step", () => {
   assert.ok(isView("exports") && !isView("nope") && !isView(null));
   assert.equal(fmtBytes(512), "512 B");
   assert.equal(fmtBytes(21_890_530), "20.9 MB");
-  const base = { status: "validated", inactiveTrunks: 0, report: { canApply: false } } as unknown as MigrationImport;
+  const row = { entity: "users", rows: 1, create: 0, update: 0, skip: 1, errors: 1, source: 1, inSystem: 1 };
+  const base = {
+    status: "validated",
+    inactiveTrunks: 0,
+    report: { canApply: false, entities: [row] },
+  } as unknown as MigrationImport;
   assert.match(nextStep(base), /Fix the files/);
+  // No error and every row skipped (R9): nothing to apply, said plainly.
+  const skipped = { ...base, report: { canApply: false, entities: [{ ...row, errors: 0 }] } } as MigrationImport;
+  assert.match(nextStep(skipped), /Nothing to apply/);
+  assert.match(nextStep({ ...base, status: "applying" }), /background/);
   assert.match(nextStep({ ...base, status: "applied", inactiveTrunks: 4 }), /4 imported trunks/);
 });

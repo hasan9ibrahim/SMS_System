@@ -174,7 +174,7 @@
     color: var(--color-text);
   }
   .menu-bar,
-  .logo > span:not(.logo-mark),
+  .logo > .logo-full,
   .jump span,
   .jump kbd,
   .top-clock {

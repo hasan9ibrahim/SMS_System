@@ -19,6 +19,7 @@ import "./styles/monitoring.css";
 import "./styles/dashboard.css";
 import "./styles/help.css";
 import "./styles/calm.css";
+import "./styles/brand.css";
 import "./styles/mobile.css";
 
 const queryClient = new QueryClient({

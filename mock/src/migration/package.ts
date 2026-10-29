@@ -14,11 +14,17 @@ import { createGzip, gunzipSync } from "node:zlib";
 import type pg from "pg";
 import { to as copyTo } from "pg-copy-streams";
 import type { MigrationExportInput, MigrationManifest, MigrationManifestEntity } from "@sms/contract";
+import { production } from "../mode.js";
 import { CREDENTIAL, EXPORT_TABLES, NEVER, SECRET } from "./entities.js";
 
 const MAGIC = "SMSPKG1\n";
 const TAG = 16;
-export const PACKAGE_DIR = join(tmpdir(), "sms-migration");
+/**
+ * Export packages and unpacking work. In production the service's working folder (/opt/sms/service/work), which a
+ * restart keeps (R9: its private /tmp is emptied on every restart, so packages vanished after an update).
+ */
+export const PACKAGE_DIR =
+  process.env.SMS_MIGRATION_DIR ?? (production ? join(process.cwd(), "migration") : join(tmpdir(), "sms-migration"));
 
 export class PackageError extends Error {}
 

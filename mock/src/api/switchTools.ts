@@ -2,6 +2,7 @@
 // (banned / trusted IPs and filters), Traffic Alert (checked against the EDR store), SMS To Voice and
 // Broadcast. Saves are undoable changes (§13.10); delete archives (§13.29); every e-mail the
 // platform sends is logged (emailLog.ts).
+import { inetText } from "../ipRanges.js";
 import { appendText, fillBody, fillText } from "../email/html.js";
 import { isIP } from "node:net";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -164,7 +165,7 @@ interface TrunkInfo {
 async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
   const { rows } = await c.query(
     `SELECT t.id, t.name, t.enterprise_id, e.name AS enterprise, bc.name AS company, bc.smpp_host, t.port, t.username,
-            t.bind_type, array(SELECT host(x) FROM unnest(t.host_ips) x) AS ips, t.tps, t.max_connections, t.password,
+            t.bind_type, array(SELECT ${inetText("x")} FROM unnest(t.host_ips) x) AS ips, t.tps, t.max_connections, t.password,
             (SELECT rt.id FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
               WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS rate_table_id,
             (SELECT rt.currency FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id

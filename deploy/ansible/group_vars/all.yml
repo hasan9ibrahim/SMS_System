@@ -99,4 +99,4 @@ web_cidrs: [0.0.0.0/0]
 
 # Platform e-mail: sign-in and password codes, alerts, reminders. The address the team's mail system accepts mail from;
 # the server and its login are vault_smtp_url (smtp://user:password@host:587 or smtps://...:465).
-smtp_from_name: SMS Platform
+smtp_from_name: Xpert

@@ -12,6 +12,7 @@ import { TAB_DRAG_TYPE } from "./channel";
 import { GROUP_COLORS, HOME_TAB_ID, useTabs, type Tab } from "./tabs";
 import { useLive } from "../live/store";
 import { useTabPaused } from "./livePause";
+import { useReloadTab } from "./reload";
 
 /** Opens a tab in its own browser window (second monitor) and removes it from the strip. */
 export function popOutTab(tab: Tab, at?: { x: number; y: number }) {
@@ -46,6 +47,7 @@ function TabButton({
   editGroup: (id: string) => void;
 }) {
   const { activate, close, move, togglePin, duplicate, closeOthers } = useTabs.getState();
+  const reload = useReloadTab();
   const groups = useTabs((s) => s.groups);
   const group = groups.find((g) => g.id === tab.groupId);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -110,6 +112,7 @@ function TabButton({
           : []),
         "separator",
         { label: tab.pinned ? "Unpin" : "Pin", icon: "pin", onSelect: () => togglePin(tab.id) },
+        { label: "Reload", icon: "refresh", onSelect: () => reload(tab.id) },
         { label: "Duplicate", icon: "copy", onSelect: () => duplicate(tab.id) },
         { label: "Open in new window", icon: "external", onSelect: () => popOutTab(tab) },
         "separator",

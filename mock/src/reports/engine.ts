@@ -26,6 +26,7 @@ import {
   beforeDetail,
   checkQuarterBounds,
   counter,
+  decFactor,
   DETAIL_MONTHS,
   PastDetailError,
   pastDetail,
@@ -182,7 +183,7 @@ export const DIMS: Record<ReportDimension, Dim> = {
 const baseSums = (factor: string, src: EdrSource = "edr_all") => {
   const n = counter(src);
   // The factor depends on the row's business company; in decimals the sum is exact whatever the rows' grouping.
-  const fx = `toDecimal128(${factor}, 8)`;
+  const fx = decFactor(factor);
   return [
     `${n("kind = 'attempt'")} AS attempts`,
     `${n("kind = 'attempt' AND is_submit_success = 1")} AS successful`,

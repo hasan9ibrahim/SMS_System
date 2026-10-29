@@ -6,7 +6,7 @@
 // (undo = rollback), trunks arrive inactive and go live per partner.
 import { randomBytes } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -37,6 +37,7 @@ import { logEmail } from "./emailLog.js";
 import type { DiffEntry } from "./records.js";
 import { iso, recordChange } from "./records.js";
 import { getCurrentUser } from "./session.js";
+import { checkEmailCode } from "./admin.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -56,8 +57,11 @@ async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: st
     return () => sendProblem(reply, 403, "Credentials can be exported and imported by admins only (§13.22)");
   const { rows } = await c.query("SELECT totp_enabled, totp_secret FROM users WHERE id = $1", [me.id]);
   const u = rows[0];
-  if (!u?.totp_enabled || !u.totp_secret)
-    return () => sendProblem(reply, 403, "Turn on 2FA for your account first: credentials need a 2FA code (§13.28)");
+  // Without the authenticator app, the code e-mailed by sendMyCredentialCode is the second factor, as at sign-in (R9).
+  if (!u?.totp_enabled || !u.totp_secret) {
+    const wrong = await checkEmailCode(db(), me.id, code, "enter the code we e-mailed you (Send code)");
+    return wrong ? () => fieldError(reply, "/totpCode", wrong) : null;
+  }
   const secret = totpSecretOf(u.totp_secret);
   if (!code) return () => fieldError(reply, "/totpCode", "enter the code from your 2FA app");
   if (!secret || !verifyTotp(secret, code)) return () => fieldError(reply, "/totpCode", "the 2FA code does not match");
@@ -393,19 +397,24 @@ interface StoredInput {
   files: { entity: string; fileName: string; rows: number; mapping: string | null }[];
   packageExportId: number | null;
   warnings: string[];
-  blob: string;
+  /** Imports before R9: the encrypted files on disk (the service's /tmp, emptied on restart). */
+  blob?: string;
 }
 
-/** File contents (credentials included) are kept encrypted on disk, not in the database. */
-async function saveFiles(files: MigrationFileInput[]) {
-  await mkdir(PACKAGE_DIR, { recursive: true });
-  const path = join(PACKAGE_DIR, `import-${randomBytes(8).toString("hex")}.bin`);
-  await writeFile(path, encryptSecret(gzipSync(JSON.stringify(files)).toString("base64")));
-  return path;
-}
-async function loadFiles(path: string): Promise<MigrationFileInput[]> {
-  const plain = decryptSecret(await readFile(path, "utf8"));
-  if (!plain) throw new Error("The stored import files cannot be read");
+/**
+ * File contents (credentials included), encrypted, for the files_enc column (R9). They were kept in the service's
+ * private /tmp, which systemd empties on every restart, so Apply after an update could not find them.
+ */
+const sealFiles = (files: MigrationFileInput[]) => encryptSecret(gzipSync(JSON.stringify(files)).toString("base64"));
+
+class FilesGone extends Error {}
+
+async function loadFiles(r: Record<string, unknown>): Promise<MigrationFileInput[]> {
+  let sealed = (r.files_enc as string | null) ?? null;
+  const blob = (r.input as StoredInput).blob;
+  if (!sealed && blob) sealed = await readFile(blob, "utf8").catch(() => null);
+  const plain = sealed ? decryptSecret(sealed) : null;
+  if (!plain) throw new FilesGone("The uploaded files are no longer on the server: use Fix and re-run to upload them again");
   return JSON.parse(gunzipSync(Buffer.from(plain, "base64")).toString("utf8"));
 }
 
@@ -417,10 +426,13 @@ async function loadMappings(c: Db) {
   );
 }
 
-const importSelect = `SELECT mi.*, u.first_name || ' ' || u.last_name AS created_by,
+// Every column but the files (files_enc), which only apply reads.
+const importSelect = `SELECT mi.id, mi.source_system, mi.status, mi.input, mi.report, mi.includes_credentials, mi.change_id,
+    mi.inserted_at, mi.validated_at, mi.applied_at, mi.apply_error, u.first_name || ' ' || u.last_name AS created_by,
     EXISTS (SELECT 1 FROM changes un WHERE un.undo_of_id = mi.change_id
              AND NOT EXISTS (SELECT 1 FROM changes re WHERE re.undo_of_id = un.id)) AS rolled_back
-  FROM migration_imports mi LEFT JOIN users u ON u.id = mi.created_by_id`;
+  FROM migration_imports mi LEFT JOIN users u ON u.id = mi.created_by_id
+ WHERE mi.deleted_at IS NULL`;
 
 /** Trunks an applied import created, still inactive and not archived. */
 async function inactiveTrunks(c: Db, changeId: number | null, enterpriseIds: number[] | null = null) {
@@ -463,10 +475,11 @@ async function mapImport(c: Db, r: Record<string, unknown>): Promise<MigrationIm
     changeId,
     inactiveTrunks: r.status === "applied" && !r.rolled_back ? (await inactiveTrunks(c, changeId)).length : 0,
     report: r.report as MigrationReport,
+    applyError: (r.apply_error as string | null) ?? null,
   };
 }
 async function loadImport(c: Db, id: number) {
-  const { rows } = await c.query(`${importSelect} WHERE mi.id = $1`, [id]);
+  const { rows } = await c.query(`${importSelect} AND mi.id = $1`, [id]);
   return rows[0] ?? null;
 }
 
@@ -539,9 +552,8 @@ async function prepare(pool: pg.Pool, reply: FastifyReply, me: CurrentUser, b: M
     })),
     packageExportId: fromPackage ? (b.packageExportId ?? null) : null,
     warnings,
-    blob: await saveFiles(files),
   };
-  return { plan, stored };
+  return { plan, stored, sealed: sealFiles(files) };
 }
 
 export function createMigrationImport(request: FastifyRequest, reply: FastifyReply) {
@@ -551,14 +563,15 @@ export function createMigrationImport(request: FastifyRequest, reply: FastifyRep
     const p = await prepare(pool, reply, me, b);
     if ("refused" in p) return p.refused;
     const { rows } = await pool.query(
-      `INSERT INTO migration_imports (source_system, input, report, includes_credentials, created_by_id)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      `INSERT INTO migration_imports (source_system, input, report, includes_credentials, created_by_id, files_enc)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
       [
         p.stored.sourceSystem,
         JSON.stringify(p.stored),
         JSON.stringify(p.plan.report),
         p.plan.includesCredentials,
         me.id,
+        p.sealed,
       ],
     );
     if (p.plan.includesCredentials)
@@ -578,16 +591,26 @@ export function revalidateMigrationImport(request: FastifyRequest, reply: Fastif
   return withDb(reply, async (pool) => {
     const cur = await loadImport(pool, id);
     if (!cur) return sendProblem(reply, 404, `Import ${id} not found`);
+    if (cur.status === "applying") return sendProblem(reply, 409, `Import #${id} is being applied: wait for it`);
     if (cur.status !== "validated")
       return sendProblem(reply, 409, `Import #${id} was already applied: start a new import`);
     const me = await getCurrentUser();
     const p = await prepare(pool, reply, me, b);
     if ("refused" in p) return p.refused;
-    await rm((cur.input as StoredInput).blob, { force: true });
+    const blob = (cur.input as StoredInput).blob;
+    if (blob) await rm(blob, { force: true });
     await pool.query(
-      `UPDATE migration_imports SET source_system = $2, input = $3, report = $4, includes_credentials = $5, validated_at = now()
+      `UPDATE migration_imports SET source_system = $2, input = $3, report = $4, includes_credentials = $5, validated_at = now(),
+              files_enc = $6, apply_error = NULL
         WHERE id = $1`,
-      [id, p.stored.sourceSystem, JSON.stringify(p.stored), JSON.stringify(p.plan.report), p.plan.includesCredentials],
+      [
+        id,
+        p.stored.sourceSystem,
+        JSON.stringify(p.stored),
+        JSON.stringify(p.plan.report),
+        p.plan.includesCredentials,
+        p.sealed,
+      ],
     );
     return mapImport(pool, await loadImport(pool, id));
   });
@@ -596,17 +619,58 @@ export function revalidateMigrationImport(request: FastifyRequest, reply: Fastif
 const counts = (r: MigrationReport) =>
   JSON.stringify(r.entities.map((e) => [e.entity, e.create, e.update, e.skip, e.errors]));
 
+/** Applies running in the background, so tests (and a shutdown) can wait for them. */
+export const runningApplies = new Map<number, Promise<void>>();
+
+/**
+ * Apply (R9: in the background, as large files outlast the web request): the import turns `applying` at once and the
+ * screen polls it. One transaction: it ends `applied`, or back at `validated` with apply_error and nothing written.
+ */
 export function applyMigrationImport(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   return withDb(reply, async (pool) => {
     const cur = await loadImport(pool, id);
     if (!cur) return sendProblem(reply, 404, `Import ${id} not found`);
+    if (cur.status === "applying") return sendProblem(reply, 409, `Import #${id} is already being applied`);
     if (cur.status !== "validated") return sendProblem(reply, 409, `Import #${id} was already applied`);
     const report = cur.report as MigrationReport;
-    if (!report.canApply) return sendProblem(reply, 409, "Fix the errors in the dry run first, then apply");
+    if (!report.canApply)
+      return sendProblem(
+        reply,
+        409,
+        report.entities.some((e) => e.errors)
+          ? "Fix the errors in the dry run first, then apply"
+          : "Nothing to apply: every row is already in the system as in the files",
+      );
     const me = await getCurrentUser();
+    // Only one apply at a time, even from two screens.
+    const { rowCount } = await pool.query(
+      "UPDATE migration_imports SET status = 'applying', apply_error = NULL WHERE id = $1 AND status = 'validated'",
+      [id],
+    );
+    if (!rowCount) return sendProblem(reply, 409, `Import #${id} is already being applied`);
+    const job = runApply(pool, id, me, request.ip).finally(() => runningApplies.delete(id));
+    runningApplies.set(id, job);
+    return reply.code(202).send(await mapImport(pool, await loadImport(pool, id)));
+  });
+}
+
+async function runApply(pool: pg.Pool, id: number, me: CurrentUser, ip: string): Promise<void> {
+  const fail = (message: string, report?: MigrationReport) =>
+    pool
+      .query(
+        `UPDATE migration_imports SET status = 'validated', apply_error = $2, report = coalesce($3::jsonb, report),
+                validated_at = CASE WHEN $3::jsonb IS NULL THEN validated_at ELSE now() END
+          WHERE id = $1`,
+        [id, message, report ? JSON.stringify(report) : null],
+      )
+      .then(() => undefined);
+  try {
+    const { rows } = await pool.query("SELECT input, report, files_enc FROM migration_imports WHERE id = $1", [id]);
+    const cur = rows[0];
     const input = cur.input as StoredInput;
-    const files = await loadFiles(input.blob);
+    const report = cur.report as MigrationReport;
+    const files = await loadFiles(cur);
     const mappings = await loadMappings(pool);
     const outcome = await inTransaction(pool, async (c) => {
       const plan = await planImport(
@@ -625,7 +689,7 @@ export function applyMigrationImport(request: FastifyRequest, reply: FastifyRepl
         diff: entries as unknown as DiffEntry[],
         note: `Import #${id} from ${input.sourceSystem}: ${created} created, ${entries.length - created} updated`,
         userId: me.id,
-        ip: request.ip,
+        ip,
       });
       await c.query(
         "UPDATE migration_imports SET status = 'applied', applied_at = now(), change_id = $2 WHERE id = $1",
@@ -633,14 +697,35 @@ export function applyMigrationImport(request: FastifyRequest, reply: FastifyRepl
       );
       return { stale: null };
     });
-    if (outcome.stale) {
-      await pool.query("UPDATE migration_imports SET report = $2, validated_at = now() WHERE id = $1", [
-        id,
-        JSON.stringify(outcome.stale),
-      ]);
-      return sendProblem(reply, 409, "The data changed since the dry run: review the new report, then apply again");
-    }
-    return mapImport(pool, await loadImport(pool, id));
+    if (outcome.stale)
+      await fail("The data changed since the dry run: review the new report, then apply again", outcome.stale);
+  } catch (err) {
+    // Nothing was written (one transaction); the reason shows on the import.
+    if (!(err instanceof FilesGone)) console.error(`migration import ${id}: apply failed`, err);
+    await fail(err instanceof Error ? err.message : String(err)).catch(() => undefined);
+  }
+}
+
+/** After a restart, an apply that was running wrote nothing (its transaction ended with the process). */
+export async function resetStuckImports(pool: pg.Pool = db()): Promise<void> {
+  await pool.query(
+    `UPDATE migration_imports SET status = 'validated',
+            apply_error = 'The service restarted while applying; nothing was written. Apply again.'
+      WHERE status = 'applying'`,
+  );
+}
+
+/** Delete an import (R9): off the list, files removed; an applied import's change stays in History. */
+export function deleteMigrationImport(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as { id: number };
+  return withDb(reply, async (pool) => {
+    const cur = await loadImport(pool, id);
+    if (!cur) return sendProblem(reply, 404, `Import ${id} not found`);
+    if (cur.status === "applying") return sendProblem(reply, 409, `Import #${id} is being applied: wait for it`);
+    const blob = (cur.input as StoredInput).blob;
+    if (blob) await rm(blob, { force: true });
+    await pool.query("UPDATE migration_imports SET deleted_at = now(), files_enc = NULL WHERE id = $1", [id]);
+    return reply.code(204).send();
   });
 }
 
