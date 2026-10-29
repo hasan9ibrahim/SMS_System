@@ -256,7 +256,7 @@ export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I
   };
 }
 
-async function endSessions(c: Db, where: string, params: unknown[], reason: string, by: number | null) {
+export async function endSessions(c: Db, where: string, params: unknown[], reason: string, by: number | null) {
   const { rowCount } = await c.query(
     `UPDATE user_sessions SET ended_at = now(), end_reason = '${reason}', ended_by_id = ${by == null ? "NULL" : Number(by)}
       WHERE ended_at IS NULL AND ${where}`,
@@ -265,10 +265,10 @@ async function endSessions(c: Db, where: string, params: unknown[], reason: stri
   return rowCount ?? 0;
 }
 
-const ruleErrors = (rules: ReturnType<typeof passwordRules>, path: string): FieldError[] =>
+export const ruleErrors = (rules: ReturnType<typeof passwordRules>, path: string): FieldError[] =>
   rules.filter((r) => !r.met).map((r) => ({ path, message: r.label }));
 
-async function recentHashes(c: Db, column: "user_id" | "portal_user_id", id: number): Promise<string[]> {
+export async function recentHashes(c: Db, column: "user_id" | "portal_user_id", id: number): Promise<string[]> {
   const { rows } = await c.query(
     `SELECT password_hash FROM password_history WHERE ${column} = $1 ORDER BY changed_at DESC LIMIT ${(await loadPolicy(c)).passwordHistory - 1}`,
     [id],

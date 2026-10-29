@@ -24,6 +24,10 @@ import type {
   EmailTemplateRecord,
   EmailTemplateSaved,
   ForcePasswordChangeResult,
+  PasswordLinksResult,
+  PasswordSetupDone,
+  PasswordSetupInfo,
+  PasswordSetupInput,
   FilterGroup,
   FormatVariables,
   ListId,
@@ -88,6 +92,14 @@ export const useForcePasswordChange = () =>
   useWrite((ids: number[]): Promise<ForcePasswordChangeResult> =>
     unwrap(api.POST("/users/force-password-change", { body: { ids } })),
   );
+/** E-mail set-password links (team trial round 11, §13.28). */
+export const useSendPasswordLinks = () =>
+  useWrite((ids: number[]): Promise<PasswordLinksResult> => unwrap(api.POST("/users/password-links", { body: { ids } })));
+/** The set-password screen's calls: no sign-in, the link's token is the proof. */
+export const checkPasswordSetup = (token: string, password: string | null): Promise<PasswordSetupInfo> =>
+  unwrap(api.POST("/password-setup/check", { body: { token, password } }));
+export const completePasswordSetup = (input: PasswordSetupInput): Promise<PasswordSetupDone> =>
+  unwrap(api.POST("/password-setup", { body: input }));
 export const setupTotp = (id: number): Promise<TotpSetup> => unwrap(api.POST("/users/{id}/totp/setup", path(id)));
 export const useConfirmTotp = () =>
   useWrite(({ id, code }: { id: number; code: string }): Promise<UserSaved> =>

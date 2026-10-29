@@ -8,6 +8,7 @@ import type pg from "pg";
 import { hostNetworks } from "../ipRanges.js";
 import type {
   MigrationConflict,
+  MigrationField,
   MigrationEntityReport,
   MigrationFileInput,
   MigrationImportEntity,
@@ -16,7 +17,7 @@ import type {
 } from "@sms/contract";
 import { hashPassword } from "../admin/passwords.js";
 import { csvTable } from "./csv.js";
-import { ENTITY, IMPORT_ENTITIES } from "./entities.js";
+import { BUILT_IN_MAPPINGS, CHOICE_SYNONYMS, ENTITY, HEADER_ALIASES, IMPORT_ENTITIES } from "./entities.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Ent = MigrationImportEntity;
@@ -170,23 +171,73 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
   };
 }
 
-/** Rows of one file as template fields: through the mapping, else by field key or label (any case). */
+/** A header or choice compared loosely: case, spaces, dashes, underscores, dots and brackets ignored. */
+export const looseKey = (s: string) =>
+  s
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}&]/gu, "")
+    .replace(/&/g, "and")
+    .toLowerCase();
+
+/** A choice as the template writes it ("Active" → active, "Tier 1" → tier1, "Bilateral" → reciprocal); else as is. */
+export function choiceOf(allowed: string[], value: string): string {
+  const k = looseKey(value);
+  if (!k) return value;
+  return (
+    allowed.find((a) => looseKey(a) === k) ??
+    allowed.find((a) => (CHOICE_SYNONYMS[a] ?? []).some((x) => looseKey(x) === k)) ??
+    value
+  );
+}
+
+/**
+ * Rows of one file as template fields (team trial round 11: any header the field is known by works). Each field
+ * takes the first column found, in this order: the chosen mapping's column, the field key, its label, the reference
+ * platform's name, then the other names it is known by; a column serves one field. Choices are written the
+ * template's way.
+ */
 export function mapRows(file: MigrationFileInput, mapping: Record<string, string> | null) {
   const info = ENTITY.get(file.entity)!;
   const { header, rows } = csvTable(file.content);
-  const byLower = new Map(header.map((h, i) => [lower(h), i]));
-  const at: [string, number][] = [];
-  const missing: string[] = [];
-  for (const f of info.fields) {
-    const want = mapping?.[f.field];
-    const col = want ? byLower.get(lower(want)) : (byLower.get(lower(f.field)) ?? byLower.get(lower(f.label)));
-    if (col != null) at.push([f.field, col]);
-    else if (f.required) missing.push(want ? `${f.label} (column "${want}")` : f.label);
-  }
+  const byKey = new Map<string, number>();
+  header.forEach((h, i) => {
+    const k = looseKey(h);
+    if (k && !byKey.has(k)) byKey.set(k, i);
+  });
+  const builtIn = BUILT_IN_MAPPINGS.find((m) => m.entity === file.entity)?.columns ?? {};
+  const aliases = HEADER_ALIASES[file.entity] ?? {};
+  const names = (f: MigrationField, pass: 0 | 1) =>
+    pass === 0
+      ? [mapping?.[f.field], f.field, f.label].filter((x): x is string => !!x)
+      : [builtIn[f.field], ...(aliases[f.field] ?? [])].filter((x): x is string => !!x);
+  const taken = new Set<number>();
+  const col = new Map<string, number>();
+  // Exact names first for every field, so another field's alias never takes a column named after its own field.
+  for (const pass of [0, 1] as const)
+    for (const f of info.fields) {
+      if (col.has(f.field)) continue;
+      for (const n of names(f, pass)) {
+        const i = byKey.get(looseKey(n));
+        if (i != null && !taken.has(i)) {
+          col.set(f.field, i);
+          taken.add(i);
+          break;
+        }
+      }
+    }
+  const missing = info.fields
+    .filter((f) => f.required && !col.has(f.field))
+    .map((f) => {
+      const want = mapping?.[f.field];
+      return `${f.label} (a column named "${want ?? f.field}"${want ? ` or "${f.field}"` : ""} or "${f.label}")`;
+    });
   const out = rows.map((cells) => {
     const o: Record<string, string> = {};
-    for (const f of info.fields) o[f.field] = "";
-    for (const [field, i] of at) o[field] = (cells[i] ?? "").trim();
+    for (const f of info.fields) {
+      const i = col.get(f.field);
+      const v = i == null ? "" : (cells[i] ?? "").trim();
+      o[f.field] = f.allowed.length ? choiceOf(f.allowed, v) : v;
+    }
     return o;
   });
   return { rows: out, missing };
@@ -397,7 +448,7 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       department_id: dept,
       access_group_id: group,
       is_account_manager: yes(r.isAccountManager),
-      status: r.status?.trim() || "active",
+      status: r.status?.trim().toLowerCase() || "active",
       ...(restore ? { deleted_at: null } : {}),
     };
   });

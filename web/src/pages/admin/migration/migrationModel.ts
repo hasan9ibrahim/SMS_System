@@ -72,12 +72,49 @@ export const exportInput = (d: ExportDraft): MigrationExportInput => ({
   totpCode: d.includeCredentials ? d.totpCode : null,
 });
 
-/** Columns that hold connection details or passwords: the file then needs a 2FA code to import. */
-const CREDENTIAL_HEADERS = /^(system id|username|password|host|host ip|hostips|port)$/i;
-export function headerHasCredentials(content: string): boolean {
-  const first = content.replace(/^﻿/, "").split(/\r?\n/, 1)[0] ?? "";
+/**
+ * Trunk columns that hold connection details or passwords: such a file needs a 2FA code to import. Only trunk files
+ * carry credentials; a users file's Username is a login name (team trial round 11). Headers compare loosely, as the
+ * import reads them (case, spaces, dashes and underscores ignored); the server has the last word.
+ */
+const CREDENTIAL_ENTITIES = new Set<MigrationImportEntity>(["customer_trunks", "vendor_trunks"]);
+const looseHeader = (h: string) =>
+  h
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}]/gu, "")
+    .toLowerCase();
+const CREDENTIAL_HEADERS = new Set(
+  [
+    "System ID",
+    "Username",
+    "User name",
+    "SMPP username",
+    "SMPP user",
+    "Login",
+    "Password",
+    "SMPP password",
+    "Pass",
+    "Host",
+    "Host IP",
+    "Host IPs",
+    "Allowed IP",
+    "Allowed IPs",
+    "IP",
+    "IPs",
+    "IP whitelist",
+    "Whitelist",
+    "SMSC",
+    "Server",
+    "Address",
+    "Port",
+    "SMPP port",
+  ].map(looseHeader),
+);
+export function headerHasCredentials(entity: MigrationImportEntity, content: string): boolean {
+  if (!CREDENTIAL_ENTITIES.has(entity)) return false;
+  const first = content.replace(/^\uFEFF/, "").split(/\r?\n/, 1)[0] ?? "";
   const delim = first.includes("\t") ? "\t" : first.split(";").length > first.split(",").length ? ";" : ",";
-  return first.split(delim).some((h) => CREDENTIAL_HEADERS.test(h.replace(/^"|"$/g, "").trim()));
+  return first.split(delim).some((h) => CREDENTIAL_HEADERS.has(looseHeader(h.replace(/^"|"$/g, ""))));
 }
 
 export interface ReportTotals {

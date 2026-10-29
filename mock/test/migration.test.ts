@@ -509,6 +509,67 @@ describe("migration center", { skip }, () => {
     assert.equal((await db().query("SELECT 1 FROM users WHERE username = $1", [`gone.${run}`])).rows.length, 0);
   });
 
+  test("headers are matched loosely and choices read as written; Apply then succeeds (team trial round 11)", async () => {
+    // "Active" used to pass the dry run and fail Apply on users_status_check; "User name" and "Username" are one
+    // column whatever mapping is picked.
+    const username = `loose.${run}`;
+    const { rows: maps } = await db().query(
+      "SELECT id FROM migration_mappings WHERE entity = 'users' AND built_in ORDER BY id LIMIT 1",
+    );
+    const dry = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Loose ${run}`,
+        trunksInactive: true,
+        files: [
+          {
+            entity: "users",
+            fileName: "users.csv",
+            mappingId: maps[0] ? Number(maps[0].id) : null,
+            content: toCsv([
+              ["External ID", "Username", "First name", "Last_Name", "E-MAIL", "Account Manager", "Status"],
+              ["L1", username, "Loosa", "Fakename", `${username}@example.com`, "Yes", "Active"],
+            ]),
+          },
+        ],
+      }),
+      201,
+    );
+    madeImports.push(dry.id);
+    assert.equal(dry.report.canApply, true, JSON.stringify(dry.report.issues));
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+    await runningApplies.get(dry.id);
+    const { rows } = await db().query("SELECT id, status, is_account_manager FROM users WHERE username = $1", [username]);
+    assert.equal(rows[0]?.status, "active");
+    assert.equal(rows[0]?.is_account_manager, true);
+    cleanup.push(async () => {
+      await db().query("DELETE FROM migration_refs WHERE entity = 'users' AND record_id = $1", [rows[0].id]);
+      await db().query("DELETE FROM users WHERE id = $1", [rows[0].id]);
+    });
+    // A word the field does not know is reported by the dry run instead of failing Apply.
+    const bad = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Loose ${run}`,
+        trunksInactive: true,
+        files: [
+          {
+            entity: "users",
+            fileName: "users.csv",
+            content: toCsv([
+              ["username", "firstName", "lastName", "email", "status"],
+              [`odd.${run}`, "Odda", "Fakename", `odd.${run}@example.com`, "Sleeping"],
+            ]),
+          },
+        ],
+      }),
+      201,
+    );
+    madeImports.push(bad.id);
+    assert.equal(bad.report.canApply, false);
+    assert.ok(bad.report.issues.some((i: { field: string }) => i.field === "status"), JSON.stringify(bad.report.issues));
+  });
+
   test("a deleted user in the file is restored, not skipped (team trial round 10)", async () => {
     const username = `back.${run}`;
     const users = (source: string, first: string) => ({

@@ -9,6 +9,8 @@ import { LIFETIME_SQL, loadPolicy } from "./passwords.js";
 /** Calls that keep working while blocked: the session, the change itself and the shell around it. */
 export const GATE_OPEN = new Set([
   "getHealth",
+  "checkPasswordSetup",
+  "completePasswordSetup",
   "getCurrentUser",
   "getMyPasswordStatus",
   "changeMyPassword",

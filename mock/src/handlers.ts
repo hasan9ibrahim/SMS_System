@@ -271,6 +271,7 @@ import {
   updateSecuritySettings,
 } from "./api/security.js";
 import { invalidateGate } from "./admin/gate.js";
+import { checkPasswordSetup, completePasswordSetup, sendPasswordLinks } from "./api/passwordLinks.js";
 import {
   archiveRateTable,
   changeRateLines,
@@ -1160,6 +1161,9 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   disableUserTotp,
   endUserSession,
   forcePasswordChange: (request, reply) => Promise.resolve(forcePasswordChange(request, reply)).finally(invalidateGate),
+  sendPasswordLinks,
+  checkPasswordSetup,
+  completePasswordSetup: (request, reply) => Promise.resolve(completePasswordSetup(request, reply)).finally(invalidateGate),
   getAccessCatalog,
   getAccessGroup,
   getDepartment,

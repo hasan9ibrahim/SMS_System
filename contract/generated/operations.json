@@ -3774,6 +3774,28 @@
   "alsoOn": []
  },
  {
+  "method": "POST",
+  "path": "/password-setup",
+  "operationId": "completePasswordSetup",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/password-setup/check",
+  "operationId": "checkPasswordSetup",
+  "tag": "session",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
   "method": "GET",
   "path": "/pcap-traces/{id}/file",
   "operationId": "downloadPcapTrace",
@@ -6018,6 +6040,17 @@
   "method": "POST",
   "path": "/users/force-password-change",
   "operationId": "forcePasswordChange",
+  "tag": "admin",
+  "module": "users",
+  "action": "change_password",
+  "readChecked": true,
+  "admin": true,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/users/password-links",
+  "operationId": "sendPasswordLinks",
   "tag": "admin",
   "module": "users",
   "action": "change_password",

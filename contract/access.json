@@ -11,7 +11,8 @@
     "online-users",
     "changes",
     "portal",
-    "lookups"
+    "lookups",
+    "password-setup"
   ],
   "admin": [
     "change-history",
@@ -574,6 +575,9 @@
       "action": "change_password"
     },
     "forcePasswordChange": {
+      "action": "change_password"
+    },
+    "sendPasswordLinks": {
       "action": "change_password"
     },
     "repushEdrs": {

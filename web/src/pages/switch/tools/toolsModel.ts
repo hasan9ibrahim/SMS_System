@@ -31,6 +31,7 @@ export const EMAIL_TYPE: Record<EmailLogRow["emailType"], string> = {
   template_test: "Template Test",
   currency_alert: "Currency Alert",
   rn_reminder: "RN Reminder",
+  password_setup: "Password Set-up Link",
   am_handover: "Account Manager Handover",
 };
 

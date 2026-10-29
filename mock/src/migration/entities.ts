@@ -302,6 +302,123 @@ export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record
   },
 ];
 
+/**
+ * Other column names each template field is known by (team trial round 11: "User name" and "Username" are the same
+ * column). Headers are compared loosely — case, spaces, dashes, underscores, dots and brackets ignored — after the
+ * chosen mapping, the field key and its label, and the reference platform's names.
+ */
+export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string[]>> = {
+  users: {
+    externalId: ["ID", "User ID", "Old ID", "Source ID"],
+    username: ["User name", "Login", "Login name", "User"],
+    firstName: ["First", "Given name", "Forename"],
+    lastName: ["Last", "Surname", "Family name"],
+    email: ["Email address", "Mail"],
+    department: ["Dept", "Department name"],
+    accessGroup: ["Access group", "GUI access group", "Group", "Role", "User group"],
+    isAccountManager: ["Account manager", "Is account manager", "AM", "Is AM"],
+    status: ["State", "User status"],
+  },
+  enterprises: {
+    externalId: ["ID", "Enterprise ID", "Partner ID", "Old ID"],
+    name: ["Enterprise", "Enterprise name", "Partner", "Partner name"],
+    alias: ["Short name", "Code"],
+    type: ["Enterprise type", "Partner type"],
+    tier: ["Enterprise tier"],
+    status: ["State"],
+    businessCompany: ["Company", "Business company name"],
+    accountManager: ["AM", "Account manager username"],
+    country: ["Country code", "Country ISO"],
+    vatNumber: ["VAT", "VAT no", "Tax number", "TRN"],
+    address: ["Address 1", "Address line 1", "Street"],
+    emails: ["Email", "Emails", "Commercial email"],
+    technicalEmails: ["Technical email", "NOC email", "Support email"],
+    ratesEmails: ["Rates email", "Rate email", "Rate notification email"],
+    financeEmails: ["Finance email", "Billing email", "Invoice email", "Accounts email"],
+  },
+  customer_trunks: {
+    externalId: ["ID", "Trunk ID", "Customer trunk ID"],
+    enterprise: ["Enterprise name", "Customer", "Partner"],
+    name: ["Trunk", "Customer trunk", "Customer trunk name", "Account name"],
+    username: ["SMPP username", "SMPP user", "Username", "User name", "Login"],
+    password: ["SMPP password", "Pass"],
+    hostIps: ["Allowed IP", "Host IP", "Host IPs", "IP", "IPs", "IP whitelist", "Whitelist"],
+    sslType: ["SSL type", "TLS", "Encryption"],
+    protocol: ["Bind protocol"],
+    tps: ["Throughput", "Max TPS"],
+    category: ["Product", "Category"],
+    billingType: ["Billed on", "Charge on"],
+  },
+  vendor_trunks: {
+    externalId: ["ID", "Trunk ID", "Vendor trunk ID"],
+    enterprise: ["Enterprise name", "Vendor", "Partner"],
+    name: ["Trunk", "Vendor trunk", "Vendor trunk name", "Account name"],
+    host: ["SMSC", "Server", "Host IP", "IP", "Address"],
+    port: ["SMPP port"],
+    username: ["SMPP username", "SMPP user", "Username", "User name", "Login"],
+    password: ["SMPP password", "Pass"],
+    protocol: ["Bind protocol"],
+    tps: ["Throughput", "Max TPS"],
+    category: ["Product", "Category"],
+    billingType: ["Billed on", "Charge on"],
+  },
+  rate_tables: {
+    externalId: ["ID", "Table ID", "Rate table ID"],
+    name: ["Table", "Table name", "Rate table", "Rate table name"],
+    kind: ["Type", "Side"],
+    currency: ["CCY"],
+    category: ["Product", "Category"],
+    vendorTrunk: ["Vendor trunk name"],
+    customerTrunks: ["Customer trunk", "Trunks"],
+  },
+  rate_lines: {
+    rateTable: ["Rate table name", "Table", "Table name"],
+    mccmnc: ["MCC MNC", "MCC/MNC", "Code"],
+    senderId: ["Sender"],
+    rate: ["Price", "Sell rate", "Buy rate"],
+    validFrom: ["From date", "From date (UTC)", "Effective date", "Effective from", "Valid from date"],
+    blocked: ["Block", "Is blocked"],
+  },
+  route_rules: {
+    externalId: ["ID", "Rule ID", "Route rule ID"],
+    name: ["Rule", "Rule name", "Route rule"],
+    priority: ["Prio", "Order"],
+    status: ["State"],
+    customerTrunks: ["Customer trunk", "Customers"],
+    destinations: ["Destination", "MCCMNC", "MCCMNCs"],
+    vendors: ["Vendor", "Vendor trunks"],
+  },
+  opening_balances: {
+    enterprise: ["Enterprise name", "Partner"],
+    side: ["Account type", "Kind", "Type"],
+    amount: ["Balance", "Opening balance"],
+    currency: ["CCY"],
+    date: ["As of", "As of date", "Balance date"],
+  },
+};
+
+/**
+ * Other ways a file writes a choice (team trial round 11: "Active" for active failed Apply). Values are compared
+ * loosely like headers ("Tier 1" = tier1, "TLS 1.2" = tls1.2); these are the other words for them.
+ */
+export const CHOICE_SYNONYMS: Record<string, string[]> = {
+  active: ["Enabled", "Enable", "On", "Live"],
+  inactive: ["Disabled", "Disable", "Off", "Suspended"],
+  customer: ["Client", "Sell", "Customers"],
+  vendor: ["Supplier", "Provider", "Buy", "Vendors"],
+  reciprocal: ["Bilateral", "Both", "Customer and vendor", "Customer & vendor", "Customer/Vendor"],
+  tier1: ["1", "T1"],
+  tier2: ["2", "T2"],
+  tier3: ["3", "T3"],
+  yes: ["Y", "True", "1", "X"],
+  no: ["N", "False", "0"],
+  none: ["No", "Off", "Plain", "No TLS", "No SSL"],
+  attempt: ["Attempts", "Attempted"],
+  submit: ["Submitted", "Submit SM"],
+  reported: ["Report", "Reports"],
+  delivery: ["Delivered", "DLR"],
+};
+
 /** Tables of a full export package, with sensitivity. Columns matching CREDENTIAL go only with credentials. */
 export interface ExportTable {
   entity: string;

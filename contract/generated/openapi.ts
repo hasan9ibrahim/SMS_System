@@ -7166,6 +7166,66 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/users/password-links": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * E-mail users a link to set their own password (§13.28)
+     * @description Team trial round 11. Each user gets an e-mail from the platform mailbox (with the Xpert logo) holding a single-use link that works for 72 hours. The link opens the Set Password screen: the user picks a password under the usual rules, then signs in as usual, 2FA included. The link never signs anyone in, and a new link replaces the user's earlier ones. Deleted or inactive users, users without an e-mail address, and administrators (unless you are one) are skipped. sharedEmails lists the addresses that got links for more than one user: whoever reads that mailbox can set those users' passwords.
+     */
+    post: operations["sendPasswordLinks"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/password-setup/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Open a set-password link and check a password against the rules (§13.28)
+     * @description No sign-in (team trial round 11): the link's token is the proof. Answers who the link is for and, when a password is sent, which rules it meets. 404 when the link is unknown, used or expired.
+     */
+    post: operations["checkPasswordSetup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/password-setup": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Set my password from a set-password link (§13.28)
+     * @description No sign-in (team trial round 11). Sets the password when it meets the rules and uses the link up; the user then signs in on the sign-in screen (2FA included). Any open sessions of the user end.
+     */
+    post: operations["completePasswordSetup"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/users/force-password-change": {
     parameters: {
       query?: never;
@@ -14806,7 +14866,7 @@ export type components = {
       rows: components["schemas"]["EmailTemplateRow"][];
     };
     /**
-     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) and currency_alert (an exchange rate moved past an alert, team trial round 2).
+     * @description The §8 list plus payment_confirmation (§13.33), invoice_acceptance / invoice_rejection (§13.31), monitoring_alert (§13.7), cleanup_summary (§13.19), credential_transfer (§13.22, to the other administrators), password_reminder (§13.28) template_test (a test of an e-mail template, §11) currency_alert (an exchange rate moved past an alert, team trial round 2) and password_setup (a set-password link, team trial round 11).
      * @enum {string}
      */
     EmailType:
@@ -14837,7 +14897,8 @@ export type components = {
       | "template_test"
       | "currency_alert"
       | "am_handover"
-      | "rn_reminder";
+      | "rn_reminder"
+      | "password_setup";
     EmailLogRow: {
       id: components["schemas"]["Id"];
       enterpriseId: components["schemas"]["Id"] | null;
@@ -16225,6 +16286,49 @@ export type components = {
     TempPasswordInput: {
       password: string;
       confirmPassword: string;
+    };
+    PasswordLinksInput: {
+      ids: number[];
+    };
+    PasswordLinksResult: {
+      sent: number;
+      skipped: {
+        /** Format: int64 */
+        userId: number;
+        username: string;
+        reason: string;
+      }[];
+      /** @description Addresses that got links for more than one user. */
+      sharedEmails: {
+        email: string;
+        usernames: string[];
+      }[];
+      /** Format: date-time */
+      expiresAt: string;
+    };
+    PasswordSetupCheckInput: {
+      token: string;
+      password?: string | null;
+    };
+    PasswordSetupInfo: {
+      username: string;
+      firstName: string;
+      /** Format: date-time */
+      expiresAt: string;
+      /** @description The rules and whether the password sent meets each; none met when no password was sent. */
+      rules: {
+        key: string;
+        label: string;
+        met: boolean;
+      }[];
+    };
+    PasswordSetupInput: {
+      token: string;
+      password: string;
+      confirmPassword: string;
+    };
+    PasswordSetupDone: {
+      username: string;
     };
     ForcePasswordChangeInput: {
       ids: components["schemas"]["Id"][];
@@ -18061,6 +18165,8 @@ export type components = {
       canApply: boolean;
     };
     MigrationImport: {
+      /** @description Users this import created or restored, while it stays applied (team trial round 11): for E-mail password links. Empty otherwise. */
+      newUserIds: number[];
       id: components["schemas"]["Id"];
       sourceSystem: string;
       /**
@@ -30072,6 +30178,88 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  sendPasswordLinks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordLinksInput"];
+      };
+    };
+    responses: {
+      /** @description The links sent and the users skipped */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordLinksResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  checkPasswordSetup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordSetupCheckInput"];
+      };
+    };
+    responses: {
+      /** @description The link is valid */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordSetupInfo"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  completePasswordSetup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["PasswordSetupInput"];
+      };
+    };
+    responses: {
+      /** @description Password set */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PasswordSetupDone"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };

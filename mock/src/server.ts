@@ -15,7 +15,16 @@ import { DEFAULT_USER_ID, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
-const PUBLIC_OPS = new Set(["getHealth", "signIn", "signInCode", "resendSignInCode", "signOut"]);
+const PUBLIC_OPS = new Set([
+  "getHealth",
+  "signIn",
+  "signInCode",
+  "resendSignInCode",
+  "signOut",
+  // A set-password link is its own proof (team trial round 11).
+  "checkPasswordSetup",
+  "completePasswordSetup",
+]);
 
 export const API_PREFIX = "/api/v1";
 

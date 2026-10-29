@@ -1483,6 +1483,7 @@ export const listFields: Record<ListId, ListFields> = {
           { value: "currency_alert", label: "Currency Alert" },
           { value: "am_handover", label: "Account Manager Handover" },
           { value: "rn_reminder", label: "RN Reminder" },
+          { value: "password_setup", label: "Password Set-up Link" },
         ],
       }),
       field({
