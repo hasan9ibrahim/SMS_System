@@ -2926,3 +2926,15 @@ body.resizing-split-h {
   margin: 4px 0 0;
   padding-left: 18px;
 }
+
+/* A list page whose top area is tall (a report's settings and "what stands out" on a laptop) keeps about six rows of
+   its grid and scrolls, instead of squeezing the grid to its header row (team trial round 12 audit). A page that fits
+   looks the same as before. */
+@media (min-width: 761px) {
+  .page:has(> .list-body) {
+    overflow-y: auto;
+  }
+  .page > .list-body {
+    min-height: 300px;
+  }
+}

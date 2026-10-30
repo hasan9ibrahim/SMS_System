@@ -409,7 +409,6 @@
   .sales-cards,
   .mc-summary,
   .recon-figures,
-  .dash-pair,
   .dash-mover-groups,
   .cleanup-areas,
   .imp-counts {
@@ -519,6 +518,46 @@
 /* Team trial round 12 sweep: a segmented control wider than the phone scrolls sideways by itself, and small tables
    (NOC and Sales reports, Network status, Cleanup Center) scroll inside their card instead of widening the page. */
 @media (max-width: 760px) {
+  /* Dashboard table pairs (top clients / vendors, TPS per trunk) stack: side by side their columns were cut. */
+  .dash-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Rate Manager with a table open: the table takes the phone's width (its x and Back return to the list), and its
+     header actions wrap. Beside the list it had about 100 px and most actions were off screen. */
+  .page.rate-split > .rate-list-pane {
+    display: none;
+  }
+  .rate-detail > .page-header {
+    flex-wrap: wrap;
+  }
+  /* Dashboard ranked tables: the lowest-priority columns go (ASR and DLR, a destination's network count, the TPS
+     limit bar) so the name column keeps room; with all of them the names were squeezed to nothing. */
+  .dash-cols {
+    column-gap: 6px;
+  }
+  .dash-top-row,
+  .dash-dest-row {
+    grid-template-columns: 22px minmax(0, 1fr) 64px 64px 60px;
+  }
+  .dash-top-row > :nth-child(n + 6),
+  .dash-dest-row > :nth-child(3),
+  .dash-dest-row > :nth-child(n + 7),
+  .dash-tps-row > :nth-child(4) {
+    display: none;
+  }
+  .dash-tps-row {
+    grid-template-columns: minmax(0, 1fr) 52px 52px 48px;
+  }
+  /* A long destination name wraps inside its chip instead of running past the card. */
+  .dash-topdest .chip {
+    max-width: 100%;
+    height: auto;
+    min-height: 28px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    border-radius: 14px;
+    white-space: normal;
+  }
   .seg {
     max-width: 100%;
     overflow-x: auto;
