@@ -773,7 +773,9 @@ export function listCompanyMailboxes(request: FastifyRequest, reply: FastifyRepl
       mailboxes: rows.map((r) => ({
         email: r.smtp_email as string,
         department:
-          r.department === "noc" ? "NOC" : String(r.department).charAt(0).toUpperCase() + String(r.department).slice(1),
+          r.department === "noc"
+            ? "NOC Support and Technical"
+            : String(r.department).charAt(0).toUpperCase() + String(r.department).slice(1),
       })),
     };
   });

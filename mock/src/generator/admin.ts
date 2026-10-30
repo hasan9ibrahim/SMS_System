@@ -17,6 +17,8 @@ export const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 
 // NOC and Support are one department (team trial round 1, 2026-10-18).
 export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin"];
+/** Names shown for the generator's department keys (team trial round 12). */
+export const DEPARTMENT_NAME: Record<string, string> = { NOC: "NOC Support and Technical" };
 
 // Permission keys are page keys of the menu (admin/catalog.ts, §11).
 export const ACCESS_GROUPS: {
@@ -297,7 +299,8 @@ async function adminColumns(
   for (const [i, name] of DEPARTMENTS.entries()) {
     await sink.insert("departments", {
       id: i + 1,
-      name,
+      // The generator's key stays "NOC"; the department is called NOC Support and Technical (team trial round 12).
+      name: DEPARTMENT_NAME[name] ?? name,
       status: "active",
       manager_id: managerOf[name] ?? managers.get(name) ?? null,
       description: `${name} department (fake)`,

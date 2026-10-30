@@ -54,7 +54,8 @@ export const ALL_ACTIONS_LABEL = "Every page";
 // ---------------------------------------------------------------- business company form
 
 export const MAILBOX_DEPARTMENTS: { value: MailboxInput["department"]; label: string }[] = [
-  { value: "noc", label: "NOC" },
+  // NOC and Support are one team, NOC Support and Technical (team trial round 12).
+  { value: "noc", label: "NOC Support and Technical" },
   { value: "sales", label: "Sales" },
   { value: "rates", label: "Rates" },
   { value: "billing", label: "Billing" },

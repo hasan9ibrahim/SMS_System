@@ -228,7 +228,7 @@ describe("§11 lists", { skip }, () => {
 
 describe("§11 users, §13.28 passwords", { skip }, () => {
   const form = async (): Promise<UserInput> => {
-    const { rows } = await db().query("SELECT id FROM departments WHERE name = 'NOC'");
+    const { rows } = await db().query("SELECT id FROM departments WHERE name = 'NOC Support and Technical'");
     return {
       username: `test.user.${run}`,
       firstName: "Testa",
@@ -418,7 +418,7 @@ describe("§11 departments, access groups, templates, portal users", { skip }, (
     assert.equal(record.manager, "Daniel Khoury");
     await fails(
       "createDepartment",
-      call("POST", "/departments", { name: "NOC", status: "active", managerId: null, description: null }),
+      call("POST", "/departments", { name: "NOC Support and Technical", status: "active", managerId: null, description: null }),
       400,
     );
     const blocked = await fails("archiveDepartment", call("POST", "/departments/3/archive", {}), 409);
