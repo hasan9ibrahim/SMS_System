@@ -121,7 +121,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "A rate can be **blocked** (shown with a lock icon). The price stays in the table, but traffic is not accepted at it: a blocked customer rate means the client cannot send to that destination at that price, and a blocked vendor rate is never used by routing. Unblock the rate to use it again. A new rate on a blocked rate keeps the block.",
+            text: "A rate can be **blocked** (shown with a lock icon). The price stays in the table, but traffic is not accepted at it: a blocked customer rate means the client cannot send to that destination at all, and a blocked vendor rate keeps that vendor off the destination. Blocked means blocked: a blocked network rate is never replaced by the country's \"All networks\" rate or by a rate in another of the trunk's tables. Unblock the rate to use it again. A new rate on a blocked rate keeps the block.",
           },
         ],
       },
@@ -146,12 +146,12 @@ export const topics: HelpTopic[] = [
               "The message's destination network is found (from the number, using the [[master-table|Master table]] dial codes, or an HLR lookup).",
               "The customer trunk's rate tables are tried in the order they are listed on the trunk. The first table that has a rate for the destination prices the message.",
               "Inside that table the most specific rate valid at send time wins: a rate with the message's sender ID first, then the network's own rate, then the country's \"All networks\" rate.",
-              "If no rate is found, or the rate is blocked, the message has no price and is not accepted.",
+              "If no rate is found, the message has no price and is not accepted. If the rate found is blocked, the message is refused too: the country rate and the trunk's later tables are not tried.",
             ],
           },
           {
             kind: "text",
-            text: "Vendor costs work the same way per vendor trunk: the network rate, else the country rate (sender-ID rates and blocked rates are not used for routing). Routing then chooses a vendor using the [[route-rules|Route rules]]. You can test any destination in [[rate-lookup|Rate lookup]].",
+            text: "Vendor costs work the same way per vendor trunk: a rate with the sender ID the vendor receives (after the vendor trunk's own translation rules) first, then the network rate, else the country rate. Routing ranks vendors by their general rate; the cost recorded for each message uses the vendor's sender-ID rate when it has one. A blocked vendor rate keeps that vendor off the destination, and routing moves on to the next vendor. Routing then chooses a vendor using the [[route-rules|Route rules]]. You can test any destination in [[rate-lookup|Rate lookup]].",
           },
         ],
       },

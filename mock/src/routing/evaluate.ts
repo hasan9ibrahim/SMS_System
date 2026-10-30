@@ -41,6 +41,11 @@ export interface MessageContext {
    * they are skipped like a vendor below margin, and the next vendor is tried.
    */
   egressBlocked?: ReadonlySet<number>;
+  /**
+   * Vendor trunks whose Sender ID line for the sender they would receive (after their egress translation) is blocked
+   * (decided 2026-10-30): skipped the same way.
+   */
+  rateBlocked?: ReadonlySet<number>;
 }
 
 /**
@@ -90,6 +95,8 @@ export interface VendorOption {
   delayS?: number | null;
   tier?: string | null;
   atLimit?: boolean;
+  /** Its rate line for the destination is blocked: it takes no traffic there (blocked means blocked, 2026-10-30). */
+  blocked?: boolean;
 }
 
 type Rule = Pick<
@@ -542,9 +549,15 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
       ? m.sellRate === null || m.sellRate <= 0 || (c.margin / m.sellRate) * 100 >= rule.margin
       : c.margin >= rule.margin);
   const marginText = `${rule.margin}${pct ? " %" : ""}`;
-  const usable = (c: RouteCandidate) => !m.egressBlocked?.has(c.vendorTrunkId) && marginOk(c);
+  const rateBlocked = (c: RouteCandidate) =>
+    !!options.get(c.vendorTrunkId)?.blocked || !!m.rateBlocked?.has(c.vendorTrunkId);
+  const usable = (c: RouteCandidate) => !m.egressBlocked?.has(c.vendorTrunkId) && !rateBlocked(c) && marginOk(c);
   const skipWhy = (c: RouteCandidate) =>
-    m.egressBlocked?.has(c.vendorTrunkId) ? "blocked by its vendor translation rule" : `margin below ${marginText}`;
+    m.egressBlocked?.has(c.vendorTrunkId)
+      ? "blocked by its vendor translation rule"
+      : rateBlocked(c)
+        ? "its rate for this destination is blocked"
+        : `margin below ${marginText}`;
 
   // 1. Number whitelist pinned to a vendor (§13.27).
   for (const w of rule.whitelists) {

@@ -28,7 +28,7 @@ import { listFields } from "../lists/fields.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { records } from "./admin.js";
-import { clientLines, routedVendors, vendorLines, withCodes, type ClientLine } from "./rateLookup.js";
+import { clientLines, routedVendors, switchLines, vendorLines, withCodes, type ClientLine } from "./rateLookup.js";
 import { dependencies, iso, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 
@@ -254,9 +254,17 @@ export function lcrTable(request: FastifyRequest, reply: FastifyReply) {
     ]);
     const q = qualityFor(quality, dest.mccmnc);
     const tps = tpsNow();
-    // Generic lines only (sender-ID rates are not LCR), one per vendor trunk.
+    // Generic lines only (sender-ID rates are not LCR), one per vendor trunk; a trunk whose line in force is blocked
+    // is not offered (blocked means blocked, decided 2026-10-30).
+    const blockedTrunks = new Set(
+      switchLines(lines)
+        .filter((x) => x.blocked)
+        .map((x) => x.trunkId),
+    );
     const byTrunk = new Map<number, (typeof lines)[number]>();
-    for (const l of lines) if (l.senderId === null && !byTrunk.has(l.trunkId)) byTrunk.set(l.trunkId, l);
+    for (const l of lines)
+      if (l.senderId === null && !l.blocked && !blockedTrunks.has(l.trunkId) && !byTrunk.has(l.trunkId))
+        byTrunk.set(l.trunkId, l);
     type Cand = LcrCandidate & { line: (typeof lines)[number] | null; whatIf: LcrRow["whatIf"] };
     const base: Cand[] = [...byTrunk.values()].map((l) => ({
       vendorTrunkId: l.trunkId,

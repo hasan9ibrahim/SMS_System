@@ -6,11 +6,12 @@
 // where the switch sends it (backend step 11c).
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { RouteSimulatorInput, RouteSimulatorResult } from "@sms/contract";
-import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
+import { PLATFORM_CURRENCY } from "../currency.js";
 import { withDb } from "../db.js";
 import { messageEncoding } from "../smpp.js";
 import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOptions } from "./routeRules.js";
 import { skipEgressBlocked } from "./egress.js";
+import { customerPrice, priced, vendorPrice } from "./linePrice.js";
 import { badInput } from "./switchTools.js";
 import { runTrunkRules } from "./translationRules.js";
 import { production } from "../mode.js";
@@ -58,6 +59,8 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         mccmnc: b.mccmnc ?? undefined,
       },
       listIdsOf(rules),
+      // Customer Sender ID rates match the sender as the customer sent it, before ingress translation (§6.2).
+      b.senderId ?? "",
     );
     const options = await vendorOptions(pool, m.mccmnc, null);
     // A vendor whose own egress rules block the message is skipped and the next vendor tried
@@ -79,32 +82,24 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           )
         : { result: routeThrough(rules, m, options), skipped: [] };
 
-    let customerRate: RouteSimulatorResult["customerRate"] = null;
-    if (m.mccmnc) {
-      const { rows } = await pool.query(
-        `SELECT l.rate, l.currency, rt.id AS rate_table_id, rt.name AS rate_table, ${toPlatformSql("l.rate")} AS conv
-           FROM customer_trunk_rate_tables x
-           JOIN rate_tables rt ON rt.id = x.rate_table_id
-           JOIN rate_lines l ON l.rate_table_id = x.rate_table_id
-           JOIN currency_latest cl ON cl.iso = l.currency
-          WHERE x.customer_trunk_id = $1 AND l.mccmnc = ANY($2) AND l.sender_id IS NULL AND NOT l.is_blocked
-            AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-          ORDER BY x.position, length(l.mccmnc) DESC LIMIT 1`,
-        [b.customerTrunkId, [m.mccmnc, m.mccmnc.slice(0, 3)]],
-      );
-      if (rows[0])
-        customerRate = {
-          rate: Number(rows[0].rate),
-          currency: String(rows[0].currency).trim(),
-          platformRate: Math.round(Number(rows[0].conv) * 1e6) / 1e6,
-          rateTableId: Number(rows[0].rate_table_id),
-          rateTable: rows[0].rate_table,
-        };
-    }
+    // The customer's rate as the switch prices it (linePrice.ts): the sender's own line first; a blocked line that
+    // applies refuses the message (blocked means blocked, decided 2026-10-30).
+    const customerPriced = m.mccmnc ? await customerPrice(pool, b.customerTrunkId, m.mccmnc, b.senderId ?? null) : null;
+    const customerBlocked = customerPriced === "blocked";
+    const cp = priced(customerPriced);
+    const customerRate: RouteSimulatorResult["customerRate"] = cp
+      ? {
+          rate: cp.rate,
+          currency: cp.currency,
+          platformRate: cp.platformRate,
+          rateTableId: cp.rateTableId,
+          rateTable: cp.rateTable,
+        }
+      : null;
     // No rate now: say when one starts, if it is only scheduled (team trial round 6: a new or raised customer rate
     // waits for its notice period, so the simulator saw "no rate" with no hint why).
     let upcomingRate: string | null = null;
-    if (m.mccmnc && !customerRate) {
+    if (m.mccmnc && !customerRate && !customerBlocked) {
       const { rows } = await pool.query(
         `SELECT l.rate, l.currency, l.valid_from FROM customer_trunk_rate_tables x
            JOIN rate_lines l ON l.rate_table_id = x.rate_table_id
@@ -119,38 +114,16 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           .slice(0, 16)
           .replace("T", " ")} UTC`;
     }
-    // Straight to one vendor: its own line for the network, else for the country.
+    // Straight to one vendor: priced below, once its egress translation gives the sender it receives.
     let forcedVendor: RouteSimulatorResult["forcedVendor"] = null;
     if (b.vendorTrunkId) {
       const { rows: vt } = await pool.query("SELECT id, name FROM vendor_trunks WHERE id = $1 AND deleted_at IS NULL", [
         b.vendorTrunkId,
       ]);
       if (!vt[0]) return badInput(reply, [{ path: "/vendorTrunkId", message: "unknown vendor trunk" }]);
-      const { rows } = m.mccmnc
-        ? await pool.query(
-            `SELECT l.rate, l.currency, ${toPlatformSql("l.rate")} AS conv
-               FROM rate_tables rt JOIN rate_lines l ON l.rate_table_id = rt.id
-               JOIN currency_latest cl ON cl.iso = l.currency
-              WHERE rt.vendor_trunk_id = $1 AND rt.deleted_at IS NULL AND l.mccmnc = ANY($2) AND l.sender_id IS NULL
-                AND NOT l.is_blocked AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-              ORDER BY length(l.mccmnc) DESC LIMIT 1`,
-            [b.vendorTrunkId, [m.mccmnc, m.mccmnc.slice(0, 3)]],
-          )
-        : { rows: [] };
-      forcedVendor = {
-        vendorTrunkId: Number(vt[0].id),
-        name: vt[0].name,
-        rate: rows[0] ? Number(rows[0].rate) : null,
-        currency: rows[0] ? String(rows[0].currency).trim() : null,
-        platformRate: rows[0] ? Math.round(Number(rows[0].conv) * 1e6) / 1e6 : null,
-      };
+      forcedVendor = { vendorTrunkId: Number(vt[0].id), name: vt[0].name, rate: null, currency: null, platformRate: null };
     }
     const d = route.decision;
-    const chosen = d?.vendor ? d.candidates.find((c) => c.vendorTrunkId === d.vendor!.vendorTrunkId) : undefined;
-    const cost = forcedVendor ? forcedVendor.platformRate : (chosen?.cost ?? null);
-    const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
-    const sell = customerRate?.platformRate ?? null;
-    const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
     // Egress translation (§6.4, §13.2): the chosen vendor trunk's rules run after routing, on the
     // message as ingress translation left it; shows what the vendor would receive.
     const egressId = forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
@@ -167,27 +140,44 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         : null;
     const vendorTranslation: RouteSimulatorResult["vendorTranslation"] =
       egress && egressId !== null ? { vendorTrunkId: egressId, vendorTrunk: egressName, result: egress } : null;
+    // The vendor's cost as the switch prices it: its Sender ID lines match the sender it receives after its egress
+    // translation (§6.2, decided 2026-10-30); a blocked line means it takes no traffic there.
+    const vendorPriced =
+      egressId !== null && m.mccmnc && !egress?.blocked
+        ? await vendorPrice(pool, egressId, m.mccmnc, egress?.after.sender ?? sender)
+        : null;
+    const vp = priced(vendorPriced);
+    if (forcedVendor && vp)
+      forcedVendor = { ...forcedVendor, rate: vp.rate, currency: vp.currency, platformRate: vp.platformRate };
+    const cost = vp?.platformRate ?? null;
+    const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
+    const sell = customerRate?.platformRate ?? null;
+    const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
     const blocked = translation.blocked
       ? "Blocked by a translation rule on the trunk"
       : !m.mccmnc
         ? "Unknown destination: no dial code matches the number"
-        : !customerRate
-          ? upcomingRate
-            ? `No customer rate yet: ${upcomingRate} (scheduled; ESME_RINVDSTADR until then)`
-            : "No customer rate for the destination (ESME_RINVDSTADR)"
-          : forcedVendor
-            ? forcedVendor.rate === null
-              ? `${forcedVendor.name} has no rate for the destination`
-              : null
-            : !d
-              ? "No route rule matches"
-              : d.outcome === "block"
-                ? `Blocked by route rule ${d.ruleId}`
-                : d.outcome === "no_vendor"
-                  ? `Route rule ${d.ruleId} matched but no vendor qualifies`
-                  : egress?.blocked
-                    ? `Blocked by a translation rule on vendor trunk ${egressName}`
-                    : null;
+        : customerBlocked
+          ? "The customer's rate for the destination is blocked (ESME_RINVDSTADR)"
+          : !customerRate
+            ? upcomingRate
+              ? `No customer rate yet: ${upcomingRate} (scheduled; ESME_RINVDSTADR until then)`
+              : "No customer rate for the destination (ESME_RINVDSTADR)"
+            : forcedVendor
+              ? vendorPriced === "blocked"
+                ? `${forcedVendor.name}'s rate for the destination is blocked`
+                : forcedVendor.rate === null
+                  ? `${forcedVendor.name} has no rate for the destination`
+                  : null
+              : !d
+                ? "No route rule matches"
+                : d.outcome === "block"
+                  ? `Blocked by route rule ${d.ruleId}`
+                  : d.outcome === "no_vendor"
+                    ? `Route rule ${d.ruleId} matched but no vendor qualifies`
+                    : egress?.blocked
+                      ? `Blocked by a translation rule on vendor trunk ${egressName}`
+                      : null;
     let testSms: RouteSimulatorResult["testSms"] = null;
     // Production (backend step 11c): the switch sends it, through its own rules (or straight to the chosen vendor).
     if (b.testSms && production)

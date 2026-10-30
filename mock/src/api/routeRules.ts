@@ -47,6 +47,7 @@ import {
 import { qbrDlrByCode } from "./qbr.js";
 import { ruleTraffic } from "./routeTraffic.js";
 import { skipEgressBlocked } from "./egress.js";
+import { customerPrice, priced } from "./linePrice.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { csvText } from "../csvSafe.js";
@@ -1008,7 +1009,13 @@ export async function vendorQuality(): Promise<Map<number, number>> {
   return qualityCache.dlr;
 }
 
-export async function messageContext(db: Db, input: RouteTestRequest, listIds: number[]): Promise<MessageContext> {
+/** `rateSender`: the sender as the customer sent it, when ingress translation changed it (the Route simulator). */
+export async function messageContext(
+  db: Db,
+  input: RouteTestRequest,
+  listIds: number[],
+  rateSender?: string | null,
+): Promise<MessageContext> {
   const prefixes = Array.from({ length: input.receiver.length }, (_, i) => input.receiver.slice(0, i + 1));
   const dest = input.mccmnc
     ? await db.query(
@@ -1031,17 +1038,10 @@ export async function messageContext(db: Db, input: RouteTestRequest, listIds: n
     ]);
     categoryId = rows[0]?.product_category_id ?? null;
     if (sellRate === null && mccmnc) {
-      // The first of the trunk's rate tables with a line for the destination (§5.4).
-      const { rows: rate } = await db.query(
-        `SELECT ${toPlatformSql("l.rate")} AS conv FROM customer_trunk_rate_tables x
-           JOIN rate_lines l ON l.rate_table_id = x.rate_table_id
-           JOIN currency_latest cl ON cl.iso = l.currency
-          WHERE x.customer_trunk_id = $1 AND l.mccmnc = ANY($2) AND l.sender_id IS NULL AND NOT l.is_blocked
-            AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-          ORDER BY x.position, length(l.mccmnc) DESC LIMIT 1`,
-        [input.customerTrunkId, [mccmnc, mccmnc.slice(0, 3)]],
-      );
-      sellRate = rate[0] ? Math.round(Number(rate[0].conv) * 1e6) / 1e6 : null;
+      // The first of the trunk's rate tables with a line for the destination (§5.4), as the switch picks it: the
+      // sender's own line first, a blocked line means none (linePrice.ts).
+      sellRate = priced(await customerPrice(db, input.customerTrunkId, mccmnc, rateSender ?? input.sender ?? null))
+        ?.platformRate ?? null;
     }
   }
   const values = [input.sender ?? "", input.receiver];
@@ -1089,15 +1089,18 @@ export async function vendorOptions(
   const tps = tpsNow();
   // QBR uses the destination's effective vendor DLR (QBR stats, §6.3), else the 7-day DLR.
   const destDlr = qbr.get(mccmnc ?? "") ?? qbr.get(mccmnc?.slice(0, 3) ?? "") ?? new Map<number, number>();
+  // The generic line in force, network before country; a blocked one means the vendor takes no traffic there
+  // (blocked means blocked, decided 2026-10-30), as the switch's vendor options.
   const { rows } = await db.query(
-    `SELECT vt.id, vt.name, vt.product_category_id, c.conv FROM vendor_trunks vt
+    `SELECT vt.id, vt.name, vt.product_category_id, c.conv, c.is_blocked FROM vendor_trunks vt
        LEFT JOIN LATERAL (
-         SELECT ${toPlatformSql("l.rate")} AS conv FROM rate_tables rt
+         SELECT ${toPlatformSql("l.rate")} AS conv, l.is_blocked FROM rate_tables rt
            JOIN rate_lines l ON l.rate_table_id = rt.id
-           JOIN currency_latest cl ON cl.iso = l.currency
-          WHERE rt.vendor_trunk_id = vt.id AND l.mccmnc = ANY($1) AND l.sender_id IS NULL AND NOT l.is_blocked
+           LEFT JOIN currency_latest cl ON cl.iso = l.currency
+          WHERE rt.vendor_trunk_id = vt.id AND rt.deleted_at IS NULL AND l.mccmnc = ANY($1) AND l.sender_id IS NULL
             AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
-          ORDER BY length(l.mccmnc) DESC LIMIT 1) c ON true
+            AND (l.is_blocked OR cl.iso IS NOT NULL)
+          ORDER BY length(l.mccmnc) DESC, rt.id LIMIT 1) c ON true
       WHERE vt.deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL} AND ($2::bigint[] IS NULL OR vt.id = ANY($2))`,
     [mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : [], onlyIds],
   );
@@ -1107,7 +1110,8 @@ export async function vendorOptions(
       {
         vendorTrunkId: Number(r.id),
         name: r.name as string,
-        cost: r.conv === null ? null : Math.round(Number(r.conv) * 1e6) / 1e6,
+        cost: r.conv === null || r.is_blocked ? null : Math.round(Number(r.conv) * 1e6) / 1e6,
+        blocked: r.is_blocked === true,
         dlr: destDlr.get(Number(r.id)) ?? quality.get(Number(r.id)) ?? null,
         categoryId: r.product_category_id ?? null,
         asr: destQ.get(Number(r.id))?.asr ?? null,
@@ -1293,23 +1297,24 @@ const testMessage = (input: RouteTestRequest) => ({
  */
 /**
  * The costs for a list of destinations as routing finds them (team trial round 12): each code's own line, else its
- * country's ("All networks") line, which the column used to leave out.
+ * country's ("All networks") line, which the column used to leave out. A blocked line in force counts as no cost for
+ * that destination, never its country's (blocked means blocked, decided 2026-10-30).
  */
 async function listedCosts(pool: pg.Pool, vendorTrunkIds: number[], codes: string[]): Promise<RouteVendorCost[]> {
   const { rows } = await pool.query(
     `WITH picked AS (
        SELECT DISTINCT ON (rt.vendor_trunk_id, c.code) rt.vendor_trunk_id AS id, rt.currency, l.rate,
-              l.rate / cl.rate_per_eur AS eur, c.code
+              l.rate / cl.rate_per_eur AS eur, c.code, l.is_blocked
          FROM unnest($2::text[]) AS c(code)
          JOIN rate_tables rt ON rt.kind = 'vendor' AND rt.deleted_at IS NULL AND rt.vendor_trunk_id = ANY($1::bigint[])
-         JOIN rate_lines l ON l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
+         JOIN rate_lines l ON l.rate_table_id = rt.id AND l.sender_id IS NULL
               AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
               AND l.mccmnc IN (c.code, left(c.code, 3))
          LEFT JOIN currency_latest cl ON cl.iso = l.currency
-        ORDER BY rt.vendor_trunk_id, c.code, (l.mccmnc = c.code) DESC)
+        ORDER BY rt.vendor_trunk_id, c.code, (l.mccmnc = c.code) DESC, rt.id)
      SELECT id, min(currency) AS currency, min(rate) AS min, max(rate) AS max, min(eur) AS min_eur, max(eur) AS max_eur,
             count(*)::int AS destinations
-       FROM picked GROUP BY id`,
+       FROM picked WHERE NOT is_blocked GROUP BY id`,
     [vendorTrunkIds, codes],
   );
   const { rows: tables } = await pool.query(

@@ -66,9 +66,10 @@ Security hardening, most useful first:
 
 Business logic to decide (the screens and the switch agree today; these are choices):
 
-- **Vendor Sender ID rates:** matched on the sender as the customer sent it (also an Open question in
-  `docs/BACKEND_TODO.md`).
-- **A blocked rate line:** the switch skips it and uses the country line; Re-rating treats it as "no rate". Pick one.
+- **Vendor Sender ID rates:** decided 2026-10-30: matched on the sender the vendor receives, after its egress
+  translation (EDR `v_src_addr`); the customer side keeps the sender as the customer sent it.
+- **A blocked rate line:** decided 2026-10-30: blocked means blocked in the switch, the screens and Re-rating. No
+  fallback to the country line or a later table; the customer is refused, the vendor passed over.
 - **Re-rating** prices each hour at the rate valid at half past, uses UTC days, and a start of "Today 00:00" counts as
   back-dated. Fine for whole-day rate changes; a mid-hour change is priced to the hour.
 - **Currency without an exchange rate** converts 1:1 to EUR silently; consider an alert instead. The conversion factor

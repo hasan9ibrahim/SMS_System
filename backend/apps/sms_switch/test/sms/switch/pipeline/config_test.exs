@@ -319,4 +319,47 @@ defmodule Sms.Switch.Pipeline.ConfigTest do
       assert Config.customer_trunk(1).name == "FAKE_CUSTOMER"
     end
   end
+
+  describe "blocked lines (blocked means blocked, decided 2026-10-30)" do
+    setup do
+      PipelineConfig.put(
+        customer_trunks: [PipelineConfig.customer_trunk(rate_table_ids: [100, 101])],
+        rates: [
+          PipelineConfig.blocked(100, 1, "26201"),
+          PipelineConfig.rate(100, 2, "262", "0.04"),
+          PipelineConfig.rate(101, 3, "26201", "0.06"),
+          PipelineConfig.rate(100, 4, "26201", "0.07", "EUR", "FakeBank"),
+          PipelineConfig.blocked(200, 5, "26201"),
+          PipelineConfig.rate(200, 6, "262", "0.01"),
+          PipelineConfig.blocked(200, 7, "26202", "FakeBank")
+        ]
+      )
+
+      start_server()
+      :ok
+    end
+
+    test "a blocked line that applies means no rate: no country line, no later table" do
+      t = now()
+      assert Config.sell_price(1, "26201", t) == :blocked
+      assert Config.sell_rate(1, "26201", t) == nil
+      # Another network of the country keeps the country line.
+      assert %{line_id: 2} = Config.sell_rate(1, "26202", t)
+      # The sender's own line comes before the blocked generic one.
+      assert %{line_id: 4, platform: 0.07} = Config.sell_rate(1, "26201", t, "FakeBank")
+
+      assert Config.vendor_price(1, "26201", t) == :blocked
+      assert Config.vendor_rate(1, "26201", t) == nil
+      assert %{line_id: 6} = Config.vendor_rate(1, "26202", t)
+      # A blocked Sender ID line blocks only that sender.
+      assert Config.vendor_price(1, "26202", t, "FakeBank") == :blocked
+      assert %{line_id: 6} = Config.vendor_rate(1, "26202", t, "OtherBank")
+    end
+
+    test "a vendor blocked for a destination is marked in its options, without a cost" do
+      t = now()
+      assert %{1 => %{blocked: true, cost: nil}} = Config.vendor_options("26201", t)
+      assert %{1 => %{blocked: false, cost: 0.01}} = Config.vendor_options("26202", t)
+    end
+  end
 end

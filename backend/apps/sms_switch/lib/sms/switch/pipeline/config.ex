@@ -212,12 +212,18 @@ defmodule Sms.Switch.Pipeline.Config do
   def rates_table, do: @rates
 
   @doc """
-  The customer's rate for a destination (§5.4): the first of the trunk's rate tables, in order, with a current,
-  unblocked line for the network, else for its country's All networks code. With the message's sender (as the
-  customer sent it), a Sender ID line of that table comes first, as in Rate Lookup and Re-rating (§6.2).
+  The customer's rate for a destination (§5.4): the first of the trunk's rate tables, in order, with a current line
+  for the network, else for its country's All networks code. With the message's sender (as the customer sent it), a
+  Sender ID line of that table comes first, as in Rate Lookup and Re-rating (§6.2). A blocked line that applies means
+  no rate: blocked means blocked, no fallback to the country line or a later table (decided 2026-10-30).
   """
   @spec sell_rate(integer(), String.t(), integer(), String.t() | nil) :: rate() | nil
-  def sell_rate(customer_trunk_id, mccmnc, now_ms, sender \\ nil) do
+  def sell_rate(customer_trunk_id, mccmnc, now_ms, sender \\ nil),
+    do: unblocked(sell_price(customer_trunk_id, mccmnc, now_ms, sender))
+
+  @doc "As `sell_rate/4`, telling a blocked line (`:blocked`) from no line at all (nil)."
+  @spec sell_price(integer(), String.t(), integer(), String.t() | nil) :: rate() | :blocked | nil
+  def sell_price(customer_trunk_id, mccmnc, now_ms, sender \\ nil) do
     case customer_trunk(customer_trunk_id) do
       nil ->
         nil
@@ -232,11 +238,19 @@ defmodule Sms.Switch.Pipeline.Config do
   end
 
   @doc """
-  A vendor trunk's buy rate for a destination: a current, unblocked line for the network in any of its rate tables,
-  else for the country's All networks code; a Sender ID line for `sender` before either.
+  A vendor trunk's buy rate for a destination: a current line for the network in any of its rate tables, else for the
+  country's All networks code; a Sender ID line for `sender` before either. `sender` is the one the vendor receives,
+  after the vendor trunk's egress translation (decided 2026-10-30). A blocked line that applies means no rate, and the
+  router does not use the vendor for the message.
   """
   @spec vendor_rate(integer(), String.t(), integer(), String.t() | nil) :: rate() | nil
-  def vendor_rate(vendor_trunk_id, mccmnc, now_ms, sender \\ nil) do
+  def vendor_rate(vendor_trunk_id, mccmnc, now_ms, sender \\ nil),
+    do: unblocked(vendor_price(vendor_trunk_id, mccmnc, now_ms, sender))
+
+  @doc "As `vendor_rate/4`, telling a blocked line (`:blocked`) from no line at all (nil)."
+  @spec vendor_price(integer(), String.t(), integer(), String.t() | nil) ::
+          rate() | :blocked | nil
+  def vendor_price(vendor_trunk_id, mccmnc, now_ms, sender \\ nil) do
     case vendor_trunk(vendor_trunk_id) do
       nil ->
         nil
@@ -248,6 +262,9 @@ defmodule Sms.Switch.Pipeline.Config do
     end
   end
 
+  defp unblocked(:blocked), do: nil
+  defp unblocked(rate), do: rate
+
   # The rate keys to try in order: the sender's lines (network, then country), then the generic ones.
   defp keys(mccmnc, sender) when sender in [nil, ""], do: codes(mccmnc)
   defp keys(mccmnc, sender), do: Enum.map(codes(mccmnc), &{sender, &1}) ++ codes(mccmnc)
@@ -257,18 +274,26 @@ defmodule Sms.Switch.Pipeline.Config do
 
   defp codes(mccmnc), do: [mccmnc]
 
+  # The line in force for a key decides: its rate, or `:blocked` (stops the search, decided 2026-10-30); nil when the
+  # key has no line in force, so the next key or table is tried.
   defp line(table, key, now) do
     case :ets.lookup(@rates, {table, key}) do
-      [{_, lines}] -> lines |> Enum.find(&current?(&1, now)) |> rate_of(table, code_of(key))
-      [] -> nil
+      [{_, lines}] ->
+        case Enum.find(lines, &current?(&1, now)) do
+          {_from, _to, _id, _micro, _currency, true} -> :blocked
+          line -> rate_of(line, table, code_of(key))
+        end
+
+      [] ->
+        nil
     end
   end
 
   defp code_of({_sender, code}), do: code
   defp code_of(code), do: code
 
-  defp current?({from, to, _id, _micro, _currency, blocked}, now),
-    do: not blocked and from <= now and (is_nil(to) or now < to)
+  defp current?({from, to, _id, _micro, _currency, _blocked}, now),
+    do: from <= now and (is_nil(to) or now < to)
 
   defp rate_of(nil, _table, _code), do: nil
 
@@ -319,7 +344,8 @@ defmodule Sms.Switch.Pipeline.Config do
     dest_q = s.quality[mccmnc] || s.quality[mcc] || %{}
 
     for {id, t} <- s.vendor_trunks, t.active, into: %{} do
-      cost = vendor_rate(id, mccmnc, now_ms)
+      price = vendor_price(id, mccmnc, now_ms)
+      cost = unblocked(price)
       q = Map.get(dest_q, id, %{})
 
       {id,
@@ -327,6 +353,8 @@ defmodule Sms.Switch.Pipeline.Config do
          vendor_trunk_id: id,
          name: t.name,
          cost: cost && cost.platform,
+         # A blocked line for the destination: the vendor is not used for it (decided 2026-10-30).
+         blocked: price == :blocked,
          dlr: Map.get(dest_dlr, id),
          category_id: t.product_category_id,
          asr: q[:asr],

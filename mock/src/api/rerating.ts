@@ -39,7 +39,11 @@ interface Line {
   blocked: boolean;
 }
 
-/** The line that prices a message to `code` at time t: sender-specific first, then the code, then its country. */
+/**
+ * The line that prices a message to `code` at time t: sender-specific first, then the code, then its country. The
+ * first line in force decides: a blocked one means no rate (blocked means blocked, decided 2026-10-30), and the
+ * message keeps the amount it was billed.
+ */
 function rateAt(lines: Map<string, Line[]>, code: string, sender: string | null, t: number): number | null {
   const keys = [
     ...(sender ? [`${sender}|${code}`, `${sender}|${code.slice(0, 3)}`] : []),
@@ -109,6 +113,11 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
       },
     ]);
   }
+  // Customer Sender ID lines match the sender as the customer sent it (src_addr); a vendor's match the sender the
+  // vendor received after its egress translation (v_src_addr), as the switch prices them (decided 2026-10-30).
+  const senderCol = input.side === "customer" ? "src_addr" : "v_src_addr";
+  // Without a sender asked for, each sender still gets its own lines when the table has any in scope.
+  const bySender = !!input.senderId || raw.some((r) => r.sender_id);
   const p = input.side === "customer" ? "c" : "v";
   const amountCol = input.side === "customer" ? "revenue" : "cost";
   const billable = input.side === "customer" ? "is_customer_billable" : "is_vendor_billable";
@@ -121,7 +130,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
     `submit_time < toDateTime64('${input.endDate} 00:00:00', 3) + INTERVAL 1 DAY`,
     // Exact codes: a 3-digit code is the All networks entry, not the whole country (team trial round 1).
     ...(codes.length ? [`${codeCol} IN (${list(codes)})`] : []),
-    ...(input.senderId ? [`src_addr = ${lit(input.senderId)}`] : []),
+    ...(input.senderId ? [`${senderCol} = ${lit(input.senderId)}`] : []),
   ];
   const groups = await chRows<{
     ent: number;
@@ -132,7 +141,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
     units: string;
     amt: number;
   }>(
-    `SELECT ${p}_enterprise_id AS ent, ${codeCol} AS code, ${input.senderId ? "src_addr" : "''"} AS sender,
+    `SELECT ${p}_enterprise_id AS ent, ${codeCol} AS code, ${bySender ? senderCol : "''"} AS sender,
             toString(toStartOfHour(submit_time)) AS h, countIf(kind = 'attempt') AS n,
             sum(msg_count * ${billable}) AS units, toFloat64(sum(${amountCol})) AS amt
        FROM edr_all WHERE ${where.join(" AND ")}
@@ -143,7 +152,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
   const per = new Map<number, { n: number; old: number; next: number }>();
   for (const g of groups) {
     const t = Date.parse(`${g.h.replace(" ", "T")}Z`) + 30 * 60_000;
-    const rate = rateAt(lines, g.code, input.senderId, t);
+    const rate = rateAt(lines, g.code, input.senderId ?? (g.sender || null), t);
     const old = Number(g.amt);
     const next = rate === null ? old : Number(g.units) * rate;
     const cur = per.get(Number(g.ent)) ?? { n: 0, old: 0, next: 0 };

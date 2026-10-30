@@ -21,6 +21,19 @@ const ready = await dbReady();
 const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
 const run = Date.now().toString(36).slice(-5);
 const tag = `test ${run}`;
+// A usage period the EDR store fully holds in any time zone, not fixed dates (the seed covers the 30 days before it
+// ran): 12 days from the store's second whole day.
+const cov = ready ? await edrCoverage() : null;
+const utcDay = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const periodStart = cov?.from ? utcDay(new Date(cov.from), 2) : new Date(Date.UTC(2026, 9, 1));
+const period = {
+  start: isoDay(periodStart),
+  overlap: isoDay(utcDay(periodStart, 4)),
+  end: isoDay(utcDay(periodStart, 11)),
+  invoiceDate: isoDay(utcDay(periodStart, 16)),
+  due: isoDay(utcDay(periodStart, 90)),
+};
 after(async () => {
   if (ready) {
     // Invoices and vendor invoices are archived, never removed, by the API; drop the test rows.
@@ -148,27 +161,28 @@ const request = (over: object) => ({
   kind: "traffic",
   enterpriseIds: [],
   timezone: null,
-  usageStart: "2026-10-01",
-  usageEnd: "2026-10-12",
+  usageStart: period.start,
+  usageEnd: period.end,
   dueDateType: "auto",
   dueDate: null,
   invoiceNumber: null,
   amount: null,
   volume: null,
   currency: null,
-  invoiceDate: "2026-10-17",
+  invoiceDate: period.invoiceDate,
   remarks: tag,
   ...over,
 });
 
-/** A customer with billing settings and no invoice yet for October (the seed invoices up to September). */
+/** A customer with billing settings and no invoice yet for the test period (the seed invoices past months). */
 async function customer() {
   const { rows } = await db().query(
     `SELECT e.id FROM enterprises e JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
       WHERE e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.enterprise_id = e.id
-            AND i.deleted_at IS NULL AND i.usage_end >= '2026-10-01')
+            AND i.deleted_at IS NULL AND i.usage_end >= $1)
         AND EXISTS (SELECT 1 FROM enterprise_contacts c WHERE c.enterprise_id = e.id AND c.contact_type IN ('finance','commercial'))
       ORDER BY e.id LIMIT 1`,
+    [period.start],
   );
   return Number(rows[0].id);
 }
@@ -227,7 +241,7 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
 
     const again = await ok(
       "createInvoiceRequest",
-      call("POST", "/invoice-requests", request({ enterpriseIds: [enterpriseId], usageStart: "2026-10-05" })),
+      call("POST", "/invoice-requests", request({ enterpriseIds: [enterpriseId], usageStart: period.overlap })),
       202,
     );
     const overlap = await waitRequest(again.requests[0].id);
@@ -236,11 +250,11 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
 
     const edited = await ok(
       "updateInvoice",
-      call("PUT", `/invoices/${inv.id}`, { dueDate: "2026-12-31", remarks: tag }),
+      call("PUT", `/invoices/${inv.id}`, { dueDate: period.due, remarks: tag }),
     );
-    assert.equal(edited.record.dueDate, "2026-12-31");
+    assert.equal(edited.record.dueDate, period.due);
     await undo(edited.change);
-    assert.notEqual((await ok("getInvoice", call("GET", `/invoices/${inv.id}`))).dueDate, "2026-12-31");
+    assert.notEqual((await ok("getInvoice", call("GET", `/invoices/${inv.id}`))).dueDate, period.due);
 
     const marked = await ok(
       "markInvoices",

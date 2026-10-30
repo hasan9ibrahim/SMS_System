@@ -221,6 +221,41 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                by_sender["OtherShop"]
     end
 
+    test "a vendor's Sender ID rates match the sender it receives after its egress translation (§6.2)" do
+      config = [
+        rates: [
+          PipelineConfig.rate(100, 1, "26201", "0.05"),
+          PipelineConfig.rate(200, 2, "26201", "0.02"),
+          PipelineConfig.rate(100, 11, "26201", "0.07", "EUR", "FakeBank"),
+          PipelineConfig.rate(200, 12, "26201", "0.03", "EUR", "FakeBank")
+        ],
+        # The vendor trunk's egress rule turns "Fake" into "FakeBank" (decided 2026-10-30).
+        translation_rules: [
+          %{id: 21, sender_conversion: "append", sender_conversion_value: "Bank"}
+        ],
+        translation_targets: [PipelineConfig.target(21, "vendor", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_client, resp} = submit(client, %{source_addr: "Fake", short_message: "Your code is 1234"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.source_addr == "FakeBank"
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      # The customer pays for the sender it sent; the vendor charges for the one it got.
+      assert [
+               %{
+                 "src_addr" => "Fake",
+                 "v_src_addr" => "FakeBank",
+                 "c_rate" => "0.05",
+                 "v_rate" => "0.03"
+               }
+             ] =
+               edr("edr.attempt")
+    end
+
     test "a finished message is forgotten; a receipt repeated after is answered OK and not forwarded (S-5.8)" do
       %{client: client, conns: [conn]} = start_all()
       {client, resp} = submit(client, %{short_message: "hello", registered_delivery: 1})
@@ -611,6 +646,19 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       end)
     end
 
+    test "a blocked customer line refuses the message 0x0B, though the country has a rate (decided 2026-10-30)" do
+      rates = [
+        PipelineConfig.blocked(100, 1, "26201"),
+        PipelineConfig.rate(100, 5, "262", "0.04"),
+        PipelineConfig.rate(200, 2, "26201", "0.02")
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: [rates: rates])
+      {_, resp} = submit(client, %{short_message: "x"})
+      assert resp.status == 0x0B
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+    end
+
     test "no rule routes it: refused 0x45 and nothing goes to a vendor" do
       %{client: client, conns: [conn]} =
         start_all(config: [route_rules: [%{id: 1, status: "inactive"}]])
@@ -989,6 +1037,46 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
       assert sent.fields.short_message == "short"
       refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+
+    test "a vendor whose rate line for the destination is blocked is passed over for the next (decided 2026-10-30)" do
+      config =
+        two_vendors(
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            # Vendor 1: the network blocked; its country line must not stand in for it.
+            PipelineConfig.blocked(200, 2, "26201"),
+            PipelineConfig.rate(200, 6, "262", "0.01"),
+            PipelineConfig.rate(201, 3, "26201", "0.03")
+          ]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"v_trunk_id" => 2, "v_rate" => "0.03"}] = edr("edr.attempt")
+    end
+
+    test "a vendor whose Sender ID line is blocked for the sender it would get is passed over (decided 2026-10-30)" do
+      config =
+        two_vendors(
+          rates: [
+            PipelineConfig.rate(100, 1, "26201", "0.05"),
+            PipelineConfig.rate(200, 2, "26201", "0.02"),
+            PipelineConfig.blocked(200, 7, "26201", "FakeBank"),
+            PipelineConfig.rate(201, 3, "26201", "0.03")
+          ]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{source_addr: "FakeBank", short_message: "code"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+      # Another sender still goes to vendor 1.
+      {_, %{status: 0}} = submit(client, %{source_addr: "OtherShop", short_message: "sale"}, 3)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
     end
 
     test "a vendor whose egress translation blocks is passed over for the next (§6.4)" do

@@ -469,8 +469,10 @@ defmodule Sms.Switch.Pipeline.Intake do
       dest ->
         msg = %{msg | destination: dest}
 
-        case Config.sell_rate(msg.trunk.id, dest.mccmnc, msg.received_at, rate_sender(msg)) do
+        # A blocked customer line refuses the message like no rate (blocked means blocked, decided 2026-10-30).
+        case Config.sell_price(msg.trunk.id, dest.mccmnc, msg.received_at, rate_sender(msg)) do
           nil -> {:reject, :esme_rinvdstadr, :no_customer_rate, msg}
+          :blocked -> {:reject, :esme_rinvdstadr, :customer_rate_blocked, msg}
           sell -> {:ok, %{msg | sell: sell}}
         end
     end
@@ -514,12 +516,12 @@ defmodule Sms.Switch.Pipeline.Intake do
       destination: msg.destination,
       sell: msg.sell,
       hlr_ported: msg[:hlr][:ported],
-      rate_sender: rate_sender(msg),
       now_ms: System.os_time(:millisecond)
     }
   end
 
-  # Sender ID rates (§6.2) match the sender as the customer sent it, the EDR's src_addr that Re-rating matches too.
+  # Customer Sender ID rates (§6.2) match the sender as the customer sent it, the EDR's src_addr that Re-rating matches
+  # too. A vendor's match the sender it receives (the router, after egress translation; EDR v_src_addr).
   defp rate_sender(msg), do: Map.get(msg.fields, :source_addr)
 
   @doc false
