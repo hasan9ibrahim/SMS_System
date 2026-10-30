@@ -527,6 +527,26 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, allowedDataCodings: null }),
     );
     assert.equal(anyAgain.record.allowedDataCodings, null);
+    // The Receipt timeout can apply to some destinations only (team trial round 12); none = every destination.
+    assert.deepEqual(saved.record.dlrTimeoutMccmncs, []);
+    const { rows: codes } = await db().query("SELECT mccmnc FROM mccmnc WHERE deleted_at IS NULL ORDER BY id LIMIT 2");
+    const some = codes.map((c) => c.mccmnc as string);
+    const scoped = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, dlrTimeoutMccmncs: some }),
+    );
+    assert.deepEqual(scoped.record.dlrTimeoutMccmncs, some);
+    const unknown = await call("PUT", `/vendor-trunks/${saved.record.id}`, {
+      ...base,
+      password: undefined,
+      dlrTimeoutMccmncs: ["999999"],
+    });
+    assert.equal(unknown.statusCode, 400, "an unknown destination is refused");
+    const everywhere = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, dlrTimeoutMccmncs: [] }),
+    );
+    assert.deepEqual(everywhere.record.dlrTimeoutMccmncs, []);
     const tables = await ok(
       "queryRateTables",
       call("POST", "/rate-tables/query", {

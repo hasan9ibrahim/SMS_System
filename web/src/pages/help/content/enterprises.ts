@@ -1637,6 +1637,11 @@ export const topics: HelpTopic[] = [
                 what: "The status recorded when no receipt arrives in time.",
                 values: "DELIVRD, EXPIRED, UNDELIV, REJECTD or UNKNOWN (default).",
               },
+              {
+                name: "Receipt timeout applies to",
+                what: "The destinations the receipt timeout and its status apply to. Messages to other destinations wait the default 48 hours, then get UNKNOWN.",
+                values: "Every destination (default), or countries and networks picked in the tree.",
+              },
             ],
           },
         ],

@@ -93,7 +93,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 .rate-detail > .page-header {
   flex-wrap: nowrap;
@@ -148,6 +148,34 @@
   font-weight: 650;
   line-height: 1.25;
 }
+/* One slim strip above the rates and the LCR table, leaving room for the grid on a laptop (team trial round 12):
+   the label above, the figure and its note on one line. */
+.stat-cards.compact {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+.stat-cards.compact .stat-card {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+}
+.stat-cards.compact .stat-label {
+  flex-basis: 100%;
+  font-size: 10.5px;
+}
+.stat-cards.compact .stat-value {
+  font-size: 17px;
+}
+.stat-cards.compact .stat-card > .muted.small {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .rate-grid-card {
   flex: 1;
   min-height: 0;
@@ -165,7 +193,22 @@
   border-top: var(--border-width) solid var(--color-border);
 }
 .rate-toolbar {
-  padding: 10px 12px;
+  padding: 6px 10px;
+  gap: 6px 10px;
+}
+.rate-toolbar select {
+  width: auto;
+}
+.rate-toolbar .quick-search {
+  /* A small basis keeps it on the first line; it grows into the room left. */
+  flex: 1 1 110px;
+  min-width: 0;
+  max-width: 260px;
+  height: 30px;
+}
+.rate-toolbar .quick-search input {
+  width: 100%;
+  min-width: 0;
 }
 .seg-count {
   margin-left: 6px;
@@ -773,6 +816,13 @@
   min-height: 0;
   display: flex;
   overflow: hidden;
+}
+/* Laptop screens (team trial round 12): names only need 260 px, the rates get the rest. */
+@media (max-width: 1500px) {
+  .rate-list-pane {
+    flex-basis: 260px;
+    min-width: 240px;
+  }
 }
 .rate-list-pane > .page {
   flex: 1;

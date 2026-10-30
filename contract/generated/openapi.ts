@@ -3132,7 +3132,8 @@ export type paths = {
     put?: never;
     /**
      * Duplicate a translation rule (Clone, Duplicate to trunk)
-     * @description An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+     * @description An independent copy with the rule's status (team trial round 12: a clone of an active rule stays active),
+     *     active when `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
      *     rule for one trunk only so a partner can have a variant. One undoable change.
      */
     post: operations["cloneTranslationRule"];
@@ -11498,6 +11499,8 @@ export type components = {
       dlrTimeoutS?: number;
       /** @enum {string} */
       dlrTimeoutStat?: "DELIVRD" | "EXPIRED" | "UNDELIV" | "REJECTD" | "UNKNOWN";
+      /** @description The destinations (MCCMNC codes) the Receipt timeout and its status apply to (team trial round 12). Empty (the default) = every destination; a message to another destination waits the default 48 hours for its receipt, then gets UNKNOWN. */
+      dlrTimeoutMccmncs?: string[];
       bindAddrTon?: number;
       bindAddrNpi?: number;
       bindAddrRange?: string | null;

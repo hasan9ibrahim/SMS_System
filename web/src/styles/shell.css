@@ -2536,8 +2536,10 @@ select.chip-select {
   border-top: var(--border-width) solid var(--color-border);
   background: var(--color-head-tint);
 }
+/* A 320 px basis keeps the switches, Views and Columns on the search's line on a laptop; the search still grows
+   into the room left (team trial round 12). */
 .pill-search {
-  flex: 1 1 560px;
+  flex: 1 1 320px;
 }
 .pill-search .pill-search-input,
 .pill-search .pill-search-input:focus,

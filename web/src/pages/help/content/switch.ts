@@ -1209,7 +1209,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Random",
-                what: "Numbers of 3–20 digits that a Random Number conversion picks from.",
+                what: "Sender IDs (long or short codes of 3–20 digits) that a Random Number conversion picks from: a translation rule matching one or many Sender IDs sends each message with one of them, at random.",
               },
               {
                 name: "Sender ID Template",

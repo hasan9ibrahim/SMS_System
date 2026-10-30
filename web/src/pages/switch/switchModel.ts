@@ -11,6 +11,14 @@ export const LIST_TYPES: { value: NumberList["listType"]; label: string }[] = [
 
 export const listTypeLabel = (t: NumberList["listType"]) => LIST_TYPES.find((x) => x.value === t)?.label ?? t;
 
+/** What each type is for (team trial round 12), shown under the type and the values. */
+export const LIST_TYPE_HINT: Record<NumberList["listType"], string> = {
+  tag: "Sender IDs or numbers that route and translation rules match on (Sender ID or DNID list condition).",
+  random:
+    "Sender IDs a translation picks from at random: a rule matching one or many Sender IDs with the Random Number conversion sends each message with one of these (long or short codes, 3-20 digits).",
+  sender_id_template: "Sender IDs with {n} placeholders (one random digit each), optionally with a content template.",
+};
+
 /** Pasted text → distinct trimmed values (lines, commas, semicolons or tabs). */
 export function splitValues(text: string): string[] {
   return [

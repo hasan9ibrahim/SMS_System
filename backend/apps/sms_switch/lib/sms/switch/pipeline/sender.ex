@@ -605,7 +605,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     vt = route.vendor_trunk_id
     trunk = Config.vendor_trunk(vt) || %{}
     ids = Enum.map(results, & &1.message_id)
-    timeout_s = trunk[:dlr_timeout_s] || 172_800
+    {timeout_s, timeout_stat} = receipt_timeout(trunk, msg)
 
     # S-5.10: with no final receipt by then, the switch answers with the trunk's DLR Timeout Status.
     timeout_at = attempt.resp_time + timeout_s * 1_000
@@ -630,7 +630,10 @@ defmodule Sms.Switch.Pipeline.Sender do
     parts = for {id, n} <- Enum.with_index(ids, 1), id not in [nil, ""], do: {n, vt, id}
 
     record =
-      record_of(charged, route, trunk, attempt, length(results), Edr.outcome_dims(msg, row))
+      charged
+      |> record_of(route, trunk, attempt, length(results), Edr.outcome_dims(msg, row))
+      # The timeout this message got, so the receipt side applies the same one (team trial round 12).
+      |> Map.merge(%{timeout_s: timeout_s, timeout_stat: timeout_stat})
 
     with {:error, reason} <-
            record_sent(msg.id, record, parts, {timeout_s + 3_600, timeout_at}, 3),
@@ -691,6 +694,22 @@ defmodule Sms.Switch.Pipeline.Sender do
           do: %{msg: msg, tried: MapSet.to_list(attempt.tried), no: attempt.no}
         )
     })
+  end
+
+  @default_receipt_timeout_s 172_800
+
+  @doc false
+  # The vendor trunk's Receipt Timeout and its status (S-5.10), for the destinations it lists (team trial round 12):
+  # none listed = every destination; a message to another destination waits the default 48 h, then UNKNOWN.
+  def receipt_timeout(trunk, msg) do
+    codes = trunk[:dlr_timeout_mccmncs] || MapSet.new()
+    mccmnc = (Map.get(msg, :destination) || %{})[:mccmnc]
+
+    if Enum.empty?(codes) or (is_binary(mccmnc) and MapSet.member?(codes, mccmnc)),
+      do:
+        {trunk[:dlr_timeout_s] || @default_receipt_timeout_s,
+         trunk[:dlr_timeout_stat] || "UNKNOWN"},
+      else: {@default_receipt_timeout_s, "UNKNOWN"}
   end
 
   # Receipts that came before the submit_sm_resp was handled (S-5.5): kept under every key their id reads as, so the

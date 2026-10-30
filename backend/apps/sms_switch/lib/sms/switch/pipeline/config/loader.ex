@@ -171,7 +171,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
              t.status = 'active' AND e.status = 'active'
                AND NOT EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'vendor' AND b.trunk_id = t.id
                                  AND b.status = 'stopped') AS active, e.account_manager_id, e.tier, t.dlr_timeout_s,
-             t.dlr_timeout_stat, t.reroute_on, t.tps, t.max_connections, t.support_multipart, t.max_msg_len,
+             t.dlr_timeout_stat, coalesce(t.dlr_timeout_mccmncs, '{}') AS dlr_timeout_mccmncs, t.reroute_on, t.tps, t.max_connections, t.support_multipart, t.max_msg_len,
              t.multipart_format, coalesce(t.overflow_buffer, 0) AS overflow_buffer,
              coalesce((SELECT array_agg(rt.id ORDER BY rt.id) FROM rate_tables rt
                         WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
@@ -335,6 +335,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       {t.id,
        t
        |> Map.put(:multipart_format, enum!(t.multipart_format, @multipart_formats))
+       |> Map.put(:dlr_timeout_mccmncs, MapSet.new(Map.get(t, :dlr_timeout_mccmncs) || []))
        |> Map.put(:tps_limit, t.tps * t.max_connections)}
     end
   end

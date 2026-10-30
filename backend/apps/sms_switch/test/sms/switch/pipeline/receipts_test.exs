@@ -5,6 +5,28 @@ defmodule Sms.Switch.Pipeline.ReceiptsTest do
   alias Sms.Switch.Pipeline.{Forwarder, Receipt, Receipts}
   alias Sms.Switch.Smpp.Pdu
 
+  describe "Receipt timeout per destination (S-5.10, team trial round 12)" do
+    alias Sms.Switch.Pipeline.Sender
+
+    @trunk %{dlr_timeout_s: 600, dlr_timeout_stat: "EXPIRED", dlr_timeout_mccmncs: MapSet.new()}
+
+    test "no destinations listed: the trunk's timeout and status for every message" do
+      assert {600, "EXPIRED"} = Sender.receipt_timeout(@trunk, %{destination: %{mccmnc: "26201"}})
+      assert {600, "EXPIRED"} = Sender.receipt_timeout(@trunk, %{destination: nil})
+    end
+
+    test "destinations listed: theirs for those, the default 48 hours and UNKNOWN for the rest" do
+      trunk = %{@trunk | dlr_timeout_mccmncs: MapSet.new(["26201", "262"])}
+      assert {600, "EXPIRED"} = Sender.receipt_timeout(trunk, %{destination: %{mccmnc: "26201"}})
+      assert {600, "EXPIRED"} = Sender.receipt_timeout(trunk, %{destination: %{mccmnc: "262"}})
+
+      assert {172_800, "UNKNOWN"} =
+               Sender.receipt_timeout(trunk, %{destination: %{mccmnc: "26202"}})
+
+      assert {172_800, "UNKNOWN"} = Sender.receipt_timeout(trunk, %{destination: nil})
+    end
+  end
+
   describe "aggregate/1 (S-5.9)" do
     test "DELIVRD only when every part was delivered" do
       assert %{status: "DELIVRD"} =

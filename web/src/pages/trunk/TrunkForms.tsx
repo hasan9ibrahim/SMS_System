@@ -29,6 +29,7 @@ import { Icon } from "../../ui/Icon";
 import { Button, IconButton } from "../../ui/primitives";
 import { tzOptions } from "../../ui/timezones";
 import { NewRateTableDialog } from "../rates/dialogs";
+import { codesText, RuleCodesDialog, useDestinationTree } from "../rates/DestinationTree";
 
 export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & { password?: string };
 
@@ -182,6 +183,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     multipartFormat: "udh8",
     dlrTimeoutS: 172800,
     dlrTimeoutStat: "UNKNOWN",
+    dlrTimeoutMccmncs: [],
     bindAddrTon: 0,
     bindAddrNpi: 0,
     bindAddrRange: null,
@@ -903,6 +905,7 @@ export function VendorTrunkFields({
             required
             options={DLR_STATS}
           />
+          <TimeoutDestinations form={form} />
         </Section>
       )}
       {shown("vendor-trunks.capacity") && (
@@ -931,5 +934,43 @@ export function VendorTrunkFields({
         </Section>
       )}
     </>
+  );
+}
+
+/**
+ * The destinations the Receipt timeout applies to (team trial round 12): none = the whole trunk; a message to another
+ * destination waits the default 48 hours, then gets UNKNOWN.
+ */
+function TimeoutDestinations({ form }: { form: FormApi<TrunkForm> }) {
+  const { tree } = useDestinationTree();
+  const codes = ((form.values as VendorTrunkInput).dlrTimeoutMccmncs ?? []) as string[];
+  return (
+    <FormField
+      label="Receipt timeout applies to"
+      wide
+      error={form.error("dlrTimeoutMccmncs")}
+      hint={codes.length ? "Other destinations wait 48 hours, then get UNKNOWN" : undefined}
+    >
+      <span className="bulk-row">
+        <Button
+          small
+          icon="globe"
+          onClick={async () => {
+            const next = await ask<string[]>((done) => <RuleCodesDialog initial={codes} done={done} />);
+            if (next) form.set("dlrTimeoutMccmncs", next);
+          }}
+        >
+          {codes.length ? "Change…" : "Pick destinations…"}
+        </Button>
+        <span className={codes.length ? "small" : "muted small"} title={codes.join(", ")}>
+          {codes.length ? `${codes.length} · ${codesText(tree, codes, 2)}` : "Every destination"}
+        </span>
+        {codes.length > 0 && (
+          <button type="button" className="link small" onClick={() => form.set("dlrTimeoutMccmncs", [])}>
+            Every destination
+          </button>
+        )}
+      </span>
+    </FormField>
   );
 }

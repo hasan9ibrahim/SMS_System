@@ -599,7 +599,7 @@ describe("translation rules API", { skip }, () => {
     assert.equal(now.original.enabled, false, "the original is off on that trunk");
     assert.equal(now.copy.enabled, true);
     const plain = await ok("cloneTranslationRule", call("POST", `/translation-rules/${src.id}/clone`, {}), 201);
-    assert.equal(plain.record.status, "inactive", "a plain clone waits for review");
+    assert.equal(plain.record.status, src.status, "a plain clone keeps the rule's status (team trial round 12)");
     assert.equal(plain.record.targets.length, 0);
     await undo(plain.change);
     await undo(copy.change);

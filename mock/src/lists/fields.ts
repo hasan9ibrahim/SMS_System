@@ -838,7 +838,8 @@ export const listFields: Record<ListId, ListFields> = {
     defaultSort: [{ field: "id", dir: "asc" }],
     fields: [
       field({ field: "id", label: "ID", type: "integer", defaultOperator: "eq" }),
-      field({ field: "name", label: "Name", type: "text", defaultOperator: "like" }),
+      // "contains" by default: the name is found from any part (team trial round 12).
+      field({ field: "name", label: "Name", type: "text", defaultOperator: "like", matchAnywhere: true }),
       field({
         field: "direction",
         label: "Type",

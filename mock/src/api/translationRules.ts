@@ -491,8 +491,9 @@ export function cloneTranslationRule(request: FastifyRequest, reply: FastifyRepl
     const input: TranslationRuleInput = {
       ...(Object.fromEntries(COLUMNS.map(([api]) => [api, src[api]])) as Fields),
       name,
-      // An independent copy: inactive until reviewed, unless it is the variant for one trunk.
-      status: target ? "active" : "inactive",
+      // A copy keeps the rule's status (team trial round 12: a clone of an active rule stays active); the variant for
+      // one trunk is active.
+      status: target ? "active" : src.status,
       targets: target ? [{ type: "trunk", trunkKind: target.kind, id: target.id }] : [],
     };
     const me = await getCurrentUser();

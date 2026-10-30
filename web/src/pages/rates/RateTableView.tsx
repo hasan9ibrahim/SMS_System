@@ -70,7 +70,9 @@ function Card({
     <div className="stat-card">
       <span className="stat-label">{label}</span>
       <span className={`stat-value num${tone ? ` tone-${tone}` : ""}`}>{value}</span>
-      <span className="muted small">{sub}</span>
+      <span className="muted small" title={typeof sub === "string" ? sub : undefined}>
+        {sub}
+      </span>
     </div>
   );
 }
@@ -79,7 +81,8 @@ function Summary({ t }: { t: RateTableDetail }) {
   const s = t.summary;
   const customer = t.kind === "customer";
   return (
-    <div className="stat-cards">
+    // A slim strip (team trial round 12): the rates get the room on a laptop.
+    <div className="stat-cards compact">
       <Card
         label="Active rates"
         value={s.activeRates.toLocaleString("en-US")}
@@ -804,7 +807,8 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             disabled={!!t.archived}
             onClick={() => setDialog("add")}
           >
-            Add rates
+            {/* A vendor table holds costs (team trial round 12). */}
+            {t.kind === "vendor" ? "Add costs" : "Add rates"}
           </Button>
           {embedded ? (
             <Button icon="external" onClick={() => openTable(t.id, { newTab: true, name: t.name })}>
@@ -844,9 +848,10 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           </div>
           {view !== "log" && (
             <>
+              {/* The first option names the filter, so the bar fits one line on a laptop (team trial round 12). */}
               <label className="toggle-inline">
-                Change
                 <select
+                  aria-label="Change"
                   value={changeFilter ?? ""}
                   onChange={(e) =>
                     setSwitch(
@@ -855,7 +860,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                     )
                   }
                 >
-                  <option value="">All</option>
+                  <option value="">All changes</option>
                   <option value="new">New</option>
                   <option value="increase">Increase</option>
                   <option value="decrease">Decrease</option>
@@ -863,8 +868,8 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                 </select>
               </label>
               <label className="toggle-inline">
-                Sender ID
                 <select
+                  aria-label="Sender ID"
                   value={senderFilter}
                   onChange={(e) =>
                     setSwitch(
@@ -875,9 +880,9 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                     )
                   }
                 >
-                  <option value="any">Any</option>
+                  <option value="any">Any sender ID</option>
                   <option value="with">With sender ID</option>
-                  <option value="none">Without</option>
+                  <option value="none">Without sender ID</option>
                 </select>
               </label>
               {t.kind === "customer" && (
@@ -892,7 +897,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
                       )
                     }
                   />
-                  Negative margin only
+                  Negative margin
                 </label>
               )}
               <span className="fb-spacer" />

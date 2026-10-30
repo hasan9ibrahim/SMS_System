@@ -1195,9 +1195,10 @@ textarea.mono {
 }
 .lcr-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 10px 14px;
-  padding: 12px 14px;
+  /* Three fields on one line on a laptop (team trial round 12). */
+  grid-template-columns: minmax(220px, 1fr) auto minmax(300px, 1.3fr);
+  gap: 8px 14px;
+  padding: 8px 12px;
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -1205,6 +1206,28 @@ textarea.mono {
 }
 .lcr-controls .field {
   margin: 0;
+}
+.lcr-controls .lcr-line {
+  flex-wrap: nowrap;
+  gap: 6px 10px;
+}
+.lcr-profile > .lookup {
+  flex: 1;
+  min-width: 0;
+}
+.lcr-weights-row {
+  grid-column: 1 / -1;
+}
+.lcr-weights-row .lcr-weights {
+  margin-top: 0;
+}
+@media (max-width: 1100px) {
+  .lcr-controls {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .lcr-controls .lcr-line {
+    flex-wrap: wrap;
+  }
 }
 .lcr-whatif {
   flex: none;

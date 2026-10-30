@@ -291,11 +291,13 @@ function BulkDeleteDialog({
   kind,
   rows,
   noun,
+  plural,
   done,
 }: {
   kind: RecordKind;
   rows: { id: number; name: string }[];
   noun: string;
+  plural: string;
   done: (deleted: number) => void;
 }) {
   const { data: me } = useMe();
@@ -339,7 +341,7 @@ function BulkDeleteDialog({
   };
   return (
     <Modal
-      title={`Delete ${rows.length} ${noun}${rows.length === 1 ? "" : "s"}?`}
+      title={`Delete ${rows.length} ${rows.length === 1 ? noun : plural}?`}
       width={620}
       onClose={() => done(running?.done ?? 0)}
       footer={
@@ -413,9 +415,11 @@ function BulkDeleteDialog({
 
 /** Opens the bulk delete dialog; resolves with how many were deleted. */
 export function useBulkDelete() {
-  return async (kind: RecordKind, rows: { id: number; name: string }[], noun: string) => {
-    const n = await ask<number>((resolve) => <BulkDeleteDialog kind={kind} rows={rows} noun={noun} done={resolve} />);
-    if (n) toast({ tone: "good", message: `Deleted ${n} ${noun}${n === 1 ? "" : "s"} · undo each from History` });
+  return async (kind: RecordKind, rows: { id: number; name: string }[], noun: string, plural = `${noun}s`) => {
+    const n = await ask<number>((resolve) => (
+      <BulkDeleteDialog kind={kind} rows={rows} noun={noun} plural={plural} done={resolve} />
+    ));
+    if (n) toast({ tone: "good", message: `Deleted ${n} ${n === 1 ? noun : plural} · undo each from History` });
     return n ?? 0;
   };
 }

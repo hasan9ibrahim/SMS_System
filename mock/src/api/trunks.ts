@@ -138,6 +138,8 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "multipartFormat", col: "multipart_format" },
   { api: "dlrTimeoutS", col: "dlr_timeout_s" },
   { api: "dlrTimeoutStat", col: "dlr_timeout_stat" },
+  // The destinations the Receipt timeout applies to; none = every destination (team trial round 12).
+  { api: "dlrTimeoutMccmncs", col: "dlr_timeout_mccmncs" },
   { api: "bindAddrTon", col: "bind_addr_ton" },
   { api: "bindAddrNpi", col: "bind_addr_npi" },
   { api: "bindAddrRange", col: "bind_addr_range" },
@@ -303,6 +305,21 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
       errors.push({ path: "/costLimitPeriod", message: "set both the limit and its period, or neither" });
     if (v.protocol === "http" && !v.http?.url && !(before && (before.http as { url?: string | null } | undefined)?.url))
       errors.push({ path: "/http/url", message: "required for an HTTP trunk" });
+    const codes = v.dlrTimeoutMccmncs ?? [];
+    if (new Set(codes).size !== codes.length)
+      errors.push({ path: "/dlrTimeoutMccmncs", message: "a destination is listed twice" });
+    if (codes.length) {
+      const { rows } = await db.query(
+        `SELECT c FROM unnest($1::text[]) AS c
+          WHERE NOT EXISTS (SELECT 1 FROM mccmnc m WHERE m.deleted_at IS NULL AND m.mccmnc = c)`,
+        [codes],
+      );
+      if (rows.length)
+        errors.push({
+          path: "/dlrTimeoutMccmncs",
+          message: `unknown code${rows.length > 1 ? "s" : ""} ${rows.map((r) => r.c).join(", ")}`,
+        });
+    }
     for (const key of ["successRegex", "messageIdRegex", "dlrStatusRegex", "dlrMidRegex"] as const) {
       const re = v.http?.[key];
       if (!re) continue;

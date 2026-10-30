@@ -365,7 +365,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Add rates",
-                what: "Adds prices for new destinations (or new versions for existing ones). See the Add rates dialog below.",
+                what: "Adds prices for new destinations (or new versions for existing ones); on a vendor table the button reads Add costs. See the Add rates dialog below.",
               },
               { name: "× (close)", what: "Closes the table and goes back to the full list." },
             ],

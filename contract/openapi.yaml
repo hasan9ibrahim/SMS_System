@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.118.0
+  version: 0.119.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -4778,7 +4778,8 @@ paths:
       operationId: cloneTranslationRule
       summary: "Duplicate a translation rule (Clone, Duplicate to trunk)"
       description: |
-        An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+        An independent copy with the rule's status (team trial round 12: a clone of an active rule stays active),
+        active when `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
         rule for one trunk only so a partner can have a variant. One undoable change.
       parameters:
         - $ref: "#/components/parameters/RecordId"
@@ -17582,6 +17583,16 @@ components:
         dlrTimeoutStat:
           type: string
           enum: [DELIVRD, EXPIRED, UNDELIV, REJECTD, UNKNOWN]
+        dlrTimeoutMccmncs:
+          type: array
+          description: >-
+            The destinations (MCCMNC codes) the Receipt timeout and its status apply to (team trial round 12). Empty
+            (the default) = every destination; a message to another destination waits the default 48 hours for its
+            receipt, then gets UNKNOWN.
+          maxItems: 5000
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
         bindAddrTon:
           type: integer
           minimum: 0

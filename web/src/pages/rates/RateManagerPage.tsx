@@ -51,14 +51,15 @@ export async function newRateTable(open: (id: number) => void) {
 export function AmFilter({ value, onChange }: { value: number | null; onChange: (id: number | null) => void }) {
   const ref = useReference();
   return (
+    // The first option names the filter, so the filter card stays on one line on a laptop (team trial round 12).
     <label className="toggle-inline">
-      Account manager
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
         aria-label="Account manager"
+        title="Account manager"
       >
-        <option value="">All</option>
+        <option value="">All account managers</option>
         {ref.data?.accountManagers.map((u) => (
           <option key={u.id} value={u.id}>
             {u.displayName}

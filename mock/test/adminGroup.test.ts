@@ -21,13 +21,24 @@ const made: { groups: number[]; users: number[] } = { groups: [], users: [] };
 
 after(async () => {
   if (ready) {
-    await db().query("DELETE FROM audit_log WHERE user_id = ANY($1)", [made.users]);
-    await db().query("DELETE FROM changes WHERE user_id = ANY($1)", [made.users]);
-    await db().query("DELETE FROM password_history WHERE user_id = ANY($1)", [made.users]);
+    // Only this file's users and groups (their names end in the run tag): other test files run alongside and
+    // add users of their own after `started`.
+    const { rows } = await db().query("SELECT id FROM users WHERE id = ANY($1) OR username LIKE $2", [
+      made.users,
+      `%.${run}`,
+    ]);
+    const users = rows.map((r) => Number(r.id));
+    await db().query("DELETE FROM audit_log WHERE user_id = ANY($1)", [users]);
+    await db().query("DELETE FROM changes WHERE user_id = ANY($1)", [users]);
+    await db().query("DELETE FROM password_history WHERE user_id = ANY($1)", [users]);
     // The groups name their editor and the users their group: unlink, then remove both.
-    await db().query("UPDATE users SET access_group_id = NULL WHERE id = ANY($1) OR inserted_at >= $2", [made.users, started]);
-    await db().query("DELETE FROM access_groups WHERE id = ANY($1) OR inserted_at >= $2", [made.groups, started]);
-    await db().query("DELETE FROM users WHERE id = ANY($1) OR inserted_at >= $2", [made.users, started]);
+    await db().query("UPDATE users SET access_group_id = NULL WHERE id = ANY($1)", [users]);
+    await db().query("DELETE FROM access_groups WHERE id = ANY($1) OR (name LIKE $2 AND inserted_at >= $3)", [
+      made.groups,
+      `% ${run}`,
+      started,
+    ]);
+    await db().query("DELETE FROM users WHERE id = ANY($1)", [users]);
   }
   await app.close();
   await closeDb();

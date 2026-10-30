@@ -1,7 +1,8 @@
 // Transactions (§7, §13.33): payments, credit notes and adjustments with the Transaction
 // Information and Conversion form, the payment confirmation (preview, send, re-send) and
 // Include in SOA (a reason when unticked). Confirmation and In SOA are grid columns with filters
-// and can be changed in bulk. Delete archives (§13.29); every save is one undoable change.
+// and can be changed in bulk. Delete archives (§13.29); every save is one undoable change. Every field of a saved
+// transaction can be edited, the enterprise type too (team trial round 12).
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -182,8 +183,7 @@ function TransactionEditor({ detail, done }: { detail: TransactionDetail | null;
                   role="radio"
                   aria-checked={v.side === s}
                   className={v.side === s ? "on" : ""}
-                  disabled={!!detail}
-                  onClick={() => setSide(s)}
+                  onClick={() => v.side !== s && setSide(s)}
                 >
                   {s === "customer" ? "Customer" : "Vendor"}
                 </button>
@@ -347,7 +347,8 @@ function EditLoader({ id, done }: { id: number; done: (id: number | null) => voi
   );
 }
 
-const openEditor = (id: number | null) =>
+/** The add / edit form; also opened from a transaction's line on the SOA (team trial round 12). */
+export const openEditor = (id: number | null) =>
   ask<number>((done) =>
     id === null ? <TransactionEditor detail={null} done={done} /> : <EditLoader id={id} done={done} />,
   );

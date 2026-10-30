@@ -23894,6 +23894,7 @@
     "label": "Name",
     "type": "text",
     "defaultOperator": "like",
+    "matchAnywhere": true,
     "operators": [
      "like",
      "not_like",

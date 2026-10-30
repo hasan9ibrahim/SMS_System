@@ -22,7 +22,7 @@ import { HoverList } from "../../ui/HoverList";
 import { Button } from "../../ui/primitives";
 import { fmtWhen, openImport, RecordActions, RecordDialog } from "../reference/shared";
 import { problemText } from "../routing/dialogs";
-import { LIST_TYPES, listTypeLabel, splitTemplates, splitValues } from "./switchModel";
+import { LIST_TYPE_HINT, LIST_TYPES, listTypeLabel, splitTemplates, splitValues } from "./switchModel";
 
 const page = pageForPath("/switch/number-lists")!;
 
@@ -72,6 +72,7 @@ export function NumberListDialog({
         wide
         disabled={!!fixedType}
         options={LIST_TYPES}
+        hint={LIST_TYPE_HINT[form.values.listType]}
       />
     </RecordDialog>
   );
@@ -120,7 +121,7 @@ function AddEntriesDialog({ list, done }: { list: NumberList; done: () => void }
         hint={
           template
             ? "One per line. {n} = random digit, {code} = code found, {text} = original text"
-            : "One per line, or separated by commas"
+            : `One per line, or separated by commas. ${LIST_TYPE_HINT[list.listType]}`
         }
       >
         <textarea
