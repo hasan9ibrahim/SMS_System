@@ -545,6 +545,16 @@ export function updateEnterpriseBilling(request: FastifyRequest, reply: FastifyR
         if (docs[0]) errors.push({ path: `/${side}/currency`, message: "can't change once invoices exist" });
       }
     }
+    // A bilateral partner is billed in one currency (team trial round 12): the vendor side takes the customer side's.
+    // Sides saved apart before keep their currencies until one of them changes.
+    const cur = (s: { currency: string } | null | undefined) => s?.currency.toUpperCase() ?? null;
+    const customer = cur(input.customer ?? before.customer);
+    const vendor = cur(input.vendor ?? before.vendor);
+    const changed =
+      (!!input.customer && cur(input.customer) !== cur(before.customer)) ||
+      (!!input.vendor && cur(input.vendor) !== cur(before.vendor));
+    if (customer && vendor && customer !== vendor && changed)
+      errors.push({ path: "/vendor/currency", message: `uses the customer billing's currency (${customer})` });
     if (errors.length) return badInput(reply, errors);
 
     const diff: DiffEntry[] = [];

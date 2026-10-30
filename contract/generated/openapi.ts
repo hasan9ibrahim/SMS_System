@@ -659,6 +659,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/customer-trunks/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The customer trunk's password, shown on request
+     * @description Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+     *     the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+     *     enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+     */
+    get: operations["getCustomerTrunkPassword"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/customer-trunks/{id}/dependencies": {
     parameters: {
       query?: never;
@@ -831,6 +853,28 @@ export type paths = {
      * @description Saves the whole record; the change lists only the fields that differ (§13.10).
      */
     put: operations["updateVendorTrunk"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The vendor trunk's password, shown on request
+     * @description Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+     *     the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+     *     enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+     */
+    get: operations["getVendorTrunkPassword"];
+    put?: never;
     post?: never;
     delete?: never;
     options?: never;
@@ -11032,7 +11076,8 @@ export type components = {
     /**
      * @description How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
      *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
-     *     `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
+     *     `MCC` plus up to 10 characters, any symbol but a space (team trial round 12), e.g. `MCC99` = 26299,
+     *     `MCCxx` = 262xx, `MCC-ALL` = 262-ALL. Incoming RNs from the partner read
      *     that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
      * @default mcc
      */
@@ -11146,6 +11191,7 @@ export type components = {
       address?: string | null;
       bank?: string | null;
       bankAddress?: string | null;
+      /** @description The account's currency: a system currency or any text, e.g. USDT (team trial round 12). */
       currency?: string | null;
       accountNumber?: string | null;
       iban?: string | null;
@@ -11268,8 +11314,12 @@ export type components = {
       categoryId?: components["schemas"]["Id"] | null;
       billingType?: components["schemas"]["BillingType"];
       status?: components["schemas"]["RecordStatus"];
-      /** @enum {string} */
-      bindType?: "TX" | "RX" | "TR" | "AUTO";
+      /**
+       * @description A new customer trunk starts on AUTO, which accepts any bind (team trial round 12); a vendor trunk on TR.
+       * @default AUTO
+       * @enum {string}
+       */
+      bindType: "TX" | "RX" | "TR" | "AUTO";
       considerHlrRate?: boolean;
       serviceTypeRouting?: boolean;
       partWiseRouting?: boolean;
@@ -11337,6 +11387,10 @@ export type components = {
       /** @description Vendor trunks own one buy table (§13.12); null for customer trunks. */
       ownRateTableId: components["schemas"]["Id"] | null;
     };
+    TrunkPassword: {
+      /** @description Empty when none is set. */
+      password: string;
+    };
     CustomerTrunkDetail: components["schemas"]["TrunkDetailCommon"] &
       WithRequired<
         components["schemas"]["CustomerTrunkFields"],
@@ -11366,8 +11420,11 @@ export type components = {
       categoryId?: components["schemas"]["Id"];
       billingType?: components["schemas"]["BillingType"];
       status?: components["schemas"]["RecordStatus"];
-      /** @enum {string} */
-      bindType?: "TX" | "RX" | "TR";
+      /**
+       * @default TR
+       * @enum {string}
+       */
+      bindType: "TX" | "RX" | "TR";
       username?: string;
       /** @description Required on create; omit to keep. */
       password?: string;
@@ -20813,6 +20870,32 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getCustomerTrunkPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The password */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkPassword"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   getCustomerTrunkDependencies: {
     parameters: {
       query?: never;
@@ -21118,6 +21201,32 @@ export interface operations {
         };
       };
       400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorTrunkPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The password */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkPassword"];
+        };
+      };
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];

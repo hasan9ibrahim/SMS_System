@@ -258,6 +258,26 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.equal(back.customer.creditLimit, 5000);
   });
 
+  test("a bilateral partner bills both sides in one currency (team trial round 12)", async () => {
+    const id = (await newEnterprise("reciprocal", "BC")).record.id;
+    const side = (currency: string) => ({ currency, billingCycleId: 3, timezone: "UTC", openingBalance: 0 });
+    const split = await call("PUT", `/enterprises/${id}/billing`, { customer: side("EUR"), vendor: side("USD") });
+    assert.equal(split.statusCode, 400);
+    check("updateEnterpriseBilling", split);
+    assert.ok(split.json().errors.some((e: { path: string }) => e.path === "/vendor/currency"));
+    const one = await ok(
+      "updateEnterpriseBilling",
+      call("PUT", `/enterprises/${id}/billing`, {
+        customer: side("EUR"),
+        vendor: { ...side("EUR"), billingCycleId: 1 },
+        beneficiary: { currency: "USDT" },
+      }),
+    );
+    assert.equal(one.record.vendor.currency, "EUR");
+    assert.equal(one.record.vendor.billingCycleId, 1, "the cycle stays the vendor side's own");
+    assert.equal(one.record.beneficiary.currency, "USDT", "the account currency may be any text");
+  });
+
   test("handover now, scheduled handover replaces a pending one, undo restores history (§13.30)", async () => {
     const saved = await newEnterprise("vendor", "C");
     const id = saved.record.id;
@@ -446,6 +466,15 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     );
     const entry = pw.change.diff.find((d: { field: string }) => d.field === "password");
     assert.equal(entry.after, "(changed)", "credentials stay out of the change log (§13.22)");
+    // Shown on request behind the form's eye button, and the look is in the Audit Trail (team trial round 12).
+    const shown = await ok("getCustomerTrunkPassword", call("GET", `/customer-trunks/${id}/password`));
+    assert.equal(shown.password, "newpass");
+    const { rows: looks } = await db().query(
+      "SELECT 1 FROM audit_log WHERE action = 'passwordShown' AND table_name = 'customer_trunks' AND master_id = $1",
+      [String(id)],
+    );
+    assert.equal(looks.length, 1);
+    await ok("getCustomerTrunkPassword", call("GET", "/customer-trunks/99999999/password"), 404);
 
     const tls = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, { ...input, sslType: "tls1.2" }));
     assert.equal(tls.record.port, 2776, "a TLS trunk binds on 2776");

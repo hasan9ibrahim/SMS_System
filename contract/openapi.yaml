@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.117.0
+  version: 0.118.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -1115,6 +1115,33 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /customer-trunks/{id}/password:
+    get:
+      tags: [trunks]
+      operationId: getCustomerTrunkPassword
+      summary: "The customer trunk's password, shown on request"
+      description: |
+        Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+        the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+        enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkPassword"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /customer-trunks/{id}/dependencies:
     get:
       tags: [trunks]
@@ -1415,6 +1442,33 @@ paths:
                 $ref: "#/components/schemas/VendorTrunkSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/password:
+    get:
+      tags: [trunks]
+      operationId: getVendorTrunkPassword
+      summary: "The vendor trunk's password, shown on request"
+      description: |
+        Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+        the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+        enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkPassword"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -16687,12 +16741,13 @@ components:
 
     AllNetworksCode:
       type: string
-      pattern: "^(mcc|mcc0|mcc00|mcc000|mccStar|MCC[0-9A-Za-z*#._-]{1,6})$"
+      pattern: "^(mcc|mcc0|mcc00|mcc000|mccStar|MCC\\S{1,10})$"
       default: mcc
       description: |
         How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
         `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
-        `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
+        `MCC` plus up to 10 characters, any symbol but a space (team trial round 12), e.g. `MCC99` = 26299,
+        `MCCxx` = 262xx, `MCC-ALL` = 262-ALL. Incoming RNs from the partner read
         that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
     EnterpriseInput:
       type: object
@@ -16908,6 +16963,8 @@ components:
           type: [string, "null"]
         currency:
           type: [string, "null"]
+          maxLength: 20
+          description: "The account's currency: a system currency or any text, e.g. USDT (team trial round 12)."
         accountNumber:
           type: [string, "null"]
         iban:
@@ -17172,6 +17229,8 @@ components:
         bindType:
           type: string
           enum: [TX, RX, TR, AUTO]
+          default: AUTO
+          description: "A new customer trunk starts on AUTO, which accepts any bind (team trial round 12); a vendor trunk on TR."
         considerHlrRate:
           type: boolean
         serviceTypeRouting:
@@ -17316,6 +17375,15 @@ components:
             - $ref: "#/components/schemas/Id"
             - type: "null"
 
+    TrunkPassword:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: "Empty when none is set."
+
     CustomerTrunkDetail:
       allOf:
         - $ref: "#/components/schemas/TrunkDetailCommon"
@@ -17354,6 +17422,7 @@ components:
         bindType:
           type: string
           enum: [TX, RX, TR]
+          default: TR
         username:
           type: string
           minLength: 1

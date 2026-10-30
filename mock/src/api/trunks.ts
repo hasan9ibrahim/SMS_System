@@ -43,7 +43,7 @@ import {
   type FieldError,
   type FieldSpec,
 } from "./records.js";
-import { maskTrunkDetail, refuseMasked } from "../visibility/records.js";
+import { contactsHidden, maskTrunkDetail, refuseMasked } from "../visibility/records.js";
 
 type Db = pg.Pool | pg.PoolClient;
 export type TrunkKind = "customer" | "vendor";
@@ -345,6 +345,33 @@ export function getTrunk(kind: TrunkKind) {
       const t = await loadTrunk(pool, k, id);
       // Masked and without credentials for a viewer who does not own it (§13.17).
       return t ? maskTrunkDetail(t as unknown as Record<string, unknown>, kind) : notFound(reply, k, id);
+    });
+  };
+}
+
+/**
+ * The trunk's password, shown on request behind the form's eye button (team trial round 12). Edit on the trunk's page
+ * is checked before this runs (contract/access.json); a viewer whose policy hides the enterprise's credentials is
+ * refused (§13.17), and every look goes to the Audit Trail (§11).
+ */
+export function getTrunkPassword(kind: TrunkKind) {
+  const k = KINDS[kind];
+  return (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: number };
+    return withDb(reply, async (pool) => {
+      const { rows } = await pool.query(`SELECT password, enterprise_id FROM ${k.table} WHERE id = $1`, [id]);
+      if (!rows[0]) return notFound(reply, k, id);
+      if (await contactsHidden(Number(rows[0].enterprise_id)))
+        return sendProblem(reply, 403, "Your visibility policy hides this trunk's credentials", {
+          detail: "Ask the account manager of this enterprise, or an administrator.",
+        });
+      const me = await getCurrentUser();
+      await pool.query(
+        `INSERT INTO audit_log (user_id, ip, module, controller, method, action, table_name, master_id, status)
+         VALUES ($1, $2, 'trunks', $3, 'GET', 'passwordShown', $4, $5, 200)`,
+        [me.id, request.ip ?? null, `/${kind}-trunks/${id}/password`, k.table, String(id)],
+      );
+      return { password: String(rows[0].password ?? "") };
     });
   };
 }

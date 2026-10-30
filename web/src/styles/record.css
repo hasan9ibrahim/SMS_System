@@ -1441,3 +1441,139 @@
   width: auto;
   margin: 0;
 }
+
+/* Team trial round 12 (§5): a value in a list is edited in place (click it). */
+.chip-text.editable {
+  cursor: text;
+  border-radius: 4px;
+}
+.chip-text.editable:hover,
+.chip-text.editable:focus-visible {
+  text-decoration: underline dotted;
+  outline: none;
+}
+.tag-input input.chip-edit {
+  flex: 0 1 auto;
+  min-width: 140px;
+  height: 26px;
+  padding: 0 8px;
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: 999px;
+  background: var(--color-panel);
+}
+/* The whole cell of a check box toggles it (auto invoicing, send payment …). */
+label.ff.check {
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+label.ff.check:hover .strong-label {
+  color: var(--color-accent);
+}
+label.ff.check.disabled {
+  cursor: default;
+}
+/* Copy and show buttons inside a text box (username, password). */
+.input-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.input-actions > input {
+  padding-right: 64px;
+}
+.input-actions-buttons {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  gap: 2px;
+}
+.input-actions-buttons .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+/* Searchable dropdown (country, account manager, time zone). */
+.combo-input {
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-secondary) 50%),
+    linear-gradient(135deg, var(--color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 24px;
+}
+.combo-pop {
+  padding: 4px;
+}
+.combo-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+.combo-option {
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.combo-option.active {
+  background: var(--hover);
+}
+.combo-option.selected {
+  font-weight: 600;
+  color: var(--color-accent);
+}
+.combo-empty {
+  padding: 6px 10px;
+}
+/* Bind and credit alerts stand out (team trial round 12). */
+.toggle-card .toggle-card-text .strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+/* Contacts wrap to the width they have (split view): long e-mails break instead of running out of the card. */
+.contact-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.contact-card {
+  min-width: 0;
+}
+.contact-card .tag-input .chip {
+  white-space: normal;
+  min-width: 0;
+  height: auto;
+}
+.contact-card .tag-input .chip-text {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.contact-card .tag-input input {
+  min-width: 0;
+}
+/* Fields left, check boxes stacked right (trunk Delivery receipts and Routing, team trial round 12). */
+.fields-checks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
+  gap: 0 28px;
+  align-items: start;
+}
+.check-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 18px 0 0 16px;
+  border-left: var(--border-width) solid var(--color-border);
+}
+.check-stack .ff.check {
+  justify-content: flex-start;
+  padding-bottom: 0;
+  margin-bottom: 6px;
+}
+@media (max-width: 760px) {
+  .fields-checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .check-stack {
+    padding: 4px 0 0;
+    border-left: 0;
+  }
+}

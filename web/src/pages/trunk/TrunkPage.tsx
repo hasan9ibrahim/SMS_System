@@ -68,6 +68,7 @@ function GeneralSection({
   slot,
   onDirty,
   connection,
+  lockedEnterprise = false,
 }: {
   kind: TrunkKind;
   record: TrunkDetail | null;
@@ -75,6 +76,8 @@ function GeneralSection({
   slot: HTMLElement | null;
   onDirty: (d: boolean) => void;
   connection: TrunkListRow["connection"] | null;
+  /** Added from an enterprise's page: the trunk belongs to it (team trial round 12). */
+  lockedEnterprise?: boolean;
 }) {
   const isNew = record === null;
   const form = useForm<TrunkForm>(seed);
@@ -140,9 +143,15 @@ function GeneralSection({
               label="Enterprise"
               required
               error={form.error("enterpriseId")}
-              hint={isNew ? undefined : "Clone the trunk to move it"}
+              hint={
+                isNew ? (lockedEnterprise ? "Added from this enterprise" : undefined) : "Clone the trunk to move it"
+              }
             >
-              {isNew ? (
+              {isNew && lockedEnterprise ? (
+                <div className="ff-readonly strong">
+                  {enterprise.data ? enterpriseLabel(enterprise.data) : `Enterprise ${form.values.enterpriseId}`}
+                </div>
+              ) : isNew ? (
                 <EnterprisePicker
                   label={enterprise.data ? enterpriseLabel(enterprise.data) : "Choose an enterprise…"}
                   onPick={(e: Enterprise) => form.set("enterpriseId", e.id)}
@@ -180,13 +189,19 @@ function GeneralSection({
           </div>
         </section>
         {kind === "customer" ? (
-          <CustomerTrunkFields form={form} isNew={isNew} passwordSet={record?.passwordSet ?? false} />
+          <CustomerTrunkFields
+            form={form}
+            isNew={isNew}
+            passwordSet={record?.passwordSet ?? false}
+            trunkId={record?.id ?? null}
+          />
         ) : (
           <VendorTrunkFields
             form={form}
             isNew={isNew}
             passwordSet={record?.passwordSet ?? false}
             connected={connection ? connection === "up" : null}
+            trunkId={record?.id ?? null}
           />
         )}
       </fieldset>
@@ -356,6 +371,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
               slot={section === "general" ? slot : null}
               onDirty={onGeneral}
               connection={connection}
+              lockedEnterprise={!t && !cloneOf && presetEnterprise > 0}
             />
           </div>
         )}

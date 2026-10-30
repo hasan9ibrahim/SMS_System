@@ -2,7 +2,7 @@
 // currency, billing cycle, time zone and opening balance, the live balance, and the
 // beneficiary (bank) details. Credit use is coloured only past the alert levels (§15.3).
 import { useCan } from "../../api/access";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
   BillingSide,
@@ -19,6 +19,7 @@ import { useTabNavigate } from "../../shell/tabContext";
 import {
   CheckField,
   FormBanner,
+  FormField,
   NumberField,
   Section,
   SelectField,
@@ -94,6 +95,9 @@ function SideSection({
   const title = side === "customer" ? "Customer billing" : "Vendor billing";
   if (!v) {
     const bc = ref.data?.businessCompanies.find((b) => b.id === enterprise.businessCompanyId);
+    // A bilateral partner's second side starts from the first: one currency (locked), and the same billing cycle and
+    // time zone, which can be changed (team trial round 12).
+    const other = form.values[side === "customer" ? "vendor" : "customer"];
     return (
       <Section title={title} columns={1}>
         <p className="muted">
@@ -104,9 +108,9 @@ function SideSection({
             disabled={!!enterprise.archived}
             onClick={() =>
               form.set(side, {
-                currency: bc?.baseCurrency ?? "EUR",
-                billingCycleId: ref.data?.billingCycles[0]?.id ?? 1,
-                timezone: enterprise.billingTimezone,
+                currency: other?.currency ?? bc?.baseCurrency ?? "EUR",
+                billingCycleId: other?.billingCycleId ?? ref.data?.billingCycles[0]?.id ?? 1,
+                timezone: other?.timezone ?? enterprise.billingTimezone,
                 billingType: "postpaid",
                 creditLimit: null,
                 openingBalance: 0,
@@ -125,6 +129,8 @@ function SideSection({
     );
   }
   const p = (k: string) => `${side}.${k}`;
+  // The vendor side of a bilateral partner bills in the customer side's currency (team trial round 12).
+  const lockedTo = side === "vendor" ? form.values.customer?.currency : undefined;
   return (
     <Section
       title={title}
@@ -136,8 +142,9 @@ function SideSection({
         path={p("currency")}
         label="Currency"
         required
+        disabled={!!lockedTo}
         options={(ref.data?.currencies ?? []).map((c) => ({ value: c.iso, label: `${c.iso} – ${c.name}` }))}
-        hint={saved ? "Locked: fixed once invoices exist" : undefined}
+        hint={lockedTo ? "Same as the customer billing" : saved ? "Locked: fixed once invoices exist" : undefined}
       />
       <SelectField
         form={form}
@@ -218,11 +225,13 @@ function SideSection({
             ))}
         </>
       )}
+      {/* In the row with the boxes above, not on a line of its own (team trial round 12). */}
       <TextArea
         form={form}
         path={p("description")}
         label="Description"
-        rows={2}
+        rows={1}
+        wide={false}
         placeholder="Optional notes about this partner's billing"
       />
     </Section>
@@ -327,6 +336,33 @@ function BillingSummary({ billing, enterprise }: { billing: EnterpriseBilling; e
   );
 }
 
+/** The bank account's currency: one of the system's or typed, any length (e.g. USDT; team trial round 12). */
+function AccountCurrency({ form }: { form: FormApi<Form> }) {
+  const ref = useReference();
+  const id = "beneficiary-currency";
+  const v = form.values.beneficiary.currency;
+  return (
+    <FormField label="Account currency" htmlFor={id} error={form.error("beneficiary.currency")}>
+      <input
+        id={id}
+        list={`${id}-list`}
+        maxLength={20}
+        value={v ?? ""}
+        placeholder="Pick or type"
+        autoComplete="off"
+        onChange={(e) => form.set("beneficiary.currency", e.target.value.trim() === "" ? null : e.target.value)}
+      />
+      <datalist id={`${id}-list`}>
+        {(ref.data?.currencies ?? []).map((c) => (
+          <option key={c.iso} value={c.iso}>
+            {c.name}
+          </option>
+        ))}
+      </datalist>
+    </FormField>
+  );
+}
+
 export function BillingTab({ enterprise, slot, onDirty }: SectionProps & { enterprise: EnterpriseDetail }) {
   const q = useBilling(enterprise.id);
   const form = useForm<Form>({ customer: null, vendor: null, beneficiary: {} });
@@ -343,6 +379,21 @@ export function BillingTab({ enterprise, slot, onDirty }: SectionProps & { enter
     }
   }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onDirty(form.dirty), [form.dirty, onDirty]);
+
+  // The vendor side follows the customer side's currency, and its billing cycle while the two were the same (team
+  // trial round 12): a change on the customer side is copied; the vendor's cycle stays changeable.
+  const prev = useRef<{ currency?: string; cycle?: number } | null>(null);
+  const cust = form.values.customer;
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = { currency: cust?.currency, cycle: cust?.billingCycleId };
+    const vendor = form.values.vendor;
+    if (!before || !cust || !vendor) return;
+    if (before.currency !== cust.currency && vendor.currency !== cust.currency)
+      form.set("vendor.currency", cust.currency);
+    if (before.cycle !== cust.billingCycleId && vendor.billingCycleId === before.cycle)
+      form.set("vendor.billingCycleId", cust.billingCycleId);
+  }, [cust?.currency, cust?.billingCycleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sides: Side[] = enterprise.type === "reciprocal" ? ["customer", "vendor"] : [enterprise.type as Side];
   const submit = () => {
@@ -396,7 +447,7 @@ export function BillingTab({ enterprise, slot, onDirty }: SectionProps & { enter
             <div className="fgrid cols-4">
               <TextField form={form} path="beneficiary.iban" label="IBAN" />
               <TextField form={form} path="beneficiary.accountNumber" label="Account number" />
-              <TextField form={form} path="beneficiary.currency" label="Account currency" maxLength={3} />
+              <AccountCurrency form={form} />
               <TextField form={form} path="beneficiary.walletAddress" label="Crypto wallet" placeholder="Optional" />
             </div>
           </div>
