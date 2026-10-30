@@ -214,13 +214,24 @@ defmodule Sms.Switch.Rules.Translation do
   """
   @spec only_maps_receipts?(Rule.t()) :: boolean()
   def only_maps_receipts?(%Rule{} = r) do
-    r.dlr_map != [] and r.action != :block and is_nil(r.sender_conversion) and
-      is_nil(r.receiver_conversion) and
-      is_nil(r.sender_ton) and is_nil(r.sender_npi) and is_nil(r.dest_ton) and is_nil(r.dest_npi) and
-      is_nil(r.billing_type) and is_nil(r.registered_delivery) and r.content_words == [] and
-      is_nil(r.content_number_format) and
-      not (r.content_regex != nil and r.content_replacement != nil) and
-      r.msg_template in [nil, ""]
+    r.dlr_map != [] and r.action != :block and not changes_message?(r)
+  end
+
+  # The message-side actions: conversions, TON / NPI, billing type, receipt request and content changes.
+  @message_fields [
+    :sender_conversion,
+    :receiver_conversion,
+    :sender_ton,
+    :sender_npi,
+    :dest_ton,
+    :dest_npi,
+    :billing_type,
+    :registered_delivery,
+    :content_number_format
+  ]
+  defp changes_message?(%Rule{} = r) do
+    Enum.any?(@message_fields, &(not is_nil(Map.fetch!(r, &1)))) or r.content_words != [] or
+      (r.content_regex != nil and r.content_replacement != nil) or r.msg_template not in [nil, ""]
   end
 
   defp entry({%Rule{} = rule, nil}), do: {rule, rule.continue_after}

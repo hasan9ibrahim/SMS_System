@@ -49,10 +49,14 @@ defmodule Sms.Switch.Pipeline.Hlr.Http do
     end
   end
 
-  defp public_ip?({a, b, _, _}) do
-    not (a == 0 or a == 10 or a == 127 or (a == 100 and b in 64..127) or (a == 169 and b == 254) or
-           (a == 172 and b in 16..31) or (a == 192 and b == 168) or a >= 224)
-  end
+  # Not this-network, private, loopback, shared (CGNAT), link-local, multicast or reserved.
+  defp public_ip?({a, b, _, _}), do: not (a in [0, 10, 127] or a >= 224 or private_pair?(a, b))
+
+  defp private_pair?(100, b), do: b in 64..127
+  defp private_pair?(169, b), do: b == 254
+  defp private_pair?(172, b), do: b in 16..31
+  defp private_pair?(192, b), do: b == 168
+  defp private_pair?(_, _), do: false
 
   defp send_request(method, request, opts, provider) do
     case :httpc.request(method, request, opts, body_format: :binary) do

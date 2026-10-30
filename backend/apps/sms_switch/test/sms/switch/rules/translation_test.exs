@@ -173,7 +173,9 @@ defmodule Sms.Switch.Rules.TranslationTest do
     assert sms.after.text == "Your PIN is 1234"
     assert Enum.map(sms.steps, & &1.rule_id) == [1, 2]
 
-    receipt = Translation.run(rules, Map.merge(@msg, %{dlr_status: "UNKNOWN", dlr_error: "000"}), ctx())
+    receipt =
+      Translation.run(rules, Map.merge(@msg, %{dlr_status: "UNKNOWN", dlr_error: "000"}), ctx())
+
     assert Enum.map(receipt.steps, & &1.rule_id) == [1]
     assert receipt.after.dlr_status == "UNDELIV"
   end

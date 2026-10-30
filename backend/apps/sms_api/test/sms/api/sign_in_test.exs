@@ -330,6 +330,7 @@ defmodule Sms.Api.SignInTest do
 
   test "too many sign-ins from one address are refused for the rest of the minute" do
     previous = Application.get_env(:sms_api, Sms.Api.RateLimit)
+
     # A long window: an unknown user's answer takes as long as a known one's, so three calls could straddle a minute.
     Application.put_env(:sms_api, Sms.Api.RateLimit, limit: 2, window_s: 3_600)
     on_exit(fn -> Application.put_env(:sms_api, Sms.Api.RateLimit, previous) end)
