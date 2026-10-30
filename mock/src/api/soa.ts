@@ -26,6 +26,7 @@ import { mapSoaReport, SOA_REPORT_FROM, SOA_REPORT_SELECT } from "../lists/defs.
 import { sendProblem } from "../problem.js";
 import { production } from "../mode.js";
 import { simplePdf, spreadsheetXml, type PdfLine } from "../billing/files.js";
+import { contentDisposition, fillFileName, nowValues } from "../billing/fileNames.js";
 import { billingContacts, convert } from "./finance.js";
 import { notFound, setArchived } from "./masterData.js";
 import { recordChange, type FieldError } from "./records.js";
@@ -750,6 +751,35 @@ export async function runSoaReport(id: number): Promise<void> {
   }
 }
 
+/** The statement's file name from the business company's SOA File Name (team trial round 12, billing/fileNames.ts). */
+async function soaFileName(c: Db, st: SoaStatement, ext: "pdf" | "xls", userId: unknown, fallback: string) {
+  const { rows } = await c.query(
+    `SELECT bc.soa_file_name, e.alias, b.address AS beneficiary_address,
+            (SELECT u.username FROM users u WHERE u.id = $2) AS username
+       FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id
+       LEFT JOIN enterprise_beneficiaries b ON b.enterprise_id = e.id
+      WHERE e.id = $1`,
+    [st.enterpriseId, userId === null || userId === undefined ? null : Number(userId)],
+  );
+  const r = rows[0] ?? {};
+  return fillFileName(
+    r.soa_file_name,
+    {
+      ...nowValues(r.username ?? null),
+      company: st.businessCompany,
+      enterpriseName: st.enterprise,
+      enterpriseAlias: r.alias,
+      currency: st.sides[0]?.currency,
+      timezone: st.timezone,
+      beneficiaryAddress: r.beneficiary_address,
+      fromDate: st.from,
+      toDate: st.to,
+    },
+    fallback,
+    ext,
+  );
+}
+
 /** Email Logs (§8) entry for a sent SOA. */
 async function logSoaEmail(
   c: Db,
@@ -762,7 +792,7 @@ async function logSoaEmail(
   // No template picked: the partner's business company's SOA Statement template (§11).
   const tid = templateId ?? (await companyTemplate(c, { enterpriseId: st.enterpriseId }, "soa_statement"))?.id ?? null;
   const mail = tid === null ? null : await emailFor(c, st, tid);
-  const file = `SOA_${st.from}_${st.to}.${fileType === "excel" ? "xls" : "pdf"}`;
+  const file = await soaFileName(c, st, fileType === "excel" ? "xls" : "pdf", userId, `SOA_${st.from}_${st.to}`);
   await logEmail(c, {
     type: "send_soa",
     enterpriseId: st.enterpriseId,
@@ -918,16 +948,18 @@ export function downloadSoaReport(request: FastifyRequest, reply: FastifyReply) 
       (r.snapshot as SoaStatement | null) ??
       (await buildStatement(pool, Number(r.enterprise_id), r.invoice_type, ymd(r.period_from), ymd(r.period_to)));
     if (!st) return notFound(reply, "Enterprise", Number(r.enterprise_id));
-    const name = `SOA_${r.alias}_${ymd(r.period_from)}_${ymd(r.period_to)}`;
-    if (r.file_type === "excel")
-      return reply
-        .type("application/vnd.ms-excel")
-        .header("content-disposition", `attachment; filename="${name}.xls"`)
-        .send(soaSheet(st));
-    return reply
-      .type("application/pdf")
-      .header("content-disposition", `attachment; filename="${name}.pdf"`)
-      .send(soaPdf(st));
+    const excel = r.file_type === "excel";
+    const name = await soaFileName(
+      pool,
+      st,
+      excel ? "xls" : "pdf",
+      (await getCurrentUser()).id,
+      `SOA_${r.alias}_${ymd(r.period_from)}_${ymd(r.period_to)}`,
+    );
+    const disposition = contentDisposition(name);
+    if (excel)
+      return reply.type("application/vnd.ms-excel").header("content-disposition", disposition).send(soaSheet(st));
+    return reply.type("application/pdf").header("content-disposition", disposition).send(soaPdf(st));
   });
 }
 

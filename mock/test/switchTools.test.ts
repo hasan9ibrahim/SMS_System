@@ -120,6 +120,12 @@ describe("Notification: Send Rate, Send Tech Info, View Rate (§8)", { skip }, (
     assert.equal(csv.statusCode, 200);
     assert.ok(csv.body.startsWith("Country,Network,MCCMNC,Dial Code,Rate,Currency,Effective Date,Change"));
     assert.ok(csv.body.split("\n").length > 10);
+    // Named by the business company's Customer Rate File Name, variables filled (team trial round 12).
+    const { rows: tn } = await db().query("SELECT name FROM customer_trunks WHERE id = $1", [id]);
+    const disposition = String(csv.headers["content-disposition"]);
+    assert.match(disposition, /filename="[^"]+\.csv"/);
+    assert.ok(disposition.includes(String(tn[0].name)), disposition);
+    assert.doesNotMatch(disposition.split("filename*")[0]!, /[[{]/, "no variable left unfilled");
     const preview = await ok(
       "previewNotification",
       call("POST", "/notifications/preview", { trunkId: id, kind: "send_rate" }),

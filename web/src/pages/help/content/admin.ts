@@ -1095,9 +1095,21 @@ export const topics: HelpTopic[] = [
               { name: "Business Company IP", what: "Optional IP address of the company, up to 45 characters." },
               {
                 name: "Customer Rate File Name",
-                what: "The file name of rate sheets sent to customers.",
+                what: "The file name of rate sheets sent to or downloaded for customers. Write variables as `[Key]` or `{Key}`, in any case; spaces are ignored, so `{Date and Time}` works.",
                 values:
-                  "Variables `{company}` `{enterprise}` `{trunk}` `{date}`; default `{company}_{trunk}_rates_{date}`",
+                  "e.g. `[EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]`; also `[Trunk]` `[Company]` `[Username]` `[Timezone]` `[RateTable]`. Empty: `Rates_<trunk>_<date>`",
+              },
+              {
+                name: "SOA File Name",
+                what: "The file name of statements of account (e-mailed and downloaded).",
+                values:
+                  "e.g. `SOA_[EnterpriseName]_[FromDate]_[ToDate]`; also `[BeneficiaryAddress]` `[Currency]` `[Company]` `[Username]` `[Date]`. Empty: `SOA_<from>_<to>`",
+              },
+              {
+                name: "Invoice File Name",
+                what: "The file name of invoice PDFs (e-mailed and downloaded).",
+                values:
+                  "e.g. `[InvoiceRefNumber]_[EnterpriseName]_[InvoiceDate]`; also `[InvoiceDueDate]` `[CurrencyCode]` `[CompanyRegisteredName]` `[RegistrationNumber]` (or `[PARAM1001]`) `[VATNumber]` `[GrandTotal]`. Empty: the invoice number",
               },
               { name: "Description", what: "Optional free text." },
             ],
@@ -1246,7 +1258,19 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "A missing file shows **missing** in amber. **Upload…** replaces a file; click a file name to download it. **Format File Variables** lists the `{variables}` each format can use, e.g. `{invoice_no}`, `{due_date}`, `{total}` for invoices or `{mccmnc}`, `{rate}`, `{change_type}` for rate sheets.",
+            text: "A missing file shows **missing** in amber. **Upload…** replaces a file; click a file name to download it. **Format file and file name variables** lists the keys each format file can hold (the old platform's `[EnterpriseName]`, `[InvoiceRefNumber]`, `[FromDate]` and so on) and every variable the three file names accept.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Dates and times in file names are UTC: `[Date]` is `2026-10-30`, `[Time]` is `16-49`, `[DateTime]` (or `{Date and Time}`) is `2026-10-30_16-49`.",
+              "`[Username]` is who sent or downloaded the file; automatic sends (auto invoices, market move re-pricing) use `system`.",
+              "Characters a file name cannot hold (`/ \\ : * ? \" < > |`) become `_`. Saving refuses a variable the file does not know and names it.",
+            ],
+          },
+          {
+            kind: "warning",
+            text: "The uploaded format files are kept with the company for now; invoices, rate sheets and statements are still laid out by the platform's own layout. Their keys are listed so a format file from the old platform can be checked.",
           },
           { kind: "tip", text: "Files can be uploaded only after the company is saved." },
         ],

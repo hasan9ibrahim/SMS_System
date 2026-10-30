@@ -19,6 +19,7 @@ import { db, withDb } from "../db.js";
 import { INVOICE_REQUEST_FROM, INVOICE_REQUEST_SELECT, invoiceList, mapInvoiceRequest } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { simplePdf } from "../billing/files.js";
+import { contentDisposition, fillFileName, nowValues } from "../billing/fileNames.js";
 import { coverageOf, destinationNames, edrCoverage, fmtDay, sumLines, usageLines } from "../billing/edrFigures.js";
 import { archiveGate } from "./enterprises.js";
 import { billingContacts } from "./finance.js";
@@ -233,6 +234,48 @@ export function getInvoiceCharges(request: FastifyRequest, reply: FastifyReply) 
 
 const amt = (v: number, ccy: string) => `${fmtMoney(v)} ${ccy}`;
 
+/** The invoice PDF's file name from the business company's Invoice File Name (team trial round 12, fileNames.ts). */
+async function invoiceFileName(c: Db, inv: InvoiceDetail, userId: number | null): Promise<string> {
+  const { rows } = await c.query(
+    `SELECT bc.invoice_file_name, e.alias, e.address_line1, e.address_line2, e.city, e.zip, co.name AS country,
+            e.registration_number, e.vat_number, e.website, e.fax,
+            (SELECT u.username FROM users u WHERE u.id = $2) AS username
+       FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id
+       LEFT JOIN countries co ON co.id = e.country_id
+      WHERE e.id = $1`,
+    [inv.enterpriseId, userId],
+  );
+  const r = rows[0] ?? {};
+  return fillFileName(
+    r.invoice_file_name,
+    {
+      ...nowValues(r.username ?? null),
+      company: inv.businessCompany,
+      enterpriseName: inv.enterprise,
+      enterpriseAlias: r.alias,
+      currency: inv.currency,
+      currencyCode: inv.currency,
+      timezone: inv.timezone,
+      invoiceTimezone: inv.timezone,
+      invoiceRefNumber: inv.invoiceNumber,
+      invoiceDate: inv.invoiceDate,
+      invoiceDueDate: inv.dueDate,
+      invoiceStartDate: inv.usageStart,
+      invoiceEndDate: inv.usageEnd,
+      accountNumber: inv.accountNumber,
+      companyRegisteredName: inv.enterprise,
+      companyAddress: [r.address_line1, r.address_line2, r.city, r.zip, r.country].filter(Boolean).join(", "),
+      registrationNumber: r.registration_number,
+      vatNumber: r.vat_number,
+      website: r.website,
+      faxNumber: r.fax,
+      grandTotal: inv.dueAmount === null ? null : fmtMoney(inv.dueAmount),
+    },
+    inv.invoiceNumber,
+    "pdf",
+  );
+}
+
 export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
   return withDb(reply, async (pool) => {
@@ -246,7 +289,7 @@ export function downloadInvoicePdf(request: FastifyRequest, reply: FastifyReply)
       );
     return reply
       .type("application/pdf")
-      .header("content-disposition", `attachment; filename="${inv.invoiceNumber}.pdf"`)
+      .header("content-disposition", contentDisposition(await invoiceFileName(pool, inv, (await getCurrentUser()).id)))
       .send(await invoicePdf(pool, inv));
   });
 }
@@ -344,7 +387,7 @@ export async function emailInvoice(pool: pg.Pool, id: number): Promise<boolean> 
   if (!inv || inv.status !== "completed") return false;
   const to = await billingContacts(pool, inv.enterpriseId);
   const mail = await invoiceMail(pool, id);
-  const file = `${inv.invoiceNumber}.pdf`;
+  const file = await invoiceFileName(pool, inv, null);
   const status = await logEmail(pool, {
     type: "invoice",
     enterpriseId: inv.enterpriseId,
@@ -409,6 +452,8 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
     const change = await inTransaction(pool, async (c) => {
       for (const s of send) {
         const mail = await invoiceMail(c, s.id);
+        const inv = await loadInvoice(c, s.id);
+        const file = inv ? await invoiceFileName(c, inv, me.id) : `${s.number}.pdf`;
         await logEmail(c, {
           type: "invoice",
           enterpriseId: s.enterpriseId,
@@ -416,8 +461,8 @@ export function sendInvoices(request: FastifyRequest, reply: FastifyReply) {
           sender: await companyMailbox(c, s.enterpriseId!, "invoice"),
           subject: mail?.subject ?? `Invoice ${s.number}`,
           body: mail?.body ?? `Please find attached invoice ${s.number}.`,
-          file: `${s.number}.pdf`,
-          attachments: await invoiceAttachment(c, s.id, `${s.number}.pdf`),
+          file,
+          attachments: await invoiceAttachment(c, s.id, file),
           userId: me.id,
         });
       }

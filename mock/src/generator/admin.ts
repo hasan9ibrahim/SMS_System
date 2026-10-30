@@ -278,7 +278,10 @@ async function adminColumns(
       state: rng.chance(0.5) ? city(rng) : null,
       zip: rng.digits(5),
       company_ip: `198.51.100.${10 + i}`, // TEST-NET-2, never routable
-      customer_rate_file_name: "{company}_{trunk}_rates_{date}",
+      // File names with variables (team trial round 12, src/billing/fileNames.ts).
+      customer_rate_file_name: "[Company]_[Trunk]_rates_[Date]",
+      soa_file_name: "SOA_[EnterpriseName]_[FromDate]_[ToDate]",
+      invoice_file_name: "[InvoiceRefNumber]_[EnterpriseName]",
       bank_beneficiary_name: `${c.name as string} (fake)`,
       bank_beneficiary_address: `${c.address_line1 as string}, ${c.city as string}`,
       bank_name: `Fake ${companyName(rng).split(" ")[0]} Bank`,

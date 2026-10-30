@@ -8173,7 +8173,9 @@ export type paths = {
     };
     /**
      * Format File Variables help (§11)
-     * @description The variables the invoice, customer rate, SOA formats and the rate file name may use.
+     * @description The variables the invoice, customer rate and SOA format files may use, and those of the three file names
+     *     (`customer_rate_file_name`, `soa_file_name`, `invoice_file_name`; team trial round 12). Keys are written
+     *     [Key] or {Key}.
      */
     get: operations["listFormatVariables"];
     put?: never;
@@ -16819,8 +16821,23 @@ export type components = {
       /** @description Invoice Number sequence start. */
       invoiceNumberStart: number;
       companyIp: string | null;
-      /** @description Customer Rate File Name, with format variables. */
+      /**
+       * @description Name of the rate sheet a client receives, with variables written [Key] or {Key} (any case; spaces and
+       *     underscores ignored), e.g. "[EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]". The keys
+       *     are those of the `customer_rate_file_name` entry of `GET /business-companies/format-variables`; an
+       *     unknown key answers 400. Empty: "Rates_<trunk>_<date>" (team trial round 12).
+       */
       customerRateFileName: string | null;
+      /**
+       * @description Name of the statement of account file, with the `soa_file_name` variables (e.g. [EnterpriseName],
+       *     [FromDate], [ToDate]). Empty: "SOA_<from>_<to>" (team trial round 12).
+       */
+      soaFileName: string | null;
+      /**
+       * @description Name of the invoice PDF, with the `invoice_file_name` variables (e.g. [InvoiceRefNumber],
+       *     [EnterpriseName], [InvoiceDate]). Empty: the invoice number (team trial round 12).
+       */
+      invoiceFileName: string | null;
       address: components["schemas"]["CompanyAddress"];
       bank: components["schemas"]["CompanyBank"];
       defaultTemplates: components["schemas"]["CompanyDefaultTemplates"];

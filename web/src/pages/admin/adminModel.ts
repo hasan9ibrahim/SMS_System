@@ -160,6 +160,8 @@ export function companyInput(r: BusinessCompanyRecord): BusinessCompanyInput {
     invoiceNumberStart: r.invoiceNumberStart,
     companyIp: r.companyIp,
     customerRateFileName: r.customerRateFileName,
+    soaFileName: r.soaFileName,
+    invoiceFileName: r.invoiceFileName,
     address: { ...r.address },
     bank: { ...r.bank },
     defaultTemplates: { ...r.defaultTemplates },
@@ -193,7 +195,10 @@ export function blankCompany(): BusinessCompanyInput {
     smppPort: 2775,
     invoiceNumberStart: 1,
     companyIp: null,
-    customerRateFileName: "{company}_{trunk}_rates_{date}",
+    // File names with variables (team trial round 12); the full list is in the Format files part.
+    customerRateFileName: "[Company]_[Trunk]_rates_[Date]",
+    soaFileName: "SOA_[EnterpriseName]_[FromDate]_[ToDate]",
+    invoiceFileName: "[InvoiceRefNumber]_[EnterpriseName]",
     address: { line1: null, line2: null, city: null, state: null, countryIso: null, zip: null },
     bank: {
       beneficiaryName: null,

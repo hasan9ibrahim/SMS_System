@@ -655,6 +655,8 @@ describe("§11 business companies", { skip }, () => {
       invoiceNumberStart: r.invoiceNumberStart,
       companyIp: r.companyIp,
       customerRateFileName: r.customerRateFileName,
+      soaFileName: r.soaFileName,
+      invoiceFileName: r.invoiceFileName,
       address: r.address,
       bank: r.bank,
       defaultTemplates: r.defaultTemplates,
@@ -754,6 +756,34 @@ describe("§11 business companies", { skip }, () => {
       400,
     );
     assert.match(wrongType.errors[0].message, /another type/);
+    // File names (team trial round 12): known variables save, an unknown one is refused with its name.
+    const named = await ok(
+      "updateBusinessCompany",
+      call("PUT", `/business-companies/${copy.id}`, {
+        ...withSecrets,
+        customerRateFileName: "{EnterpriseName}{ProductCategoryName}{Currency}{Username}{Date and Time}{Trunk}{Company}",
+        soaFileName: "SOA_[EnterpriseName]_[BeneficiaryAddress]_[FromDate]_[ToDate]",
+        invoiceFileName: "[InvoiceRefNumber]_[CompanyRegisteredName]_[PARAM1001]",
+      }),
+    );
+    assert.equal(named.record.invoiceFileName, "[InvoiceRefNumber]_[CompanyRegisteredName]_[PARAM1001]");
+    const badName = await fails(
+      "updateBusinessCompany",
+      call("PUT", `/business-companies/${copy.id}`, { ...withSecrets, soaFileName: "SOA_[InvoiceRefNumber]" }),
+      400,
+    );
+    assert.equal(badName.errors[0].path, "/soaFileName");
+    assert.match(badName.errors[0].message, /\[InvoiceRefNumber\]/);
+    const formatVars = await ok("listFormatVariables", call("GET", "/business-companies/format-variables"));
+    const keys = (kind: string) =>
+      formatVars.formats.find((f: { kind: string }) => f.kind === kind).variables.map((v: { key: string }) => v.key);
+    for (const k of ["[EnterpriseName]", "[ProductCategoryName]", "[Currency]", "[Timezone]"])
+      assert.ok(keys("customer_rate_format").includes(k), `rate format has ${k}`);
+    for (const k of ["[BeneficiaryAddress]", "[FromDate]", "[ToDate]"]) assert.ok(keys("soa_format").includes(k));
+    for (const k of ["[InvoiceRefNumber]", "[PARAM1001]", "[FaxNumber]", "[SIDTitle]"])
+      assert.ok(keys("invoice_format").includes(k));
+    for (const k of ["[EnterpriseName]", "[ProductCategoryName]", "[Currency]", "[Username]", "[DateTime]", "[Trunk]"])
+      assert.ok(keys("customer_rate_file_name").includes(k), `rate file name has ${k}`);
 
     await fails(
       "uploadCompanyFile",

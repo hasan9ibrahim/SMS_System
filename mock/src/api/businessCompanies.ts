@@ -27,6 +27,7 @@ import { notFound, setArchived } from "./masterData.js";
 import { dependencies, iso, recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
+import { FILE_NAME_VARIABLES, unknownFileNameVariables } from "../billing/fileNames.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -47,6 +48,8 @@ const SCALARS: [keyof BusinessCompanyInput & string, string][] = [
   ["invoiceNumberStart", "invoice_number_start"],
   ["companyIp", "company_ip"],
   ["customerRateFileName", "customer_rate_file_name"],
+  ["soaFileName", "soa_file_name"],
+  ["invoiceFileName", "invoice_file_name"],
 ];
 const ADDRESS: [string, string][] = [
   ["line1", "address_line1"],
@@ -134,6 +137,8 @@ export async function loadCompany(c: Db, id: number): Promise<BusinessCompanyRec
     invoiceNumberStart: Number(r.invoice_number_start),
     companyIp: str(r.company_ip),
     customerRateFileName: str(r.customer_rate_file_name),
+    soaFileName: str(r.soa_file_name),
+    invoiceFileName: str(r.invoice_file_name),
     address: Object.fromEntries(
       ADDRESS.map(([k, col]) => [k, k === "countryIso" ? char(r[col]) : str(r[col])]),
     ) as BusinessCompanyRecord["address"],
@@ -177,6 +182,8 @@ function values(b: BusinessCompanyInput): BusinessCompanyInput {
     smppHost: trimOrNull(b.smppHost),
     companyIp: trimOrNull(b.companyIp),
     customerRateFileName: trimOrNull(b.customerRateFileName),
+    soaFileName: trimOrNull(b.soaFileName),
+    invoiceFileName: trimOrNull(b.invoiceFileName),
     address: t(b.address) as BusinessCompanyInput["address"],
     bank: t(b.bank) as BusinessCompanyInput["bank"],
     mailboxes: [...b.mailboxes].sort(
@@ -199,6 +206,19 @@ async function check(c: Db, b: BusinessCompanyInput, id: number | null): Promise
     if (!cur) continue;
     const { rows } = await c.query("SELECT 1 FROM currencies WHERE iso = $1 AND deleted_at IS NULL", [cur]);
     if (!rows[0]) errors.push({ path, message: "unknown currency" });
+  }
+  // File names: every [Key] / {Key} must be one the file knows (team trial round 12).
+  for (const [path, kind, pattern] of [
+    ["/customerRateFileName", "rate", b.customerRateFileName],
+    ["/soaFileName", "soa", b.soaFileName],
+    ["/invoiceFileName", "invoice", b.invoiceFileName],
+  ] as const) {
+    const bad = pattern ? unknownFileNameVariables(kind, pattern) : [];
+    if (bad.length)
+      errors.push({
+        path,
+        message: `unknown variable${bad.length === 1 ? "" : "s"} ${bad.join(", ")}; see the file name variables in Format files`,
+      });
   }
   if (b.address.countryIso) {
     const { rows } = await c.query("SELECT 1 FROM countries WHERE iso = $1", [b.address.countryIso]);
@@ -615,67 +635,91 @@ export function downloadCompanyFile(request: FastifyRequest, reply: FastifyReply
   });
 }
 
+// The format files' variables, with the old platform's [Key] names first (team trial round 12: "check if the variables
+// in the screenshot are available"), then the file names' variables (mock/src/billing/fileNames.ts).
+const fileNameEntry = (kind: "customer_rate_file_name" | "soa_file_name" | "invoice_file_name", label: string) => ({
+  kind,
+  label,
+  variables: FILE_NAME_VARIABLES[
+    kind === "customer_rate_file_name" ? "rate" : kind === "soa_file_name" ? "soa" : "invoice"
+  ].map(([key, description]) => ({ key: `[${key}]`, description })),
+});
+
 export const listFormatVariables = () => ({
   formats: [
     {
       kind: "invoice_format",
       label: "Invoice Format File",
       variables: [
-        ["invoice_no", "Invoice number"],
-        ["invoice_date", "Invoice date"],
-        ["due_date", "Due date"],
-        ["enterprise", "Partner name"],
-        ["enterprise_address", "Partner address"],
-        ["period_from", "Usage start"],
-        ["period_to", "Usage end"],
-        ["lines", "One row per destination: country, network, messages, rate, amount"],
-        ["total", "Total amount"],
-        ["currency", "Billing currency"],
-        ["bank_details", "Bank block of the business company"],
+        ["[InvoiceRefNumber]", "Invoice reference number"],
+        ["[InvoiceDate]", "Invoice date"],
+        ["[InvoiceDueDate]", "Invoice due date"],
+        ["[InvoiceStartDate]", "Invoice start date (usage start)"],
+        ["[InvoiceEndDate]", "Invoice end date (usage end)"],
+        ["[InvoiceTimezone]", "Invoice time zone"],
+        ["[CurrencyCode]", "Currency code"],
+        ["[CompanyRegisteredName]", "Company registered name"],
+        ["[CompanyAddress]", "Company address"],
+        ["[PARAM1001]", "Registration number"],
+        ["[RegistrationNumber]", "Registration number"],
+        ["[VATNumber]", "VAT number"],
+        ["[Website]", "Website"],
+        ["[FaxNumber]", "Fax number"],
+        ["[ChargeDescription]", "One row per charge: description"],
+        ["[ChargeVolume]", "One row per charge: messages"],
+        ["[EstimatedAmount]", "One row per charge: amount"],
+        ["[MOSetupCharge]", "MO setup charge"],
+        ["[MOFixCharge]", "MO fixed charge"],
+        ["[MOTotalCharge]", "MO total charge"],
+        ["[GrandTotal]", "Grand total"],
+        ["[SIDDesc]", "Sender ID description (proforma)"],
+        ["[SIDAmount]", "Sender ID amount (proforma)"],
+        ["[SIDTitle]", "Sender ID title (proforma)"],
+        ["{bank_details}", "Bank block of the business company"],
       ],
     },
     {
       kind: "customer_rate_format",
       label: "Customer Rate Format File",
       variables: [
-        ["trunk", "Customer trunk"],
-        ["rate_date", "Effective date"],
-        ["mccmnc", "MCCMNC"],
-        ["country", "Country"],
-        ["network", "Network"],
-        ["rate", "Rate"],
-        ["currency", "Currency"],
-        ["change_type", "NEW / SAME / INCREASE / DECREASE"],
-        ["from_date", "From date"],
+        ["[EnterpriseName]", "Enterprise name"],
+        ["[ProductCategoryName]", "Product category name"],
+        ["[Currency]", "Currency"],
+        ["[Timezone]", "Time zone"],
+        ["{trunk}", "Customer trunk"],
+        ["{rate_date}", "Effective date"],
+        ["{mccmnc}", "MCCMNC"],
+        ["{country}", "Country"],
+        ["{network}", "Network"],
+        ["{rate}", "Rate"],
+        ["{change_type}", "NEW / SAME / INCREASE / DECREASE"],
+        ["{from_date}", "From date"],
       ],
     },
     {
       kind: "soa_format",
       label: "SOA Format File",
       variables: [
-        ["enterprise", "Partner name"],
-        ["from", "Period start"],
-        ["to", "Period end"],
-        ["opening_balance", "Opening balance"],
-        ["entries", "One row per entry: date, description, debit, credit, balance"],
-        ["closing_balance", "Closing balance"],
-        ["currency", "Currency"],
+        ["[EnterpriseName]", "Enterprise name"],
+        ["[BeneficiaryAddress]", "Beneficiary address"],
+        ["[FromDate]", "From date"],
+        ["[ToDate]", "To date"],
+        ["{opening_balance}", "Opening balance"],
+        ["{entries}", "One row per entry: date, description, debit, credit, balance"],
+        ["{closing_balance}", "Closing balance"],
+        ["{currency}", "Currency"],
       ],
     },
-    {
-      kind: "customer_rate_file_name",
-      label: "Customer Rate File Name",
-      variables: [
-        ["company", "Business company"],
-        ["enterprise", "Partner name"],
-        ["trunk", "Customer trunk"],
-        ["date", "Send date (YYYY-MM-DD)"],
-      ],
-    },
-  ].map((f) => ({
-    ...f,
-    variables: f.variables.map(([key, description]) => ({ key: key!, description: description! })),
-  })),
+  ]
+    .map((f) => ({
+      ...f,
+      variables: f.variables.map(([key, description]) => ({ key: key!, description: description! })),
+    }))
+    .concat([
+      fileNameEntry("customer_rate_file_name", "Customer Rate File Name"),
+      fileNameEntry("soa_file_name", "SOA File Name"),
+      fileNameEntry("invoice_file_name", "Invoice File Name"),
+    ]),
 });
 
 // ---------------------------------------------------------------- Check SMTP Connection

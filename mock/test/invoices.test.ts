@@ -255,6 +255,10 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     assert.equal(pdf.statusCode, 200);
     assert.equal(pdf.headers["content-type"], "application/pdf");
     assert.ok(pdf.rawPayload.subarray(0, 8).toString() === "%PDF-1.4");
+    // Named by the business company's Invoice File Name, the invoice number at least (team trial round 12).
+    const disposition = String(pdf.headers["content-disposition"]);
+    assert.ok(disposition.includes(mailed.invoiceNumber) && /\.pdf"/.test(disposition), disposition);
+    assert.doesNotMatch(disposition.split("filename*")[0]!, /[[{]/);
     // The partner's business company issues it (§11): its mailbox, Invoice template and bank account.
     const { rows: bc } = await db().query(
       `SELECT bc.name, bc.bank_iban, mb.smtp_email FROM enterprises e JOIN business_companies bc ON bc.id = e.business_company_id
