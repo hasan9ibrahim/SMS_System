@@ -1514,6 +1514,42 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "service trunks (team trial round 12)" do
+    test "nothing goes to the network; the customer gets the trunk's status after its delay" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(
+            protocol: "service",
+            dlr_timeout_s: 0,
+            dlr_timeout_stat: "UNDELIV"
+          )
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      start_supervised!({Pipeline.Timeouts, sweep_ms: 100})
+
+      {client, resp} =
+        submit(client, %{short_message: "to a service trunk", registered_delivery: 1})
+
+      assert resp.status == 0
+      id = resp.fields.message_id
+
+      {_, dlr} = customer_receipt(client, 4_000)
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:UNDELIV"
+      refute_received {:smsc, ^conn, %Pdu{command: :submit_sm}}
+
+      assert_eventually(fn ->
+        Enum.any?(
+          edr("edr.receipt"),
+          &(&1["kind"] == "customer" and &1["source"] == "switch" and
+              &1["c_msg_status"] == "UNDELIV")
+        )
+      end)
+    end
+  end
+
   describe "DLR timeout (S-5.10, D5)" do
     test "no receipt within the vendor trunk's DLR Timeout: the customer gets its DLR Timeout Status" do
       config = [

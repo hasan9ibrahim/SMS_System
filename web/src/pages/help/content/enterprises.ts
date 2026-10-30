@@ -991,7 +991,10 @@ export const topics: HelpTopic[] = [
               { name: "Enterprise", what: "The vendor that owns the trunk." },
               { name: "UserName", what: "Our login (system_id) at the vendor." },
               { name: "Product Category", what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS." },
-              { name: "Protocol", what: "SMPP or HTTP." },
+              {
+                name: "Protocol",
+                what: "SMPP, HTTP or Service. A service trunk sends nothing to a network: routed to it, the message is ended by the switch and the client gets the receipt set on the trunk (Receipt status, after Receipt after seconds; 0 = at once). One outcome per trunk: add a trunk for each outcome you need (delivered, undelivered, rejected, expired…). It has no connection, so it never shows as down.",
+              },
               { name: "TPS", what: "TPS (messages per second) we send per session." },
               { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
               {

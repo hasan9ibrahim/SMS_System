@@ -547,6 +547,27 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, dlrTimeoutMccmncs: [] }),
     );
     assert.deepEqual(everywhere.record.dlrTimeoutMccmncs, []);
+    // A service trunk (team trial round 12): one outcome, its receipt status after its delay; vendor side only.
+    const service = await ok(
+      "createVendorTrunk",
+      call("POST", "/vendor-trunks", {
+        ...base,
+        name: `V${run}_svc`,
+        protocol: "service",
+        dlrTimeoutS: 0,
+        dlrTimeoutStat: "UNDELIV",
+      }),
+      201,
+    );
+    assert.equal(service.record.protocol, "service");
+    assert.equal(service.record.dlrTimeoutStat, "UNDELIV");
+    const svcRow = await ok(
+      "queryVendorTrunks",
+      call("POST", "/vendor-trunks/query", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: service.record.id }] },
+      }),
+    );
+    assert.equal(svcRow.rows[0].connection, "up", "a service trunk has no bind to wait for");
     const tables = await ok(
       "queryRateTables",
       call("POST", "/rate-tables/query", {
@@ -556,6 +577,9 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(tables.rows[0].kind, "vendor");
     const wrongEnterprise = await call("POST", "/customer-trunks", customerTrunk(ent.id, "x"));
     assert.equal(wrongEnterprise.statusCode, 400, "a vendor enterprise can't have customer trunks");
+    const client = (await newEnterprise("customer", "SV")).record;
+    const serviceClient = await call("POST", "/customer-trunks", { ...customerTrunk(client.id, "sv"), protocol: "service" });
+    assert.equal(serviceClient.statusCode, 400, "only a vendor trunk can be a service trunk");
   });
 
   test("rules tab: reorder, switch off, detach a direct rule, undo (§13.2)", async () => {

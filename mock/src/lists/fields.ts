@@ -1748,6 +1748,7 @@ export const listFields: Record<ListId, ListFields> = {
         enumValues: [
           { value: "smpp", label: "SMPP" },
           { value: "http", label: "HTTP" },
+          { value: "service", label: "Service" },
         ],
         hidden: true,
       }),

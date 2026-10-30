@@ -517,8 +517,21 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   # ---------------------------------------------------------------- sending
 
-  # Every part to the same vendor, the same connection where possible; stops at the first part that does not go.
+  # Every part to the same vendor, the same connection where possible; stops at the first part that does not go. A
+  # service trunk (team trial round 12) sends nothing: each part gets an id of the switch's, and the trunk's receipt
+  # comes from the timeout sweep after its delay (`receipt_timeout/2`).
   defp send_parts(vt, submits, message_id, first_deadline) do
+    if (Config.vendor_trunk(vt) || %{})[:service] == true,
+      do: {:sent, Enum.map(submits, fn _ -> service_result() end)},
+      else: send_to_vendor(vt, submits, message_id, first_deadline)
+  end
+
+  defp service_result do
+    id = "svc" <> Base.encode16(:crypto.strong_rand_bytes(8), case: :lower)
+    %{message_id: id, raw_message_id: id}
+  end
+
+  defp send_to_vendor(vt, submits, message_id, first_deadline) do
     submits
     |> Enum.with_index(1)
     |> Enum.reduce_while({:sent, [], nil}, fn {{fields, tlvs}, n}, {:sent, done, prefer} ->
@@ -701,6 +714,10 @@ defmodule Sms.Switch.Pipeline.Sender do
   @doc false
   # The vendor trunk's Receipt Timeout and its status (S-5.10), for the destinations it lists (team trial round 12):
   # none listed = every destination; a message to another destination waits the default 48 h, then UNKNOWN.
+  # A service trunk: its receipt status after its delay, for every destination.
+  def receipt_timeout(%{service: true} = trunk, _msg),
+    do: {trunk[:dlr_timeout_s] || 0, trunk[:dlr_timeout_stat] || "DELIVRD"}
+
   def receipt_timeout(trunk, msg) do
     codes = trunk[:dlr_timeout_mccmncs] || MapSet.new()
     mccmnc = (Map.get(msg, :destination) || %{})[:mccmnc]

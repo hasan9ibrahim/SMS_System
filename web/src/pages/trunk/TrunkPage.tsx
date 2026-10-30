@@ -38,6 +38,7 @@ import {
   VendorTrunkFields,
   blankTrunk,
   checkTrunk,
+  fillService,
   toTrunkForm,
   type TrunkForm,
 } from "./TrunkForms";
@@ -95,14 +96,15 @@ function GeneralSection({
   useEffect(() => onDirty(form.dirty), [form.dirty, onDirty]);
 
   const submit = () => {
-    const errors = checkTrunk(kind, form.values, isNew);
+    const values = fillService(kind, form.values, isNew);
+    const errors = checkTrunk(kind, values, isNew);
     if (Object.keys(errors).length) {
       form.setErrors(errors);
       setBanner(`Check the highlighted fields (${Object.keys(errors).length})`);
       return;
     }
     setBanner(null);
-    const input = { ...form.values };
+    const input = { ...values };
     if (!input.password) delete input.password;
     save.mutate(
       { id: record?.id ?? null, input },

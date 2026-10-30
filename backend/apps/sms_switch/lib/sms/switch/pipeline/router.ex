@@ -113,9 +113,10 @@ defmodule Sms.Switch.Pipeline.Router do
 
   defp count_warmup(_rules, _decision, _input), do: :ok
 
+  # A service trunk has no connection to wait for (team trial round 12).
   defp bound?(vendor_trunk_id) do
     check = Application.get_env(:sms_switch, __MODULE__, [])[:bound?] || (&Vendor.bound?/1)
-    check.(vendor_trunk_id)
+    (Config.vendor_trunk(vendor_trunk_id) || %{})[:service] == true or check.(vendor_trunk_id)
   end
 
   defp network(%{all_networks: true}), do: "All networks"

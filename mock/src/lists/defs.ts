@@ -212,11 +212,13 @@ export function trunkCurrencySql(kind: "customer" | "vendor", alias: string): st
 /**
  * Live connection (team trial round 2): up when bound with every session; a vendor trunk missing sessions, or down
  * for less than its Bind down alert delay (bind_alert_after_min, default 2), is reconnecting (the switch retries on
- * its reconnect schedule); after that it is down and the Bind Down Alert goes out.
+ * its reconnect schedule); after that it is down and the Bind Down Alert goes out. A service trunk has no
+ * connection: always up (team trial round 12).
  */
 const connectionSql = (kind: "customer" | "vendor") =>
   kind === "vendor"
-    ? `(CASE WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
+    ? `(CASE WHEN t.protocol = 'service' THEN 'up'
+             WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
              WHEN tb.status = 'online' THEN 'reconnecting'
              WHEN tb.status = 'offline' AND t.status = 'active'
                   AND tb.since > now() - make_interval(mins => t.bind_alert_after_min) THEN 'reconnecting'
@@ -2489,7 +2491,8 @@ export const NETWORK_FROM = `(
       FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
       JOIN trunk_binds tb ON tb.side = 'vendor' AND tb.trunk_id = t.id
       LEFT JOIN users u ON u.id = tb.changed_by_id
-     WHERE t.deleted_at IS NULL
+     -- A service trunk has no connection (team trial round 12).
+     WHERE t.deleted_at IS NULL AND t.protocol <> 'service'
   ) nb`;
 export const networkBindList: ListDef<NetworkBindRow> = {
   fields: listFields.network_binds,

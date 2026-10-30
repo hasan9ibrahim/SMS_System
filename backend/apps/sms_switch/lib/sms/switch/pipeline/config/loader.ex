@@ -166,7 +166,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
        WHERE t.deleted_at IS NULL AND e.deleted_at IS NULL
       """,
       vendor_trunks: """
-      SELECT t.id, t.name, t.enterprise_id, t.product_category_id, t.billing_type,
+      SELECT t.id, t.name, t.enterprise_id, t.product_category_id, t.billing_type, t.protocol,
              -- A vendor trunk stopped on Network Status is not routed to (§9.2, backend step 11c).
              t.status = 'active' AND e.status = 'active'
                AND NOT EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'vendor' AND b.trunk_id = t.id
@@ -336,6 +336,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
        t
        |> Map.put(:multipart_format, enum!(t.multipart_format, @multipart_formats))
        |> Map.put(:dlr_timeout_mccmncs, MapSet.new(Map.get(t, :dlr_timeout_mccmncs) || []))
+       # A service trunk (team trial round 12) sends nothing: the client gets its receipt from the switch.
+       |> Map.put(:service, Map.get(t, :protocol) == "service")
        |> Map.put(:tps_limit, t.tps * t.max_connections)}
     end
   end

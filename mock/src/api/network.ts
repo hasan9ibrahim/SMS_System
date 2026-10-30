@@ -128,7 +128,8 @@ export async function syncBinds(pool: pg.Pool) {
       WHERE t.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'customer' AND b.trunk_id = t.id)
      UNION ALL
      SELECT 'vendor', t.id, t.status, t.max_connections FROM vendor_trunks t
-      WHERE t.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'vendor' AND b.trunk_id = t.id)`,
+      WHERE t.deleted_at IS NULL AND t.protocol <> 'service'
+        AND NOT EXISTS (SELECT 1 FROM trunk_binds b WHERE b.side = 'vendor' AND b.trunk_id = t.id)`,
   );
   if (!rows.length) return;
   const tps = await averageTps();

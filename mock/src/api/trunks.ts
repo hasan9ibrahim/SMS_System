@@ -254,6 +254,9 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
       path: "/name",
       message: `already used by trunk ${nameClash[0].id}${nameClash[0].deleted_at ? " (archived)" : ""}`,
     });
+  // A service trunk ends messages itself (team trial round 12): vendor trunks only.
+  if (k.kind === "customer" && input.protocol === "service")
+    errors.push({ path: "/protocol", message: "only a vendor trunk can be a service trunk" });
   if (k.kind === "customer") {
     // Our SMPP system_id: unique across customer trunks, archived ones included.
     const { rows } = await db.query(

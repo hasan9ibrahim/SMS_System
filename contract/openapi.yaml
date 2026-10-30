@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.119.0
+  version: 0.120.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -17114,7 +17114,12 @@ components:
     # ------------------------------------------------------------- trunks (§5.4, §5.5)
     TrunkProtocol:
       type: string
-      enum: [smpp, http]
+      enum: [smpp, http, service]
+      description: >-
+        service: a vendor trunk that sends nothing (team trial round 12): routed to, the message is ended by the switch
+        and the client gets a receipt with the trunk's Status on receipt timeout after its Receipt timeout (seconds; 0
+        = at once). One outcome per trunk: make several for several outcomes. Its connection fields are not used;
+        customer trunks cannot be service.
     BillingType:
       type: string
       enum: [attempt, submit, reported, delivery]

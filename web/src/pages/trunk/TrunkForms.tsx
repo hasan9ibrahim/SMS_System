@@ -47,6 +47,8 @@ const PROTOCOL = [
   { value: "smpp", label: "SMPP" },
   { value: "http", label: "HTTP" },
 ];
+// A vendor trunk can be a service trunk (team trial round 12): it sends nothing, the client gets the set receipt.
+const VENDOR_PROTOCOL = [...PROTOCOL, { value: "service", label: "Service" }];
 const SSL = [
   { value: "none", label: "None" },
   { value: "tls1.0", label: "TLS 1.0 (legacy)" },
@@ -193,6 +195,21 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
 }
 
 /** Required fields checked before the round trip. */
+/**
+ * A service trunk has no connection (team trial round 12): its connection fields, still in the contract, get fixed
+ * values so the form does not ask for them.
+ */
+export function fillService(kind: TrunkKind, v: TrunkForm, isNew: boolean): TrunkForm {
+  if (kind !== "vendor" || v.protocol !== "service") return v;
+  const x = v as VendorTrunkInput;
+  return {
+    ...v,
+    username: v.username.trim() || "service",
+    host: x.host.trim() || "service",
+    ...(isNew && !v.password ? { password: generatePassword() } : {}),
+  } as TrunkForm;
+}
+
 export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Record<string, string> {
   const e: Record<string, string> = {};
   if (!v.name.trim()) e.name = "Required";
@@ -361,12 +378,19 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
         hint="Day and month totals are cut at midnight here (§13.31)"
       />
-      <ChoiceField form={form} path="protocol" label="Protocol" required options={PROTOCOL} />
+      <ChoiceField
+        form={form}
+        path="protocol"
+        label="Protocol"
+        required
+        options={kind === "vendor" ? VENDOR_PROTOCOL : PROTOCOL}
+      />
       <ChoiceField
         form={form}
         path="bindType"
         label="Bind type"
         required
+        disabled={form.values.protocol === "service"}
         options={["TR", "TX", "RX", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
       />
       <StatusField form={form} path="status" required onText="Active" />
@@ -717,12 +741,42 @@ export function VendorTrunkFields({
   const trunk: TrunkRef = { kind: "vendor", id: trunkId };
   const v = form.values as VendorTrunkInput;
   const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
+  const service = v.protocol === "service";
+  // Made a service trunk: its receipt comes at once and reads delivered, until changed.
+  const [wasService, setWasService] = useState(service);
+  useEffect(() => {
+    if (service === wasService) return;
+    setWasService(service);
+    if (service) {
+      form.set("dlrTimeoutS", 0);
+      form.set("dlrTimeoutStat", "DELIVRD");
+    }
+  }, [service]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <Section title="Trunk" columns={4}>
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
-      {shown("vendor-trunks.connection") && (
+      {service && (
+        <Section
+          title="Service outcome"
+          columns={2}
+          note="Nothing is sent to a network: the switch ends the message and sends the client this receipt. One outcome per trunk; add a trunk for each other outcome."
+        >
+          <SelectField form={form} path="dlrTimeoutStat" label="Receipt status" required options={DLR_STATS} />
+          <NumberField
+            form={form}
+            path="dlrTimeoutS"
+            label="Receipt after"
+            required
+            min={0}
+            step={1}
+            suffix="s"
+            hint="0 = at once"
+          />
+        </Section>
+      )}
+      {!service && shown("vendor-trunks.connection") && (
         <Section title="Connection" columns={4}>
           <BindLine
             from={`Us · ${v.sourceHost || "any address"}`}
@@ -756,7 +810,9 @@ export function VendorTrunkFields({
           <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
         </Section>
       )}
-      {v.protocol === "http"
+      {service
+        ? null
+        : v.protocol === "http"
         ? shown("vendor-trunks.http") && (
             <Section title="HTTP API">
               <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
@@ -860,7 +916,7 @@ export function VendorTrunkFields({
               <TextField form={form} path="bindAddrRange" label="Bind address range" maxLength={41} />
             </Section>
           )}
-      {shown("vendor-trunks.messages") && (
+      {!service && shown("vendor-trunks.messages") && (
         <Section title="Messages" columns={2}>
           <MultiCheck form={form} path="allowedDataCodings" any label="Allowed data codings" options={CODINGS} />
           <MultiCheck

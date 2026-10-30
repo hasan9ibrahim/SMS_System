@@ -11256,8 +11256,11 @@ export type components = {
       /** @description File content, base64 (at most 10 MB decoded). */
       dataBase64: string;
     };
-    /** @enum {string} */
-    TrunkProtocol: "smpp" | "http";
+    /**
+     * @description service: a vendor trunk that sends nothing (team trial round 12): routed to, the message is ended by the switch and the client gets a receipt with the trunk's Status on receipt timeout after its Receipt timeout (seconds; 0 = at once). One outcome per trunk: make several for several outcomes. Its connection fields are not used; customer trunks cannot be service.
+     * @enum {string}
+     */
+    TrunkProtocol: "smpp" | "http" | "service";
     /**
      * @description The event that makes a message billable (§7).
      * @enum {string}
