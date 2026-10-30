@@ -258,6 +258,26 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.equal(back.customer.creditLimit, 5000);
   });
 
+  test("a bilateral partner bills both sides in one currency (team trial round 12)", async () => {
+    const id = (await newEnterprise("reciprocal", "BC")).record.id;
+    const side = (currency: string) => ({ currency, billingCycleId: 3, timezone: "UTC", openingBalance: 0 });
+    const split = await call("PUT", `/enterprises/${id}/billing`, { customer: side("EUR"), vendor: side("USD") });
+    assert.equal(split.statusCode, 400);
+    check("updateEnterpriseBilling", split);
+    assert.ok(split.json().errors.some((e: { path: string }) => e.path === "/vendor/currency"));
+    const one = await ok(
+      "updateEnterpriseBilling",
+      call("PUT", `/enterprises/${id}/billing`, {
+        customer: side("EUR"),
+        vendor: { ...side("EUR"), billingCycleId: 1 },
+        beneficiary: { currency: "USDT" },
+      }),
+    );
+    assert.equal(one.record.vendor.currency, "EUR");
+    assert.equal(one.record.vendor.billingCycleId, 1, "the cycle stays the vendor side's own");
+    assert.equal(one.record.beneficiary.currency, "USDT", "the account currency may be any text");
+  });
+
   test("handover now, scheduled handover replaces a pending one, undo restores history (§13.30)", async () => {
     const saved = await newEnterprise("vendor", "C");
     const id = saved.record.id;
@@ -446,6 +466,15 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     );
     const entry = pw.change.diff.find((d: { field: string }) => d.field === "password");
     assert.equal(entry.after, "(changed)", "credentials stay out of the change log (§13.22)");
+    // Shown on request behind the form's eye button, and the look is in the Audit Trail (team trial round 12).
+    const shown = await ok("getCustomerTrunkPassword", call("GET", `/customer-trunks/${id}/password`));
+    assert.equal(shown.password, "newpass");
+    const { rows: looks } = await db().query(
+      "SELECT 1 FROM audit_log WHERE action = 'passwordShown' AND table_name = 'customer_trunks' AND master_id = $1",
+      [String(id)],
+    );
+    assert.equal(looks.length, 1);
+    await ok("getCustomerTrunkPassword", call("GET", "/customer-trunks/99999999/password"), 404);
 
     const tls = await ok("updateCustomerTrunk", call("PUT", `/customer-trunks/${id}`, { ...input, sslType: "tls1.2" }));
     assert.equal(tls.record.port, 2776, "a TLS trunk binds on 2776");
@@ -498,6 +527,47 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, allowedDataCodings: null }),
     );
     assert.equal(anyAgain.record.allowedDataCodings, null);
+    // The Receipt timeout can apply to some destinations only (team trial round 12); none = every destination.
+    assert.deepEqual(saved.record.dlrTimeoutMccmncs, []);
+    const { rows: codes } = await db().query("SELECT mccmnc FROM mccmnc WHERE deleted_at IS NULL ORDER BY id LIMIT 2");
+    const some = codes.map((c) => c.mccmnc as string);
+    const scoped = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, dlrTimeoutMccmncs: some }),
+    );
+    assert.deepEqual(scoped.record.dlrTimeoutMccmncs, some);
+    const unknown = await call("PUT", `/vendor-trunks/${saved.record.id}`, {
+      ...base,
+      password: undefined,
+      dlrTimeoutMccmncs: ["999999"],
+    });
+    assert.equal(unknown.statusCode, 400, "an unknown destination is refused");
+    const everywhere = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, dlrTimeoutMccmncs: [] }),
+    );
+    assert.deepEqual(everywhere.record.dlrTimeoutMccmncs, []);
+    // A service trunk (team trial round 12): one outcome, its receipt status after its delay; vendor side only.
+    const service = await ok(
+      "createVendorTrunk",
+      call("POST", "/vendor-trunks", {
+        ...base,
+        name: `V${run}_svc`,
+        protocol: "service",
+        dlrTimeoutS: 0,
+        dlrTimeoutStat: "UNDELIV",
+      }),
+      201,
+    );
+    assert.equal(service.record.protocol, "service");
+    assert.equal(service.record.dlrTimeoutStat, "UNDELIV");
+    const svcRow = await ok(
+      "queryVendorTrunks",
+      call("POST", "/vendor-trunks/query", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: service.record.id }] },
+      }),
+    );
+    assert.equal(svcRow.rows[0].connection, "up", "a service trunk has no bind to wait for");
     const tables = await ok(
       "queryRateTables",
       call("POST", "/rate-tables/query", {
@@ -507,6 +577,9 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(tables.rows[0].kind, "vendor");
     const wrongEnterprise = await call("POST", "/customer-trunks", customerTrunk(ent.id, "x"));
     assert.equal(wrongEnterprise.statusCode, 400, "a vendor enterprise can't have customer trunks");
+    const client = (await newEnterprise("customer", "SV")).record;
+    const serviceClient = await call("POST", "/customer-trunks", { ...customerTrunk(client.id, "sv"), protocol: "service" });
+    assert.equal(serviceClient.statusCode, 400, "only a vendor trunk can be a service trunk");
   });
 
   test("rules tab: reorder, switch off, detach a direct rule, undo (§13.2)", async () => {

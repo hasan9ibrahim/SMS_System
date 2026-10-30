@@ -510,10 +510,12 @@ export function forcePasswordChange(request: FastifyRequest, reply: FastifyReply
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const out = await inTransaction(pool, async (c) => {
+      // Administrators only by an administrator (security audit, team trial round 12).
       const { rows } = await c.query(
-        `UPDATE users SET must_change_password = true, updated_at = now(), updated_by_id = $2
-          WHERE id = ANY($1) AND deleted_at IS NULL AND NOT must_change_password RETURNING id, username`,
-        [ids, me.id],
+        `UPDATE users u SET must_change_password = true, updated_at = now(), updated_by_id = $2
+          WHERE u.id = ANY($1) AND u.deleted_at IS NULL AND NOT u.must_change_password AND ($3 OR NOT ${adminSql("u")})
+          RETURNING u.id, u.username`,
+        [ids, me.id, me.permissions.includes("*")],
       );
       if (!rows.length) return { updated: 0, change: null };
       const change = await recordChange(c, {
@@ -539,6 +541,9 @@ export function setupUserTotp(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const u = await loadUser(pool, id);
     if (!u) return notFound(reply, "User", id);
+    // An administrator's sign-in factor is changed by an administrator only (security audit, team trial round 12).
+    const refused = await adminUserGuard(pool, id);
+    if (refused) return sendProblem(reply, 403, refused);
     const secret = newTotpSecret();
     await pool.query("UPDATE users SET totp_pending_secret = $2 WHERE id = $1", [id, encryptSecret(secret)]);
     return { secret, otpauthUri: otpauthUri(secret, u.username) };
@@ -564,6 +569,8 @@ export function confirmUserTotp(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const { rows } = await pool.query("SELECT username, totp_pending_secret FROM users WHERE id = $1", [id]);
     if (!rows[0]) return notFound(reply, "User", id);
+    const refused = await adminUserGuard(pool, id);
+    if (refused) return sendProblem(reply, 403, refused);
     const pending = totpSecretOf(rows[0].totp_pending_secret);
     if (!pending) return badInput(reply, [{ path: "/code", message: "start the QR enrolment first" }]);
     if (!verifyTotp(pending, code))
@@ -584,6 +591,8 @@ export function disableUserTotp(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const u = await loadUser(pool, id);
     if (!u) return notFound(reply, "User", id);
+    const refused = await adminUserGuard(pool, id);
+    if (refused) return sendProblem(reply, 403, refused);
     if (!u.totpEnabled) return { record: u, change: null };
     const change = await inTransaction(pool, async (c) => {
       await c.query(

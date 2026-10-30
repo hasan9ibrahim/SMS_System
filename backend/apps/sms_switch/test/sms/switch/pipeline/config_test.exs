@@ -57,7 +57,11 @@ defmodule Sms.Switch.Pipeline.ConfigTest do
           rates_with([
             PipelineConfig.rate(100, 5, "262", "0.04"),
             # Scheduled, not current yet.
-            [100, 6, "26203", Decimal.new("0.09"), "EUR", future, nil, false],
+            [100, 6, "26203", Decimal.new("0.09"), "EUR", future, nil, false, nil],
+            # Sender ID lines (§6.2): FakeBank pays its own rate for the network and the country.
+            PipelineConfig.rate(100, 8, "26201", "0.07", "EUR", "FakeBank"),
+            PipelineConfig.rate(100, 9, "262", "0.08", "EUR", "OtherBank"),
+            PipelineConfig.rate(200, 10, "26201", "0.03", "EUR", "FakeBank"),
             # In a currency without an exchange rate: never usable.
             PipelineConfig.rate(100, 7, "26204", "0.01", "XXX")
           ]),
@@ -133,6 +137,25 @@ defmodule Sms.Switch.Pipeline.ConfigTest do
       assert Config.vendor_rate(99, "26201", t) == nil
       assert %{platform: 0.02} = Config.vendor_rate(1, "26201", t)
       assert Config.vendor_rate(1, "26202", t) == nil
+    end
+
+    test "Sender ID rates: the sender's line first, network then country, else the generic ones (§6.2)" do
+      t = now()
+
+      assert %{line_id: 8, mccmnc: "26201", platform: 0.07} =
+               Config.sell_rate(1, "26201", t, "FakeBank")
+
+      # Exact sender only; any other sender (or none) pays the generic rate.
+      assert %{line_id: 1} = Config.sell_rate(1, "26201", t, "fakebank")
+      assert %{line_id: 1} = Config.sell_rate(1, "26201", t, nil)
+
+      # The sender's country line comes before the generic network line, as in Rate Lookup and Re-rating.
+      assert %{line_id: 9, mccmnc: "262", platform: 0.08} =
+               Config.sell_rate(1, "26201", t, "OtherBank")
+
+      assert %{line_id: 5} = Config.sell_rate(1, "26202", t, "FakeBank")
+      assert %{line_id: 10, platform: 0.03} = Config.vendor_rate(1, "26201", t, "FakeBank")
+      assert %{line_id: 2} = Config.vendor_rate(1, "26201", t, "OtherBank")
     end
 
     test "vendor options for a destination are cached a few seconds, then recomputed" do

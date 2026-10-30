@@ -6,6 +6,14 @@ import { rankLcr, splitPick, type LcrProfileCore } from "../lcr/rank.js";
 import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail, ValueMatch } from "@sms/contract";
 import { valuesHit, valuesText } from "./values.js";
 
+/**
+ * A vendor trunk the switch routes to (config loader, vendor_trunks.active): the trunk and its enterprise active and
+ * its bind not stopped on Network Status. `vt` is the vendor_trunks alias; the enterprise is looked up by id.
+ */
+export const ROUTABLE_VENDOR_SQL = `vt.status = 'active'
+  AND EXISTS (SELECT 1 FROM enterprises ve WHERE ve.id = vt.enterprise_id AND ve.status = 'active' AND ve.deleted_at IS NULL)
+  AND NOT EXISTS (SELECT 1 FROM trunk_binds vb WHERE vb.side = 'vendor' AND vb.trunk_id = vt.id AND vb.status = 'stopped')`;
+
 export interface MessageContext {
   now: number;
   customerTrunkId: number | null;
@@ -194,7 +202,7 @@ export function keywordPattern(pattern: string): string | null {
   return null;
 }
 
-function regex(pattern: string, value: string, matchCase = false): boolean {
+function compiledRegex(pattern: string, matchCase: boolean): RegExp | null {
   const key = matchCase ? `c:${pattern}` : `i:${pattern}`;
   let re = compiled.get(key);
   if (re === undefined) {
@@ -206,6 +214,18 @@ function regex(pattern: string, value: string, matchCase = false): boolean {
     if (compiled.size > 5000) compiled.clear();
     compiled.set(key, re);
   }
+  return re;
+}
+
+/** The part of the value a pattern matched, or null (the Content check names the word or phrase, round 12). */
+export function matchedPart(pattern: string, value: string, matchCase = false): string | null {
+  const re = compiledRegex(pattern, matchCase);
+  const m = re ? re.exec(value) : null;
+  return m ? m[0] : null;
+}
+
+function regex(pattern: string, value: string, matchCase = false): boolean {
+  const re = compiledRegex(pattern, matchCase);
   return re ? re.test(value) : false;
 }
 
@@ -397,7 +417,20 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
   };
   rows("Sender", rule.senderValues, rule.senderPatternNegate, m.sender);
   rows("Receiver", rule.receiverValues, rule.receiverPatternNegate, m.receiver);
-  pattern("Content", rule.contentPattern, rule.contentPatternNegate, m.content);
+  // Content names the word or phrase that matched (team trial round 12: a rule over many words did not say which).
+  if (rule.contentPattern) {
+    const part = matchedPart(rule.contentPattern, m.content);
+    const hit = part !== null;
+    const negate = rule.contentPatternNegate;
+    add(
+      "Content",
+      true,
+      negate ? !hit : hit,
+      hit
+        ? `content has “${part}”${negate ? ", which the rule must not match" : ""} (${rule.contentPattern})`
+        : `content has none of ${rule.contentPattern}${negate ? ", as the rule wants" : ""}`,
+    );
+  }
   if (rule.senderListId) {
     const hit = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
     const neg = !!rule.senderListNegate;
@@ -551,7 +584,11 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
     if (!byRule) pools.set(options, (byRule = new WeakMap()));
     let pool = byRule.get(rule);
     if (!pool) {
-      pool = [...options.values()].filter((o) => o.cost !== null && inScope(o));
+      // Vendor trunk id order first, as the switch does (route.ex pool/2): equal costs or scores go to the lower id
+      // whatever order the database returned the rows in (security and logic audit, team trial round 12).
+      pool = [...options.values()]
+        .sort((a, b) => a.vendorTrunkId - b.vendorTrunkId)
+        .filter((o) => o.cost !== null && inScope(o));
       if (rule.routeType === "qbr") pool = byQbr(pool, rule.qbrWeights ?? null);
       else pool.sort((a, b) => a.cost! - b.cost!);
       byRule.set(rule, pool);

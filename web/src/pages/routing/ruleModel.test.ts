@@ -16,6 +16,7 @@ import {
   conditionChips,
   missingConditions,
   shareProblems,
+  withSoleShares,
   timeText,
   toInput,
 } from "./ruleModel";
@@ -158,6 +159,13 @@ test("percentage shares must add up to 100 per level; counts read compact", () =
     "Level 1 shares add up to 90%, not 100%.",
   ]);
   assert.deepEqual(shareProblems([v(1, 10)], "top_down"), []);
+  // A vendor alone on its level takes 100 %: its share is not asked (team trial round 12).
+  assert.deepEqual(shareProblems([v(1, 60), v(1, 40), v(2, 0)], "percentage"), []);
+  assert.deepEqual(
+    withSoleShares([v(1, 60), v(1, 40), v(2, 0), v(2, 50, true)], "percentage").map((x) => x.sharePct),
+    [60, 40, 100, 50],
+  );
+  assert.deepEqual(withSoleShares([v(1, 0)], "top_down")[0]!.sharePct, 0);
   assert.equal(compact(28_200), "28.2k");
   assert.equal(compact(812), "812");
   assert.equal(compact(null), "—");

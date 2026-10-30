@@ -9,11 +9,19 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebStream } from "node:stream/web";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { EdrDownloadInput, FieldDescriptor, FilterCondition, FilterGroup, ListFields } from "@sms/contract";
+import type {
+  EdrDownloadInput,
+  FieldDescriptor,
+  FilterCondition,
+  FilterGroup,
+  ListFields,
+  ListQuery,
+} from "@sms/contract";
 import { db, withDb } from "../db.js";
 import { chQuery, chStream } from "../edr.js";
 import { chOrder, chWhere, lit, namesOf, outcomeJoin, type ChListDef } from "../lists/chEngine.js";
-import { EDR_DOWNLOAD_FROM, EDR_DOWNLOAD_SELECT, mapEdrDownload } from "../lists/defs.js";
+import { EDR_DOWNLOAD_FROM, EDR_DOWNLOAD_SELECT, edrDownloadList, mapEdrDownload } from "../lists/defs.js";
+import { runList, type ListDef } from "../lists/engine.js";
 import { edrList, failedEdrList } from "../lists/edrDefs.js";
 import { listFields } from "../lists/fields.js";
 import { checkListQuery } from "../lists/validate.js";
@@ -21,6 +29,10 @@ import { sendProblem } from "../problem.js";
 import { notFound } from "./masterData.js";
 import { getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
+import { csvTextSql } from "../csvSafe.js";
+import { restrictingViewer, runAsUser } from "../visibility/context.js";
+import { viewChDef } from "../visibility/edr.js";
+import { loadMaps } from "../visibility/walk.js";
 
 type Params = { id: number };
 const MAX_ROWS = 1_000_000;
@@ -88,10 +100,21 @@ export async function filterNames(c: pg.Pool, group: FilterGroup | undefined): P
     });
   if (group) walk(group);
   const out = new Map<string, string>();
+  // Other AMs' enterprises and trunks stay neutral IDs in the summary (§13.17).
+  const v = await restrictingViewer();
+  const m = v?.policy.maskOthers ? await loadMaps() : null;
+  const own = new Set(v?.own ?? []);
+  const masked = (field: string, id: number) => {
+    if (!m) return false;
+    if (field.endsWith("EnterpriseId")) return !own.has(id);
+    if (field === "customerTrunkId" || field === "vendorTrunkId")
+      return !own.has((field === "customerTrunkId" ? m.customerTrunk : m.vendorTrunk).get(id) ?? -1);
+    return false;
+  };
   for (const [field, ids] of wanted) {
     const { table, name } = NAMED[field]!;
     const { rows } = await c.query(`SELECT id, ${name} AS name FROM ${table} WHERE id = ANY($1)`, [[...ids]]);
-    for (const r of rows) out.set(`${field}:${r.id}`, String(r.name));
+    for (const r of rows) if (!masked(field, Number(r.id))) out.set(`${field}:${r.id}`, String(r.name));
   }
   return out;
 }
@@ -206,11 +229,37 @@ export function requestEdrDownload(request: FastifyRequest, reply: FastifyReply)
   });
 }
 
+/**
+ * The downloads list (§9.2). A viewer whose visibility policy restricts anything sees only their own downloads: a
+ * file made for someone else shows what that person may see (§13.17).
+ */
+export async function queryEdrDownloads(request: FastifyRequest, reply: FastifyReply) {
+  const query = request.body as ListQuery;
+  const errors = checkListQuery(query, listFields.edr_downloads);
+  if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
+  const v = await restrictingViewer();
+  const def = edrDownloadList as ListDef<unknown>;
+  return withDb(reply, (pool) =>
+    runList(pool, v ? { ...def, baseWhere: `d.requested_by_id = ${Number(v.userId)}` } : def, query),
+  );
+}
+
+/** A restricted viewer may only open or cancel their own downloads (§13.17). */
+async function refuseOthers(reply: FastifyReply, raw: Record<string, unknown>): Promise<boolean> {
+  const v = await restrictingViewer();
+  if (!v || Number(raw.requested_by_id) === v.userId) return false;
+  void sendProblem(reply, 403, "This download belongs to another user", {
+    detail: "Your visibility policy lets you open only the EDR downloads you asked for.",
+  });
+  return true;
+}
+
 export function cancelEdrDownload(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
   return withDb(reply, async (pool) => {
     const d = await loadDownload(pool, id);
     if (!d) return notFound(reply, "EDR download", id);
+    if (await refuseOthers(reply, d.raw)) return reply;
     if (d.row.status !== "pending" && d.row.status !== "inprogress")
       return sendProblem(reply, 409, `This download is already ${d.row.status}`);
     await pool.query("UPDATE edr_downloads SET status = 'cancelled', finished_at = now() WHERE id = $1", [id]);
@@ -224,10 +273,12 @@ export function downloadEdrFile(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const d = await loadDownload(pool, id);
     if (!d) return notFound(reply, "EDR download", id);
+    if (await refuseOthers(reply, d.raw)) return reply;
     if (d.row.status !== "success") return sendProblem(reply, 409, `The file is not ready (status ${d.row.status})`);
     let path = d.raw.file_path as string | null;
-    // Seeded downloads (and files lost with the temp folder) are built again from the stored request.
-    if (!path || !existsSync(path)) path = (await runExport(pool, d.raw, new AbortController().signal)).path;
+    // Seeded downloads (and files lost with the temp folder) are built again from the stored request, as its requester.
+    if (!path || !existsSync(path))
+      path = (await asRequester(d.raw, () => runExport(pool, d.raw, new AbortController().signal))).path;
     const xlsx = d.row.fileType === "xlsx";
     return reply
       .type(xlsx ? "application/vnd.ms-excel" : "text/csv; charset=utf-8")
@@ -238,9 +289,19 @@ export function downloadEdrFile(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- export
 
+/** A download is made as the user who asked for it would see the EDRs (§13.17); seeded ones without a user as is. */
+const asRequester = <T>(raw: Record<string, unknown>, fn: () => Promise<T>): Promise<T> =>
+  raw.requested_by_id == null ? fn() : runAsUser(Number(raw.requested_by_id), fn);
+
 /** SELECT list with column labels as the header: names as text, booleans as Yes / No. */
-async function exportSelect(pool: pg.Pool, kind: string, columns: string[], expr: (field: string) => string) {
-  const def = defOf(kind);
+async function exportSelect(
+  pool: pg.Pool,
+  kind: string,
+  def: ChListDef<unknown>,
+  columns: string[],
+  expr: (field: string) => string,
+  csv = false,
+) {
   const byName = new Map(fieldsOf(kind).fields.map((f) => [f.field, f]));
   const parts: string[] = [];
   for (const c of columns) {
@@ -254,6 +315,8 @@ async function exportSelect(pool: pg.Pool, kind: string, columns: string[], expr
     } else if (f.type === "boolean") out = `if(${sql} = 1, 'Yes', 'No')`;
     else if (c.endsWith("RuleIds")) out = `arrayStringConcat(arrayMap(x -> toString(x), ${sql}), ' ')`;
     else if (f.type === "datetime") out = `toString(${sql})`;
+    // Text that starts like a formula opens as text in a spreadsheet (security audit, team trial round 12).
+    if (csv && !NUMERIC.has(f.type) && f.type !== "boolean" && f.type !== "datetime") out = csvTextSql(out);
     parts.push(`${out} AS \`${f.label.replace(/`/g, "")}\``);
   }
   return { select: parts.join(", "), fields: columns.map((c) => byName.get(c)!) };
@@ -273,11 +336,12 @@ async function runExport(
   const kind = raw.kind as string;
   const xlsx = raw.file_type === "xlsx";
   const query = raw.query as { filter?: FilterGroup; search?: string; sort?: { field: string; dir: "asc" | "desc" }[] };
-  const def = defOf(kind);
+  // Masked names, withheld values and others' traffic as the requester sees them (§13.17).
+  const def = await viewChDef(defOf(kind));
   const [where, order] = await Promise.all([chWhere(pool, def, query), chOrder(pool, def, query)]);
   // The switch's outcome rows merged in (final status, delay, receipt-billed money; backend step 11b).
   const joined = outcomeJoin(def, raw.columns as string[], where);
-  const sel = await exportSelect(pool, kind, raw.columns as string[], joined.expr);
+  const sel = await exportSelect(pool, kind, def, raw.columns as string[], joined.expr, !xlsx);
   mkdirSync(DIR, { recursive: true });
   const path = join(DIR, `${kind}_${raw.id}.${xlsx ? "xls" : "csv"}`);
   const sql = `SELECT ${sel.select} FROM ${joined.from} WHERE ${where} ORDER BY ${order} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}
@@ -350,27 +414,29 @@ async function tick() {
   const xlsx = raw.file_type === "xlsx";
   try {
     await pool.query("UPDATE edr_downloads SET status = 'inprogress', progress = 0 WHERE id = $1", [id]);
-    const def = defOf(raw.kind as string);
     const query = raw.query as { filter?: FilterGroup; search?: string };
-    const total = Number(
-      (
-        await chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${await chWhere(pool, def, query)}`)
-      )[0]?.n ?? 0,
-    );
+    const total = await asRequester(raw, async () => {
+      const def = await viewChDef(defOf(raw.kind as string));
+      const where = await chWhere(pool, def, query);
+      return Number((await chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${where}`))[0]?.n ?? 0);
+    });
     const limit = xlsx ? MAX_XLSX_ROWS : MAX_ROWS;
     if (total > limit)
       throw new Error(
         `${total.toLocaleString("en-US")} rows match; the limit is ${limit.toLocaleString("en-US")}. Narrow the date range or filters.`,
       );
     let last = Date.now();
-    const out = await runExport(pool, raw, running.abort.signal, (n) => {
-      if (Date.now() - last < 1000) return;
-      last = Date.now();
-      void pool.query("UPDATE edr_downloads SET progress = $2 WHERE id = $1 AND status = 'inprogress'", [
-        id,
-        Math.min(99, Math.floor((n / Math.max(1, total)) * 100)),
-      ]);
-    });
+    const abort = running.abort.signal;
+    const out = await asRequester(raw, () =>
+      runExport(pool, raw, abort, (n) => {
+        if (Date.now() - last < 1000) return;
+        last = Date.now();
+        void pool.query("UPDATE edr_downloads SET progress = $2 WHERE id = $1 AND status = 'inprogress'", [
+          id,
+          Math.min(99, Math.floor((n / Math.max(1, total)) * 100)),
+        ]);
+      }),
+    );
     await pool.query(
       `UPDATE edr_downloads SET status = 'success', progress = 100, file_name = $2, finished_at = now()
         WHERE id = $1 AND status = 'inprogress'`,

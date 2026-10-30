@@ -4,6 +4,7 @@
 import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { Icon } from "../ui/Icon";
+import { ComboBox } from "../ui/ComboBox";
 
 import { getAt, pointerToPath, setAt } from "./paths";
 
@@ -98,6 +99,27 @@ export function Section({
       </header>
       <div className={`fgrid cols-${columns}`}>{children}</div>
     </section>
+  );
+}
+
+/**
+ * Fields on the left and yes / no boxes stacked on the right, in one section (trunk Delivery receipts and Routing,
+ * team trial round 12). Takes the section's whole width.
+ */
+export function FieldsAndChecks({
+  fields,
+  checks,
+  columns = 2,
+}: {
+  fields: ReactNode;
+  checks: ReactNode;
+  columns?: 1 | 2 | 3;
+}) {
+  return (
+    <div className="fields-checks wide">
+      <div className={`fgrid cols-${columns}`}>{fields}</div>
+      <div className="check-stack">{checks}</div>
+    </div>
   );
 }
 
@@ -254,6 +276,7 @@ export function TextField<T>({
   type = "text",
   nullable = true,
   autoComplete,
+  trailing,
 }: BaseProps<T> & {
   placeholder?: string;
   maxLength?: number;
@@ -261,23 +284,35 @@ export function TextField<T>({
   /** Empty text is sent as null (optional fields). */
   nullable?: boolean;
   autoComplete?: string;
+  /** Small buttons inside the box on the right, e.g. Copy (team trial round 12). */
+  trailing?: ReactNode;
 }) {
   const id = useId();
   const v = form.get(path);
+  const box = (
+    <input
+      id={id}
+      type={type}
+      value={v == null ? "" : String(v)}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      disabled={disabled}
+      required={required}
+      autoComplete={autoComplete ?? "off"}
+      aria-invalid={!!form.error(path)}
+      onChange={(e) => form.set(path, e.target.value === "" && nullable && !required ? null : e.target.value)}
+    />
+  );
   return (
     <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
-      <input
-        id={id}
-        type={type}
-        value={v == null ? "" : String(v)}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        disabled={disabled}
-        required={required}
-        autoComplete={autoComplete ?? "off"}
-        aria-invalid={!!form.error(path)}
-        onChange={(e) => form.set(path, e.target.value === "" && nullable && !required ? null : e.target.value)}
-      />
+      {trailing ? (
+        <span className="input-actions">
+          {box}
+          <span className="input-actions-buttons">{trailing}</span>
+        </span>
+      ) : (
+        box
+      )}
     </FormField>
   );
 }
@@ -291,11 +326,12 @@ export function TextArea<T>({
   disabled,
   rows = 3,
   placeholder,
+  wide = true,
 }: BaseProps<T> & { rows?: number; placeholder?: string }) {
   const id = useId();
   const v = form.get(path);
   return (
-    <FormField label={label} required={required} error={form.error(path)} hint={hint} wide htmlFor={id}>
+    <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
       <textarea
         id={id}
         rows={rows}
@@ -365,10 +401,31 @@ export function SelectField<T>({
   wide,
   options,
   placeholder = "—",
-}: BaseProps<T> & { options: Option[]; placeholder?: string }) {
+  searchable,
+}: BaseProps<T> & {
+  options: Option[];
+  placeholder?: string;
+  /** Type to filter the list: any option containing the text (long lists, team trial round 12). */
+  searchable?: boolean;
+}) {
   const id = useId();
   const v = form.get(path);
   const numeric = options.length > 0 && typeof options[0]!.value === "number";
+  if (searchable)
+    return (
+      <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
+        <ComboBox
+          id={id}
+          value={v == null ? null : (v as string | number)}
+          options={options}
+          disabled={disabled}
+          invalid={!!form.error(path)}
+          placeholder="Type to search…"
+          {...(required ? {} : { emptyLabel: placeholder })}
+          onChange={(x) => form.set(path, x === null ? null : numeric ? Number(x) : x)}
+        />
+      </FormField>
+    );
   return (
     <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
       <select
@@ -392,10 +449,11 @@ export function SelectField<T>({
   );
 }
 
+/** A yes / no box; the whole cell (label and hint) toggles it, not only the small box (team trial round 12). */
 export function CheckField<T>({ form, path, label, hint, disabled }: Omit<BaseProps<T>, "required">) {
   return (
-    <div className="ff check">
-      <label className="toggle-inline strong-label">
+    <label className={`ff check${disabled ? " disabled" : ""}`}>
+      <span className="toggle-inline strong-label">
         <input
           type="checkbox"
           checked={form.get(path) === true}
@@ -403,13 +461,13 @@ export function CheckField<T>({ form, path, label, hint, disabled }: Omit<BasePr
           onChange={(e) => form.set(path, e.target.checked)}
         />
         {label}
-      </label>
+      </span>
       {form.error(path) ? (
         <span className="ff-error">{form.error(path)}</span>
       ) : (
         hint && <span className="ff-hint">{hint}</span>
       )}
-    </div>
+    </label>
   );
 }
 
@@ -432,6 +490,24 @@ export function ListField<T>({
   const id = useId();
   const list = ((form.get(path) as string[] | null) ?? []).slice();
   const [draft, setDraft] = useState("");
+  // A value being edited in place (click it, team trial round 12): Enter or leaving keeps the change, Escape not.
+  const [editing, setEditing] = useState<{ i: number; text: string } | null>(null);
+  const commitEdit = () => {
+    if (!editing) return;
+    const text = editing.text.trim();
+    setEditing(null);
+    if (text === list[editing.i]) return;
+    if (!text)
+      form.set(
+        path,
+        list.filter((_, j) => j !== editing.i),
+      );
+    else if (!list.some((x, j) => j !== editing.i && x === text))
+      form.set(
+        path,
+        list.map((x, j) => (j === editing.i ? text : x)),
+      );
+  };
   const add = (text: string) => {
     const parts = text
       .split(/[,\s;]+/)
@@ -451,25 +527,60 @@ export function ListField<T>({
           document.getElementById(id)?.focus();
         }}
       >
-        {list.map((x, i) => (
-          <span key={x} className={`chip${form.errors[`${path}.${i}`] ? " invalid" : ""}`}>
-            {x}
-            {!disabled && (
-              <button
-                type="button"
-                aria-label={`Remove ${x}`}
-                onClick={() =>
-                  form.set(
-                    path,
-                    list.filter((_, j) => j !== i),
-                  )
+        {list.map((x, i) =>
+          editing?.i === i ? (
+            <input
+              key={x}
+              className="chip-edit"
+              aria-label={`Edit ${x}`}
+              autoFocus
+              value={editing.text}
+              onChange={(e) => setEditing({ i, text: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitEdit();
                 }
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setEditing(null);
+                }
+              }}
+              onBlur={commitEdit}
+            />
+          ) : (
+            <span key={x} className={`chip${form.errors[`${path}.${i}`] ? " invalid" : ""}`}>
+              <span
+                className={disabled ? "chip-text" : "chip-text editable"}
+                title={disabled ? undefined : "Click to edit"}
+                {...(disabled
+                  ? {}
+                  : {
+                      role: "button",
+                      tabIndex: 0,
+                      onClick: () => setEditing({ i, text: x }),
+                      onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setEditing({ i, text: x }),
+                    })}
               >
-                <Icon name="x" size={11} />
-              </button>
-            )}
-          </span>
-        ))}
+                {x}
+              </span>
+              {!disabled && (
+                <button
+                  type="button"
+                  aria-label={`Remove ${x}`}
+                  onClick={() =>
+                    form.set(
+                      path,
+                      list.filter((_, j) => j !== i),
+                    )
+                  }
+                >
+                  <Icon name="x" size={11} />
+                </button>
+              )}
+            </span>
+          ),
+        )}
         {!disabled && (
           <input
             id={id}

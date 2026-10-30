@@ -597,7 +597,7 @@ function ImportDialog({
                     </select>
                   </td>
                   <td>
-                    {e === "rate_lines" || e === "opening_balances" ? (
+                    {e === "rate_lines" || e === "opening_balances" || e === "number_lists" ? (
                       <span className="muted small">always added</span>
                     ) : (
                       <select

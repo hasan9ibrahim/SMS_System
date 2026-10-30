@@ -173,7 +173,8 @@ export function getTranslationRule(request: FastifyRequest, reply: FastifyReply)
 const DIGITS = /^[0-9]{1,2}$/;
 
 /** Checks one rule input against the database; returns field errors (400). */
-async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldError[]> {
+/** The rule form's checks; also used by the Migration Center import (team trial round 12). */
+export async function checkRule(db: Db, input: TranslationRuleInput): Promise<FieldError[]> {
   const errors: FieldError[] = [];
   const err = (path: string, message: string) => errors.push({ path, message });
   if (!input.name.trim()) err("/name", "required");
@@ -340,7 +341,7 @@ export async function applyTranslationRuleField(
   }
 }
 
-async function insertRule(c: pg.PoolClient, input: TranslationRuleInput, userId: number): Promise<number> {
+export async function insertRule(c: pg.PoolClient, input: TranslationRuleInput, userId: number): Promise<number> {
   const cols = COLUMNS.map(([, col]) => col);
   const values = COLUMNS.map(([api]) => toDb(api, input[api]));
   const { rows } = await c.query(
@@ -356,7 +357,7 @@ async function insertRule(c: pg.PoolClient, input: TranslationRuleInput, userId:
 const rowsOf = (rows: TranslationRuleInput["senderValues"]) =>
   rows?.map((r) => ({ value: r.value.trim(), match: r.match, matchCase: r.matchCase })).filter((r) => r.value !== "");
 
-const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
+export const normalise = (input: TranslationRuleInput): TranslationRuleInput => ({
   ...input,
   name: input.name.trim(),
   mccmncs: [...new Set(input.mccmncs)].sort(),
@@ -491,8 +492,9 @@ export function cloneTranslationRule(request: FastifyRequest, reply: FastifyRepl
     const input: TranslationRuleInput = {
       ...(Object.fromEntries(COLUMNS.map(([api]) => [api, src[api]])) as Fields),
       name,
-      // An independent copy: inactive until reviewed, unless it is the variant for one trunk.
-      status: target ? "active" : "inactive",
+      // A copy keeps the rule's status (team trial round 12: a clone of an active rule stays active); the variant for
+      // one trunk is active.
+      status: target ? "active" : src.status,
       targets: target ? [{ type: "trunk", trunkKind: target.kind, id: target.id }] : [],
     };
     const me = await getCurrentUser();

@@ -82,16 +82,7 @@ export function CheckList<V extends string | number>({
   const values = shown.map((i) => i.value);
   return (
     <div className="checklist" aria-label={label}>
-      <div className="checklist-search">
-        <Icon name="search" size={13} />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={placeholder}
-          aria-label={`Search ${label}`}
-          autoFocus={autoFocus}
-        />
-      </div>
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
       <div className="checklist-bar">
         <span className="muted">
           Selected {selected.length.toLocaleString("en-US")} of {items.length.toLocaleString("en-US")}
@@ -106,29 +97,41 @@ export function CheckList<V extends string | number>({
           </button>
         </span>
       </div>
-      <div className="checklist-items" ref={scroll} style={{ height }} role="listbox" aria-multiselectable>
-        {shown.length === 0 ? (
-          <div className="muted checklist-empty">Nothing matches</div>
-        ) : (
-          <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
-            {virtual.getVirtualItems().map((vi) => {
-              const it = shown[vi.index]!;
-              return (
-                <label
-                  key={String(it.value)}
-                  className={`checklist-item${it.muted ? " muted" : ""}`}
-                  style={{ transform: `translateY(${vi.start}px)`, height: vi.size }}
-                  role="option"
-                  aria-selected={sel.has(it.value)}
-                >
-                  <input type="checkbox" checked={sel.has(it.value)} onChange={() => toggle(it.value)} />
-                  <span className="checklist-label">{it.label}</span>
-                  {it.detail && <span className="checklist-detail">{it.detail}</span>}
-                </label>
-              );
-            })}
-          </div>
-        )}
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={placeholder}
+            aria-label={`Search ${label}`}
+            autoFocus={autoFocus}
+          />
+        </div>
+        <div className="checklist-items" ref={scroll} style={{ height }} role="listbox" aria-multiselectable>
+          {shown.length === 0 ? (
+            <div className="muted checklist-empty">Nothing matches</div>
+          ) : (
+            <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
+              {virtual.getVirtualItems().map((vi) => {
+                const it = shown[vi.index]!;
+                return (
+                  <label
+                    key={String(it.value)}
+                    className={`checklist-item${it.muted ? " muted" : ""}`}
+                    style={{ transform: `translateY(${vi.start}px)`, height: vi.size }}
+                    role="option"
+                    aria-selected={sel.has(it.value)}
+                  >
+                    <input type="checkbox" checked={sel.has(it.value)} onChange={() => toggle(it.value)} />
+                    <span className="checklist-label">{it.label}</span>
+                    {it.detail && <span className="checklist-detail">{it.detail}</span>}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

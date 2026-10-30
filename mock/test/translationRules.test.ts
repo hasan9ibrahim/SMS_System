@@ -181,6 +181,20 @@ describe("translation engine (§6.4)", () => {
     assert.equal(res.blocked, false);
   });
 
+  test("a Stop rule that only maps receipts does not stop a message; it stops a receipt (team trial round 12)", () => {
+    const rules = [
+      {
+        rule: rule(1, { dlrMap: [{ fromStatus: "unknown", fromError: null, toStatus: "UNDELIV", toError: "001" }] }),
+        continueAfter: false,
+      },
+      { rule: rule(2, { contentWords: [{ find: "code", replace: "PIN", wholeWord: true, matchCase: false }] }) },
+    ];
+    const sms = runRules(rules, msg, ctx);
+    assert.equal(sms.after.text, "Your PIN is 1234", "the content rule after it ran");
+    const receipt = runRules(rules, { ...msg, dlrStatus: "UNKNOWN", dlrError: "000" }, ctx);
+    assert.equal(receipt.steps.length, 1, "on a receipt the DLR rule applies and stops the run");
+  });
+
   test("block, length guards, time window and DLR conversion", () => {
     const blocked = runRules([{ rule: rule(1, { action: "block", contentPattern: "code" }) }], msg, ctx);
     assert.equal(blocked.blocked, true);
@@ -585,7 +599,7 @@ describe("translation rules API", { skip }, () => {
     assert.equal(now.original.enabled, false, "the original is off on that trunk");
     assert.equal(now.copy.enabled, true);
     const plain = await ok("cloneTranslationRule", call("POST", `/translation-rules/${src.id}/clone`, {}), 201);
-    assert.equal(plain.record.status, "inactive", "a plain clone waits for review");
+    assert.equal(plain.record.status, src.status, "a plain clone keeps the rule's status (team trial round 12)");
     assert.equal(plain.record.targets.length, 0);
     await undo(plain.change);
     await undo(copy.change);

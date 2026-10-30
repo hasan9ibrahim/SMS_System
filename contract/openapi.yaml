@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.114.0
+  version: 0.124.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -544,7 +544,9 @@ paths:
       summary: Change history (server-side filter, sort and paging)
       description: |
         One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
-        History tab, on `userId` for "My changes".
+        History tab, on `userId` for "My changes". Whose changes (team trial round 12): everyone's for
+        administrators and directors (the Management department), the people of their department for a
+        department's manager, and else the user's own. Each row says whether the viewer may undo it (`canUndo`).
       requestBody:
         required: true
         content:
@@ -575,8 +577,9 @@ paths:
         other fields are kept. If someone else has since changed one of those fields,
         the server answers 409 with both values; the GUI then asks the user to keep the
         current value, restore theirs, or cancel, and calls again with `resolution`.
-        The undo is itself a change and is returned. Users may undo their own changes;
-        undoing someone else's needs the "undo others' changes" permission (403 otherwise).
+        The undo is itself a change and is returned. Users may undo their own changes; someone else's
+        only an administrator, a director (the Management department) or the manager of that user's
+        department (team trial round 12; 403 otherwise).
       parameters:
         - $ref: "#/components/parameters/RecordId"
       requestBody:
@@ -1115,6 +1118,33 @@ paths:
         "503":
           $ref: "#/components/responses/Unavailable"
 
+  /customer-trunks/{id}/password:
+    get:
+      tags: [trunks]
+      operationId: getCustomerTrunkPassword
+      summary: "The customer trunk's password, shown on request"
+      description: |
+        Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+        the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+        enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkPassword"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
   /customer-trunks/{id}/dependencies:
     get:
       tags: [trunks]
@@ -1415,6 +1445,33 @@ paths:
                 $ref: "#/components/schemas/VendorTrunkSaved"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /vendor-trunks/{id}/password:
+    get:
+      tags: [trunks]
+      operationId: getVendorTrunkPassword
+      summary: "The vendor trunk's password, shown on request"
+      description: |
+        Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+        the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+        enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrunkPassword"
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
@@ -4724,7 +4781,8 @@ paths:
       operationId: cloneTranslationRule
       summary: "Duplicate a translation rule (Clone, Duplicate to trunk)"
       description: |
-        An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+        An independent copy with the rule's status (team trial round 12: a clone of an active rule stays active),
+        active when `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
         rule for one trunk only so a partner can have a variant. One undoable change.
       parameters:
         - $ref: "#/components/parameters/RecordId"
@@ -9339,6 +9397,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EdrDownloadRow"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -9354,7 +9414,9 @@ paths:
       operationId: downloadEdrFile
       summary: "The exported file"
       description: |
-        CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+        CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls). The file shows the EDRs as the user who
+        asked for it may see them (§13.17); a user whose visibility policy restricts anything opens and lists only
+        their own downloads (403 for another user's).
       parameters:
         - $ref: "#/components/parameters/RecordId"
       responses:
@@ -9369,6 +9431,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -10767,6 +10831,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TotpSetup'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -10796,6 +10862,8 @@ paths:
                 $ref: '#/components/schemas/UserSaved'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -10817,6 +10885,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserSaved'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -12020,7 +12090,10 @@ paths:
       - admin
       operationId: listFormatVariables
       summary: Format File Variables help (§11)
-      description: The variables the invoice, customer rate, SOA formats and the rate file name may use.
+      description: |
+        The variables the invoice, customer rate and SOA format files may use, and those of the three file names
+        (`customer_rate_file_name`, `soa_file_name`, `invoice_file_name`; team trial round 12). Keys are written
+        [Key] or {Key}.
       responses:
         '200':
           description: The variables
@@ -16325,6 +16398,14 @@ components:
           items:
             type: string
           description: List fields only, what the save removed (as text).
+        changed:
+          type: array
+          items:
+            type: string
+          description: |
+            List fields only, items kept by the save but with other details (team trial round 12), e.g.
+            "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC". An item is the same when its id
+            (or, for account managers, the user and start) matches.
 
     Change:
       type: object
@@ -16375,6 +16456,12 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Id"
             - type: "null"
+        canUndo:
+          type: boolean
+          description: >-
+            On History lists: whether the viewer may undo it (team trial round 12). Own changes; others' only for
+            administrators, directors (the Management department) and the manager of the user's department. False
+            once undone, for an undo itself and for re-rating requests. Undo still needs Edit on the record's page.
 
     ChangePage:
       allOf:
@@ -16675,12 +16762,13 @@ components:
 
     AllNetworksCode:
       type: string
-      pattern: "^(mcc|mcc0|mcc00|mcc000|mccStar|MCC[0-9A-Za-z*#._-]{1,6})$"
+      pattern: "^(mcc|mcc0|mcc00|mcc000|mccStar|MCC\\S{1,10})$"
       default: mcc
       description: |
         How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
         `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
-        `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
+        `MCC` plus up to 10 characters, any symbol but a space (team trial round 12), e.g. `MCC99` = 26299,
+        `MCCxx` = 262xx, `MCC-ALL` = 262-ALL. Incoming RNs from the partner read
         that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
     EnterpriseInput:
       type: object
@@ -16740,7 +16828,8 @@ components:
           type: integer
           minimum: 0
           maximum: 90
-          description: Notice period for rate increases (§13.14, §13.32).
+          default: 0
+          description: Notice period for rate increases (§13.14, §13.32). 0 by default (team trial round 12).
         rateNoticeDaysDecrease:
           type: integer
           minimum: 0
@@ -16895,6 +16984,8 @@ components:
           type: [string, "null"]
         currency:
           type: [string, "null"]
+          maxLength: 20
+          description: "The account's currency: a system currency or any text, e.g. USDT (team trial round 12)."
         accountNumber:
           type: [string, "null"]
         iban:
@@ -17043,7 +17134,12 @@ components:
     # ------------------------------------------------------------- trunks (§5.4, §5.5)
     TrunkProtocol:
       type: string
-      enum: [smpp, http]
+      enum: [smpp, http, service]
+      description: >-
+        service: a vendor trunk that sends nothing (team trial round 12): routed to, the message is ended by the switch
+        and the client gets a receipt with the trunk's Status on receipt timeout after its Receipt timeout (seconds; 0
+        = at once). One outcome per trunk: make several for several outcomes. Its connection fields are not used;
+        customer trunks cannot be service.
     BillingType:
       type: string
       enum: [attempt, submit, reported, delivery]
@@ -17159,6 +17255,8 @@ components:
         bindType:
           type: string
           enum: [TX, RX, TR, AUTO]
+          default: AUTO
+          description: "A new customer trunk starts on AUTO, which accepts any bind (team trial round 12); a vendor trunk on TR."
         considerHlrRate:
           type: boolean
         serviceTypeRouting:
@@ -17303,6 +17401,15 @@ components:
             - $ref: "#/components/schemas/Id"
             - type: "null"
 
+    TrunkPassword:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: "Empty when none is set."
+
     CustomerTrunkDetail:
       allOf:
         - $ref: "#/components/schemas/TrunkDetailCommon"
@@ -17341,6 +17448,7 @@ components:
         bindType:
           type: string
           enum: [TX, RX, TR]
+          default: TR
         username:
           type: string
           minLength: 1
@@ -17500,6 +17608,16 @@ components:
         dlrTimeoutStat:
           type: string
           enum: [DELIVRD, EXPIRED, UNDELIV, REJECTD, UNKNOWN]
+        dlrTimeoutMccmncs:
+          type: array
+          description: >-
+            The destinations (MCCMNC codes) the Receipt timeout and its status apply to (team trial round 12). Empty
+            (the default) = every destination; a message to another destination waits the default 48 hours for its
+            receipt, then gets UNKNOWN.
+          maxItems: 5000
+          items:
+            type: string
+            pattern: "^[0-9]{3,6}$"
         bindAddrTon:
           type: integer
           minimum: 0
@@ -25484,7 +25602,8 @@ components:
         customerTrunk:
           type: [string, "null"]
         customerIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerPort:
           type: integer
         customerSessionId:
@@ -25561,12 +25680,13 @@ components:
         customerRateTableId:
           type: integer
         customerRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerCurrency:
           type: string
         customerSysRate:
-          type: number
-          description: "Rate in the base currency."
+          type: [number, "null"]
+          description: "Rate in the base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         translationRuleIds:
           type: array
           items:
@@ -25586,7 +25706,8 @@ components:
         vendorTrunk:
           type: [string, "null"]
         vendorIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorPort:
           type: integer
         vendorMsgId:
@@ -25601,11 +25722,13 @@ components:
         vendorRateTableId:
           type: integer
         vendorRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorCurrency:
           type: string
         vendorSysRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorExRate:
           type: number
         vendorTranslationRuleIds:
@@ -25657,17 +25780,17 @@ components:
         isVendorBillable:
           type: boolean
         revenue:
-          type: number
-          description: "Customer currency."
+          type: [number, "null"]
+          description: "Customer currency. Null when withheld by the viewer's visibility policy (§13.17)."
         cost:
-          type: number
-          description: "Vendor currency."
+          type: [number, "null"]
+          description: "Vendor currency. Null when withheld by the viewer's visibility policy (§13.17)."
         revenueSys:
-          type: number
-          description: "Base currency."
+          type: [number, "null"]
+          description: "Base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         costSys:
-          type: number
-          description: "Base currency."
+          type: [number, "null"]
+          description: "Base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         hlrProviderId:
           type: integer
         hlrProvider:
@@ -25716,7 +25839,8 @@ components:
         customerTrunk:
           type: [string, "null"]
         customerIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerPort:
           type: integer
         customerMsgId:
@@ -28809,6 +28933,8 @@ components:
       - invoiceNumberStart
       - companyIp
       - customerRateFileName
+      - soaFileName
+      - invoiceFileName
       - address
       - bank
       - defaultTemplates
@@ -28863,7 +28989,27 @@ components:
           - string
           - 'null'
           maxLength: 200
-          description: Customer Rate File Name, with format variables.
+          description: |
+            Name of the rate sheet a client receives, with variables written [Key] or {Key} (any case; spaces and
+            underscores ignored), e.g. "[EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]". The keys
+            are those of the `customer_rate_file_name` entry of `GET /business-companies/format-variables`; an
+            unknown key answers 400. Empty: "Rates_<trunk>_<date>" (team trial round 12).
+        soaFileName:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          description: |
+            Name of the statement of account file, with the `soa_file_name` variables (e.g. [EnterpriseName],
+            [FromDate], [ToDate]). Empty: "SOA_<from>_<to>" (team trial round 12).
+        invoiceFileName:
+          type:
+          - string
+          - 'null'
+          maxLength: 200
+          description: |
+            Name of the invoice PDF, with the `invoice_file_name` variables (e.g. [InvoiceRefNumber],
+            [EnterpriseName], [InvoiceDate]). Empty: the invoice number (team trial round 12).
         address:
           $ref: '#/components/schemas/CompanyAddress'
         bank:
@@ -32126,15 +32272,23 @@ components:
     MigrationImportEntity:
       type: string
       enum:
+      - departments
+      - product_categories
       - users
       - enterprises
       - customer_trunks
       - vendor_trunks
       - rate_tables
       - rate_lines
+      - number_lists
       - route_rules
+      - translation_rules
+      - hlr_rules
       - opening_balances
-      description: Imported in this order, so every reference exists when it is needed.
+      description: |
+        Imported in this order, so every reference exists when it is needed. Departments, product categories,
+        number lists (one row per value, rows of one list merged), translation rules and HLR rules were added in
+        team trial round 12 ("migrate whatever the client has: translation rules, HLR rules, number lists").
     MigrationField:
       type: object
       required:
@@ -33663,6 +33817,11 @@ components:
       type: object
       required: [ruleId, matched, checks, outcome, vendor, candidates, mccmnc, destination, sellRate]
       properties:
+        ingress:
+          description: The customer trunk's ingress translation, run first (team trial round 12; rule Test only).
+          oneOf:
+            - $ref: "#/components/schemas/TranslationTestResult"
+            - type: "null"
         ruleId:
           $ref: "#/components/schemas/Id"
         matched:
@@ -33728,6 +33887,13 @@ components:
       type: object
       required: [tried, decision, egressSkipped]
       properties:
+        ingress:
+          description: >-
+            The customer trunk's ingress translation rules, run first as the switch does (team trial round 12): the
+            rules are tried on the translated message. Null without a customer trunk or rules.
+          oneOf:
+            - $ref: "#/components/schemas/TranslationTestResult"
+            - type: "null"
         egressSkipped:
           description: Vendors skipped because their own vendor translation rules block the message.
           type: array

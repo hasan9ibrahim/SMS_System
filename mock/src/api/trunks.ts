@@ -43,7 +43,7 @@ import {
   type FieldError,
   type FieldSpec,
 } from "./records.js";
-import { maskTrunkDetail, refuseMasked } from "../visibility/records.js";
+import { contactsHidden, maskTrunkDetail, refuseMasked } from "../visibility/records.js";
 
 type Db = pg.Pool | pg.PoolClient;
 export type TrunkKind = "customer" | "vendor";
@@ -138,6 +138,8 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "multipartFormat", col: "multipart_format" },
   { api: "dlrTimeoutS", col: "dlr_timeout_s" },
   { api: "dlrTimeoutStat", col: "dlr_timeout_stat" },
+  // The destinations the Receipt timeout applies to; none = every destination (team trial round 12).
+  { api: "dlrTimeoutMccmncs", col: "dlr_timeout_mccmncs" },
   { api: "bindAddrTon", col: "bind_addr_ton" },
   { api: "bindAddrNpi", col: "bind_addr_npi" },
   { api: "bindAddrRange", col: "bind_addr_range" },
@@ -252,6 +254,9 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
       path: "/name",
       message: `already used by trunk ${nameClash[0].id}${nameClash[0].deleted_at ? " (archived)" : ""}`,
     });
+  // A service trunk ends messages itself (team trial round 12): vendor trunks only.
+  if (k.kind === "customer" && input.protocol === "service")
+    errors.push({ path: "/protocol", message: "only a vendor trunk can be a service trunk" });
   if (k.kind === "customer") {
     // Our SMPP system_id: unique across customer trunks, archived ones included.
     const { rows } = await db.query(
@@ -303,6 +308,21 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
       errors.push({ path: "/costLimitPeriod", message: "set both the limit and its period, or neither" });
     if (v.protocol === "http" && !v.http?.url && !(before && (before.http as { url?: string | null } | undefined)?.url))
       errors.push({ path: "/http/url", message: "required for an HTTP trunk" });
+    const codes = v.dlrTimeoutMccmncs ?? [];
+    if (new Set(codes).size !== codes.length)
+      errors.push({ path: "/dlrTimeoutMccmncs", message: "a destination is listed twice" });
+    if (codes.length) {
+      const { rows } = await db.query(
+        `SELECT c FROM unnest($1::text[]) AS c
+          WHERE NOT EXISTS (SELECT 1 FROM mccmnc m WHERE m.deleted_at IS NULL AND m.mccmnc = c)`,
+        [codes],
+      );
+      if (rows.length)
+        errors.push({
+          path: "/dlrTimeoutMccmncs",
+          message: `unknown code${rows.length > 1 ? "s" : ""} ${rows.map((r) => r.c).join(", ")}`,
+        });
+    }
     for (const key of ["successRegex", "messageIdRegex", "dlrStatusRegex", "dlrMidRegex"] as const) {
       const re = v.http?.[key];
       if (!re) continue;
@@ -345,6 +365,33 @@ export function getTrunk(kind: TrunkKind) {
       const t = await loadTrunk(pool, k, id);
       // Masked and without credentials for a viewer who does not own it (§13.17).
       return t ? maskTrunkDetail(t as unknown as Record<string, unknown>, kind) : notFound(reply, k, id);
+    });
+  };
+}
+
+/**
+ * The trunk's password, shown on request behind the form's eye button (team trial round 12). Edit on the trunk's page
+ * is checked before this runs (contract/access.json); a viewer whose policy hides the enterprise's credentials is
+ * refused (§13.17), and every look goes to the Audit Trail (§11).
+ */
+export function getTrunkPassword(kind: TrunkKind) {
+  const k = KINDS[kind];
+  return (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: number };
+    return withDb(reply, async (pool) => {
+      const { rows } = await pool.query(`SELECT password, enterprise_id FROM ${k.table} WHERE id = $1`, [id]);
+      if (!rows[0]) return notFound(reply, k, id);
+      if (await contactsHidden(Number(rows[0].enterprise_id)))
+        return sendProblem(reply, 403, "Your visibility policy hides this trunk's credentials", {
+          detail: "Ask the account manager of this enterprise, or an administrator.",
+        });
+      const me = await getCurrentUser();
+      await pool.query(
+        `INSERT INTO audit_log (user_id, ip, module, controller, method, action, table_name, master_id, status)
+         VALUES ($1, $2, 'trunks', $3, 'GET', 'passwordShown', $4, $5, 200)`,
+        [me.id, request.ip ?? null, `/${kind}-trunks/${id}/password`, k.table, String(id)],
+      );
+      return { password: String(rows[0].password ?? "") };
     });
   };
 }

@@ -12,6 +12,8 @@ import { LiveSocket, socketUrl, type PhxFrame } from "./socket";
 
 interface LiveState {
   connected: boolean;
+  /** The server refused the socket as not signed in (team trial round 12): the status bar says so. */
+  refused: boolean;
   totalTps: number | null;
   tpsAt: string | null;
   incidents: IncidentEvent[];
@@ -67,6 +69,7 @@ function apply(updated: IncidentEvent) {
 
 export const useLive = create<LiveState>((set, get) => ({
   connected: false,
+  refused: false,
   totalTps: null,
   tpsAt: null,
   incidents: [],
@@ -156,7 +159,7 @@ let socket: LiveSocket | null = null;
 /** Main window: open the socket and relay every frame to pop-out windows. */
 export function startLive(userId: number, incidents = true): () => void {
   socket = new LiveSocket(socketUrl());
-  socket.onStatus = (connected) => useLive.setState({ connected });
+  socket.onStatus = (connected, refused = false) => useLive.setState({ connected, refused });
   socket.onFrame = (frame) => channel.post({ type: "live", frame });
   const offTps = socket.subscribe(
     "live:tps",
@@ -202,7 +205,7 @@ export function startLiveRelay(userId: number): () => void {
   channel.post({ type: "live-hello" });
   const fallback = setTimeout(() => {
     if (!owner) {
-      relay.onStatus = (connected) => useLive.setState({ connected });
+      relay.onStatus = (connected, refused = false) => useLive.setState({ connected, refused });
       relay.connect();
     }
   }, 2000);

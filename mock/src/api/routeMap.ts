@@ -14,6 +14,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { PLATFORM_CURRENCY } from "../currency.js";
 import { clientLines, routedVendors, type ClientLine, type Dest, type RouteOutcome } from "./rateLookup.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -44,7 +45,10 @@ async function allDestinations(db: Db): Promise<(Dest & { id: number })[]> {
 export async function computeRouteMap(db: Db, trunkId: number, force = false) {
   const at = computedAt.get(trunkId);
   if (!force && at && Date.now() - at < TTL_MS && routeMapRows.has(trunkId)) return routeMapRows.get(trunkId)!;
+  const gen = generation;
   const rows = await routeMapFor(db, trunkId);
+  // Computed from data a save has changed meanwhile: answered, not kept (team trial round 12).
+  if (gen !== generation) return rows;
   routeMapRows.set(trunkId, rows);
   computedAt.set(trunkId, Date.now());
   // Keep the cache small: a handful of recently viewed trunks.
@@ -135,24 +139,36 @@ export async function routeMapFor(db: Db, trunkId: number): Promise<RouteMapRow[
   return rows as RouteMapRow[];
 }
 
-/** Forgets computed route maps (after a rate change or an undo); routed costs refresh on their next view. */
+/**
+ * Bumped by every change that can move routes; a computation that started before it is not kept as fresh (team trial
+ * round 12: a refresh running during a save marked its old answer fresh for another minute).
+ */
+let generation = 0;
+/** When the last such change was made (0 = none since the start). */
+let changedAt = 0;
+
+/** Forgets computed route maps (after a rate, rule or trunk change, or an undo); routed costs refresh on their next view. */
 export function clearRouteMaps() {
+  generation++;
+  changedAt = Date.now();
   routeMapRows.clear();
   computedAt.clear();
-  for (const t of costsAt.keys()) costsAt.set(t, 0);
 }
 
 // ---------------------------------------------------------------- routed costs (Rate Manager, team trial round 2)
 
 /** When each trunk's routed costs were written to route_cost_cache (0 = due for a refresh). */
 const costsAt = new Map<number, number>();
-const refreshing = new Map<number, Promise<void>>();
+const refreshing = new Map<number, { gen: number; job: Promise<void> }>();
 
 /** Writes the vendor and cost the route rules choose for each destination the trunk sells (Route map engine). */
 export function refreshRouteCosts(db: Db, trunkId: number): Promise<void> {
   const running = refreshing.get(trunkId);
-  if (running) return running;
+  if (running?.gen === generation) return running.job;
+  // One started before the last change: a new one follows it, so the answer is from the changed data.
+  const gen = generation;
   const job = (async () => {
+    await running?.job.catch(() => undefined);
     const rows = await routeMapFor(db, trunkId);
     const { rows: fx } = await db.query("SELECT rate_per_eur FROM currency_latest WHERE iso = $1", [PLATFORM_CURRENCY]);
     const perEur = Number(fx[0]?.rate_per_eur ?? 1) || 1;
@@ -171,9 +187,11 @@ export function refreshRouteCosts(db: Db, trunkId: number): Promise<void> {
           keep.map((r) => (r.vendorCost === null ? null : r.vendorCost / perEur)),
         ],
       );
-    costsAt.set(trunkId, Date.now());
-  })().finally(() => refreshing.delete(trunkId));
-  refreshing.set(trunkId, job);
+    if (gen === generation) costsAt.set(trunkId, Date.now());
+  })().finally(() => {
+    if (refreshing.get(trunkId)?.job === job) refreshing.delete(trunkId);
+  });
+  refreshing.set(trunkId, { gen, job });
   return job;
 }
 
@@ -198,6 +216,9 @@ export async function ensureRouteCosts(db: Db, rateTableId: number): Promise<voi
     if (!cached.length) return refreshRouteCosts(db, trunk);
     costsAt.set(trunk, 0);
   }
+  // Written before the last change: this view waits for the new routed costs, so a rate or rule just saved shows at
+  // once (team trial round 12). Merely older than a minute: refreshed in the background.
+  if (costsAt.get(trunk)! < changedAt) return refreshRouteCosts(db, trunk);
   if (Date.now() - costsAt.get(trunk)! > TTL_MS) void refreshRouteCosts(db, trunk).catch(() => undefined);
 }
 
@@ -249,8 +270,7 @@ export function queryRouteMap(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 

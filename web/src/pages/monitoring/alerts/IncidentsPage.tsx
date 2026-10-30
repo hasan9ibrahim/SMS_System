@@ -185,7 +185,7 @@ export function IncidentsPage() {
       historyScope={null}
       selectId={selectId}
       onExport={(state) =>
-        void exportIncidents({ ...toListQuery(state), limit: 100000 } as never).catch((e: unknown) =>
+        void exportIncidents({ ...toListQuery(state), limit: 4000, withTotal: false }).catch((e: unknown) =>
           toast({ tone: "error", message: problemText(e) }),
         )
       }

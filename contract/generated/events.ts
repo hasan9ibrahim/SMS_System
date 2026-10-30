@@ -310,13 +310,22 @@ export interface DashboardSummaryEvent {
   attempts: number;
   submitted: number;
   delivered: number;
-  revenue: number;
-  cost: number;
   /**
-   * revenue - cost
+   * Null when withheld by the viewer's visibility policy (§13.17).
    */
-  margin: number;
-  marginPct: number;
+  revenue: number | null;
+  /**
+   * Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  cost: number | null;
+  /**
+   * revenue - cost. Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  margin: number | null;
+  /**
+   * Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  marginPct: number | null;
   /**
    * Succeeded / Attempts x 100
    */
@@ -365,10 +374,13 @@ export interface TopParty {
   party: PartyRef;
   attempts: number;
   /**
-   * Revenue for a client, cost for a vendor.
+   * Revenue for a client, cost for a vendor. Null when withheld by the viewer's visibility policy (§13.17).
    */
-  money: number;
-  margin: number;
+  money: number | null;
+  /**
+   * Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  margin: number | null;
   asr: number | null;
   dlr: number | null;
 }
@@ -386,8 +398,14 @@ export interface TopDestinationRow {
    */
   networks: number;
   attempts: number;
-  revenue: number;
-  margin: number;
+  /**
+   * Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  revenue: number | null;
+  /**
+   * Null when withheld by the viewer's visibility policy (§13.17).
+   */
+  margin: number | null;
   asr: number | null;
   dlr: number | null;
 }

@@ -107,17 +107,32 @@ interface TabsState {
 
 const BACK_DEPTH = 30;
 const pathname = (p: string) => p.split("?")[0];
-/** Remembers the page a tab leaves; filter changes on the same page are not steps. */
+/** A record page's section (?tab=billing): a step for Back, unlike a filter change. */
+const sectionOf = (p: string) => new URLSearchParams(p.split("?")[1] ?? "").get("tab");
+/** Remembers the page a tab leaves; filter changes on the same page are not steps, a new section is. */
 function pushBack(back: TabsState["back"], id: string, from: string, to: string): TabsState["back"] {
-  if (pathname(from) === pathname(to)) return back;
+  if (pathname(from) === pathname(to) && sectionOf(from) === sectionOf(to)) return back;
   const cur = back[id] ?? { paths: [] };
   return { ...back, [id]: { ...cur, paths: [...cur.paths, from].slice(-BACK_DEPTH) } };
+}
+
+/**
+ * Where Back goes in a tab with no earlier page: a record's list (/enterprises/12 → /enterprises), else nowhere.
+ * Back stays in its tab; it never jumps to another tab (team trial round 12).
+ */
+export function parentPath(path: string): string | null {
+  const parts = pathname(path)!.split("/").filter(Boolean);
+  if (parts.length < 2 || !/^(\d+|new)$/.test(parts.at(-1)!)) return null;
+  const up = `/${parts.slice(0, -1).join("/")}`;
+  return pageForPath(up) ? up : null;
 }
 
 /** Whether Back has somewhere to go for this tab. */
 export function canGoBack(state: Pick<TabsState, "back" | "tabs">, id: string): boolean {
   const b = state.back[id];
-  return !!b && (b.paths.length > 0 || (!!b.opener && state.tabs.some((t) => t.id === b.opener)));
+  if (b && b.paths.length > 0) return true;
+  const tab = state.tabs.find((t) => t.id === id);
+  return !!tab && parentPath(tab.path) !== null;
 }
 
 /** Pinned tabs stay left of the others, Home first; the tabs of a group stay together, where its first tab is. */
@@ -155,6 +170,9 @@ export function regroupAfterMove(tabs: Tab[], id: string): Tab[] {
     groupId = null;
   return groupId === (tab.groupId ?? null) ? tabs : tabs.map((t) => (t.id === id ? { ...t, groupId } : t));
 }
+
+/** The tabs in the order they were last in view (most recent last), for closing the tab in view. */
+const recentTabs: string[] = [];
 
 export const useTabs = create<TabsState>((set, get) => ({
   tabs: [homeTab()],
@@ -240,6 +258,8 @@ export const useTabs = create<TabsState>((set, get) => ({
 
   activate: (id) => {
     const { splitId, activeId, splitLeft } = get();
+    // A tab that is gone (closed meanwhile) is never made active: that left a grey page.
+    if (!get().tabs.some((t) => t.id === id)) return;
     // The other split tab takes the focus and both stay on their side; any other tab replaces
     // the focused side.
     // A tab in a collapsed group opens the group (Chrome style).
@@ -290,7 +310,10 @@ export const useTabs = create<TabsState>((set, get) => ({
     const { tabs, activeId } = get();
     const idx = tabs.findIndex((t) => t.id === id);
     const next = tabs.filter((t) => t.id !== id);
-    const nextActive = activeId === id ? (next[Math.min(idx, next.length - 1)] ?? next[0]!).id : activeId;
+    // Closing the tab in view goes back to the tab used before it (team trial round 12), else its neighbour.
+    const before = [...recentTabs].reverse().find((r) => r !== id && next.some((t) => t.id === r));
+    const nextActive =
+      activeId === id ? (before ?? (next[Math.min(idx, next.length - 1)] ?? next[0]!).id) : activeId;
     const splitId = get().splitId;
     set({
       tabs: next,
@@ -343,8 +366,7 @@ export const useTabs = create<TabsState>((set, get) => ({
     });
   },
   goBack: (id) => {
-    const b = get().back[id];
-    if (!b) return false;
+    const b = get().back[id] ?? { paths: [] };
     const prev = b.paths.at(-1);
     if (prev !== undefined) {
       set({
@@ -357,8 +379,10 @@ export const useTabs = create<TabsState>((set, get) => ({
       });
       return true;
     }
-    if (b.opener && get().tabs.some((t) => t.id === b.opener)) {
-      get().activate(b.opener);
+    const tab = get().tabs.find((t) => t.id === id);
+    const up = tab ? parentPath(tab.path) : null;
+    if (up) {
+      set({ tabs: get().tabs.map((t) => (t.id === id ? { ...t, path: up, title: defaultTitle(up) } : t)) });
       return true;
     }
     return false;
@@ -443,6 +467,14 @@ export const useTabs = create<TabsState>((set, get) => ({
     for (const t of get().tabs.filter((x) => x.groupId === groupId)) await get().close(t.id);
   },
 }));
+
+useTabs.subscribe((state, prev) => {
+  if (state.activeId === prev.activeId || !prev.activeId) return;
+  const i = recentTabs.indexOf(prev.activeId);
+  if (i >= 0) recentTabs.splice(i, 1);
+  recentTabs.push(prev.activeId);
+  if (recentTabs.length > 50) recentTabs.shift();
+});
 
 // ---- persistence (§13.5: the open tab set is restored after re-login, per user) ----
 

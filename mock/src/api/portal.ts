@@ -35,6 +35,7 @@ import {
   loadPolicy,
   passwordExpiry,
   passwordRules,
+  verifyNoUser,
   verifyPassword,
 } from "../admin/passwords.js";
 import { badInput } from "./switchTools.js";
@@ -43,6 +44,7 @@ import { money } from "../currency.js";
 import { logEmail } from "./emailLog.js";
 import { maskEmail } from "./admin.js";
 import { beforeDetail, counter, type EdrSource } from "../reports/source.js";
+import { csvText } from "../csvSafe.js";
 
 export const PORTAL_COOKIE = "sms_portal";
 const SESSION_HOURS = 12;
@@ -254,7 +256,7 @@ export function portalSignIn(request: FastifyRequest, reply: FastifyReply) {
     const u = rows[0];
     // One message for an unknown user and a wrong password, so usernames cannot be guessed.
     const wrong = () => sendProblem(reply, 401, "Wrong username or password");
-    if (!u) return wrong();
+    if (!u) return verifyNoUser(b.password) || wrong();
     if (u.locked_until && (u.locked_until as Date).getTime() > Date.now())
       return sendProblem(reply, 429, "Too many wrong passwords", {
         detail: `Try again after ${(u.locked_until as Date).toISOString().slice(11, 16)} UTC.`,
@@ -633,7 +635,7 @@ export function portalQueryRates(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  const s = v == null ? "" : String(v);
+  const s = csvText(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

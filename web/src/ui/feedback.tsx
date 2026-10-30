@@ -1,7 +1,11 @@
 // Toasts (e.g. the 10-second "Undo" after a save, §13.10) and promise-based dialogs.
-import type { ReactNode } from "react";
+//
+// Dialogs belong to the tab they were opened from (team trial round 12): they render inside that tab's pane and stay
+// there, with their progress, while the user works in other tabs. One opened from the shell (user menu, tab strip)
+// covers the whole window as before.
+import { useEffect, useState, type ReactNode } from "react";
 import { create } from "zustand";
-import { Button, Modal } from "./primitives";
+import { Button, Modal, ModalHost } from "./primitives";
 import { Icon } from "./Icon";
 
 export interface Toast {
@@ -14,6 +18,8 @@ export interface Toast {
 
 interface DialogEntry {
   id: number;
+  /** The tab it was opened from, or null (the shell). */
+  tabId: string | null;
   render: (close: () => void) => ReactNode;
 }
 
@@ -22,8 +28,10 @@ interface FeedbackState {
   dialogs: DialogEntry[];
   push: (t: Omit<Toast, "id" | "timeoutMs"> & { timeoutMs?: number }) => number;
   dismiss: (id: number) => void;
-  openDialog: (render: (close: () => void) => ReactNode) => void;
+  openDialog: (render: (close: () => void) => ReactNode, tabId?: string | null) => void;
   closeDialog: (id: number) => void;
+  /** A tab closed: its dialogs go with it. */
+  closeTabDialogs: (tabId: string) => void;
 }
 
 let seq = 0;
@@ -39,9 +47,24 @@ export const useFeedback = create<FeedbackState>((set, get) => ({
     return id;
   },
   dismiss: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
-  openDialog: (render) => set({ dialogs: [...get().dialogs, { id: ++seq, render }] }),
+  openDialog: (render, tabId = originTab()) => set({ dialogs: [...get().dialogs, { id: ++seq, tabId, render }] }),
   closeDialog: (id) => set({ dialogs: get().dialogs.filter((d) => d.id !== id) }),
+  closeTabDialogs: (tabId) => {
+    if (get().dialogs.some((d) => d.tabId === tabId)) set({ dialogs: get().dialogs.filter((d) => d.tabId !== tabId) });
+  },
 }));
+
+/** The tab of the last click or key press (its pane carries data-tab-id); null for the shell. */
+let lastTab: string | null = null;
+if (typeof document !== "undefined") {
+  const note = (e: Event) => {
+    const el = e.target instanceof Element ? e.target.closest("[data-tab-id]") : null;
+    lastTab = el?.getAttribute("data-tab-id") ?? null;
+  };
+  document.addEventListener("pointerdown", note, true);
+  document.addEventListener("keydown", note, true);
+}
+const originTab = () => lastTab;
 
 export const toast = (t: Omit<Toast, "id" | "timeoutMs"> & { timeoutMs?: number }) => useFeedback.getState().push(t);
 
@@ -108,9 +131,31 @@ export function FeedbackLayer() {
           </div>
         ))}
       </div>
-      {dialogs.map((d) => (
-        <div key={d.id}>{d.render(() => closeDialog(d.id))}</div>
-      ))}
+      {dialogs
+        .filter((d) => d.tabId === null)
+        .map((d) => (
+          <div key={d.id}>{d.render(() => closeDialog(d.id))}</div>
+        ))}
     </>
+  );
+}
+
+/** The dialogs opened from one tab, inside its pane; they stay mounted (and keep their state) while it is hidden. */
+export function TabDialogs({ tabId }: { tabId: string }) {
+  const dialogs = useFeedback((s) => s.dialogs);
+  const closeDialog = useFeedback((s) => s.closeDialog);
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => () => useFeedback.getState().closeTabDialogs(tabId), [tabId]);
+  const mine = dialogs.filter((d) => d.tabId === tabId);
+  return (
+    <div ref={setHost} className={`pane-dialogs${mine.length ? " on" : ""}`}>
+      {host && (
+        <ModalHost.Provider value={host}>
+          {mine.map((d) => (
+            <div key={d.id}>{d.render(() => closeDialog(d.id))}</div>
+          ))}
+        </ModalHost.Provider>
+      )}
+    </div>
   );
 }

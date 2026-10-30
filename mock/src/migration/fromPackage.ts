@@ -35,6 +35,33 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   const name = (m: Map<string, Row>, id: string | undefined) => (id ? (m.get(id)?.name ?? "") : "");
   const out: { entity: MigrationImportEntity; rows: Row[] }[] = [];
 
+  // Team trial round 12: departments, product categories and number lists travel too (one row per list value).
+  out.push({
+    entity: "departments",
+    rows: [...departments.values()]
+      .filter((d) => !d.deleted_at)
+      .map((d) => ({
+        externalId: d.id!,
+        name: d.name!,
+        description: d.description ?? "",
+        status: d.status ?? "active",
+      })),
+  });
+  out.push({
+    entity: "product_categories",
+    rows: [...categories.values()].filter((c) => !c.deleted_at).map((c) => ({ externalId: c.id!, name: c.name! })),
+  });
+  const lists = byId(table("number_lists").filter((l) => !l.deleted_at));
+  out.push({
+    entity: "number_lists",
+    rows: table("number_list_entries")
+      .filter((e) => !e.deleted_at && lists.has(e.number_list_id!))
+      .map((e) => {
+        const l = lists.get(e.number_list_id!)!;
+        return { name: l.name!, type: l.list_type!, value: e.value!, content: e.content ?? "" };
+      }),
+  });
+
   out.push({
     entity: "users",
     rows: users.map((u) => ({

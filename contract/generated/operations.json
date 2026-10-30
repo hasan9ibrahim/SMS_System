@@ -438,7 +438,7 @@
   "operationId": "checkSmtp",
   "tag": "admin",
   "module": "business-companies",
-  "action": null,
+  "action": "edit",
   "readChecked": true,
   "admin": true,
   "alsoOn": []
@@ -912,6 +912,17 @@
   "tag": "trunks",
   "module": "customer-trunks",
   "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/customer-trunks/{id}/password",
+  "operationId": "getCustomerTrunkPassword",
+  "tag": "trunks",
+  "module": "customer-trunks",
+  "action": "edit",
   "readChecked": true,
   "admin": false,
   "alsoOn": []
@@ -6285,6 +6296,17 @@
   "tag": "trunks",
   "module": "vendor-trunks",
   "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/vendor-trunks/{id}/password",
+  "operationId": "getVendorTrunkPassword",
+  "tag": "trunks",
+  "module": "vendor-trunks",
+  "action": "edit",
   "readChecked": true,
   "admin": false,
   "alsoOn": []

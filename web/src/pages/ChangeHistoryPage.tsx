@@ -29,9 +29,8 @@ export function ChangeHistoryPage() {
   const typeLabel = (t: string) =>
     fields.data?.fields.find((f) => f.field === "entityType")?.enumValues?.find((v) => v.value === t)?.label ?? t;
   const mine = new URLSearchParams(useLocation().search).get("mine") === "1";
-  const canUndoOthers = !!me && (me.permissions.includes("*") || me.permissions.includes("undo_others"));
-  const undoable = (c: Change) =>
-    c.undoneById === null && c.changeType !== "undo" && (c.userId === me?.id || canUndoOthers);
+  // The server decides who may undo what (team trial round 12, §13.10).
+  const undoable = (c: Change) => c.canUndo ?? (c.undoneById === null && c.changeType !== "undo");
   return (
     <ListScreen<Change>
       key={`${mine ? "mine" : "all"}-${me?.id ?? 0}`}
@@ -52,7 +51,7 @@ export function ChangeHistoryPage() {
               ? `Already undone by #${c.undoneById}`
               : c.changeType === "undo"
                 ? "An undo cannot be undone here"
-                : "Only your own changes (or with the undo-others permission)",
+                : "Only your own changes; an administrator, a director or the department's manager undoes someone else's",
           onSelect: () => void undo(c.id, false, c),
         },
       ]}
@@ -128,12 +127,15 @@ export function ChangeHistoryPage() {
                       <td>{d.beforeText ?? show(d.before)}</td>
                       <td>
                         {d.afterText ?? show(d.after)}
-                        {d.added?.length || d.removed?.length ? (
+                        {d.added?.length || d.removed?.length || d.changed?.length ? (
                           <div className="ch-delta small">
                             {d.added?.map((x, j) => (
-                              <div key={`a${j}`} className="tone-success">
+                              <div key={`a${j}`} className="tone-good">
                                 + {x}
                               </div>
+                            ))}
+                            {d.changed?.map((x, j) => (
+                              <div key={`c${j}`}>~ {x}</div>
                             ))}
                             {d.removed?.map((x, j) => (
                               <div key={`r${j}`} className="tone-error">

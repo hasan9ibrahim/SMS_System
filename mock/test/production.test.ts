@@ -5,7 +5,7 @@
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { countEvent, type Pending } from "../src/live/feed.js";
+import { countEvent, createFeedSimulator, refreshParties, type Pending } from "../src/live/feed.js";
 import { applySessionEvent } from "../src/jobs/binds.js";
 import { sendCreditAlert } from "../src/jobs/creditAlerts.js";
 import { deliver, platformMailbox, transportOptions } from "../src/jobs/mailer.js";
@@ -138,6 +138,28 @@ test("production refuses to start without its secrets; the platform mailbox from
 });
 
 describe("with the database (backend step 11)", { skip }, () => {
+  test("the live feed keeps every live vendor and picks up trunks made after it started (team trial round 12)", async () => {
+    const pool = db();
+    const sim = await createFeedSimulator();
+    const { rows: live } = await pool.query(
+      `SELECT count(*)::int AS n FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+        WHERE t.deleted_at IS NULL AND t.status = 'active' AND e.deleted_at IS NULL`,
+    );
+    assert.equal(sim.vendors.length, live[0].n, "vendors without traffic last week are on the live screens too");
+    // A trunk the feed has not seen yet (as if made after the start), and one renamed since.
+    const missing = sim.trunks.pop()!;
+    const kept = sim.trunks[0]!;
+    kept.day.attempts = 7;
+    const name = kept.name;
+    kept.name = "OLD_NAME";
+    await refreshParties(sim);
+    const added = sim.trunks.find((t) => t.id === missing.id);
+    assert.ok(added, "the new trunk shows without a restart");
+    assert.equal(added.tps, 0);
+    assert.equal(sim.trunks.find((t) => t.id === kept.id)?.name, name, "renamed trunks show their new name");
+    assert.equal(sim.trunks.find((t) => t.id === kept.id)?.day.attempts, 7, "a kept trunk keeps what it counted");
+  });
+
   test("session events keep the bind status; a stopped trunk stays stopped", async () => {
     const pool = db();
     const { rows } = await pool.query("SELECT id FROM vendor_trunks WHERE deleted_at IS NULL ORDER BY id LIMIT 1");

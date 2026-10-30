@@ -26,11 +26,18 @@ export function tableOf(path: string): string | null {
 export const isAudited = (op: ContractOperation) =>
   op.method !== "GET" && !op.path.endsWith("/query") && !READS.test(op.operationId);
 
+/** Audit rows still being written; the server waits for them when it closes, so none is lost at shutdown. */
+const pending = new Set<Promise<unknown>>();
+
+export async function auditSettled(): Promise<void> {
+  await Promise.allSettled([...pending]);
+}
+
 export function auditCall(op: ContractOperation, request: FastifyRequest, reply: FastifyReply): void {
   if (!isAudited(op) || reply.statusCode === 503) return;
   const params = (request.params ?? {}) as Record<string, unknown>;
   const masterId = params.id ?? null;
-  db()
+  const write = db()
     .query(
       `INSERT INTO audit_log (user_id, ip, module, controller, method, action, table_name, master_id, status, duration_ms)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -50,5 +57,7 @@ export function auditCall(op: ContractOperation, request: FastifyRequest, reply:
     )
     .catch(() => {
       // The audit row is best effort in the mock; the database may be down.
-    });
+    })
+    .finally(() => pending.delete(write));
+  pending.add(write);
 }

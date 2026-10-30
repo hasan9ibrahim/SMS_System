@@ -12,6 +12,7 @@ import { clearVisibilityCache } from "../src/visibility/policy.js";
 import { modeSql, valueSql, hide, maskName, byEnterprise, lit } from "../src/visibility/sql.js";
 import type { Viewer } from "../src/visibility/policy.js";
 import { PRESETS } from "../src/visibility/policy.js";
+import { chRows } from "../src/edr.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -204,10 +205,15 @@ describe("visibility policies (§13.17)", { skip }, () => {
   });
 
   test("rate lines: others' sell rates hidden, margin as bands with a band policy, export withheld", async () => {
+    // A table of the other AM's client that none of this AM's clients shares (tables can serve several trunks).
     const { rows } = await db().query(
       `SELECT x.rate_table_id AS id FROM customer_trunk_rate_tables x JOIN customer_trunks t ON t.id = x.customer_trunk_id
-        WHERE t.enterprise_id = $1 AND t.deleted_at IS NULL LIMIT 1`,
-      [other],
+        WHERE t.enterprise_id = $1 AND t.deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM customer_trunk_rate_tables y JOIN customer_trunks u ON u.id = y.customer_trunk_id
+                           JOIN enterprises e ON e.id = u.enterprise_id
+                          WHERE y.rate_table_id = x.rate_table_id AND e.account_manager_id = $2)
+        ORDER BY x.rate_table_id LIMIT 1`,
+      [other, AM],
     );
     const tableId = Number(rows[0].id);
     const q = {
@@ -351,6 +357,97 @@ describe("visibility policies (§13.17)", { skip }, () => {
       "SELECT count(*)::int AS n FROM audit_log WHERE table_name IN ('visibility_grants', 'visibility_policies', 'visibility_assignments') AND at > now() - interval '5 minutes'",
     );
     assert.ok(au[0].n >= 3);
+  });
+
+  test("an enterprise handed to the account manager shows under its name at once (team trial round 12)", async () => {
+    // The viewer is cached: a first look as the AM primes it.
+    const masked = await ok("getEnterprise", call("GET", `/enterprises/${other}`, undefined, AM));
+    assert.match(masked.name, /#\d+$/);
+    const { rows } = await db().query("SELECT name, account_manager_id FROM enterprises WHERE id = $1", [other]);
+    // The handover writes the AM history, which loading the enterprise applies again: both are put back.
+    const { rows: history } = await db().query("SELECT id, ends_at FROM enterprise_am_history WHERE enterprise_id = $1", [
+      other,
+    ]);
+    try {
+      await ok(
+        "handOverEnterprise",
+        call("POST", `/enterprises/${other}/handover`, { userId: AM, note: "visibility test", notify: false }),
+      );
+      // No waiting for the cache to expire.
+      const seen = await ok("getEnterprise", call("GET", `/enterprises/${other}`, undefined, AM));
+      assert.equal(seen.name, rows[0].name);
+    } finally {
+      await db().query("DELETE FROM enterprise_am_history WHERE enterprise_id = $1 AND NOT (id = ANY($2))", [
+        other,
+        history.map((h) => h.id),
+      ]);
+      for (const h of history)
+        await db().query("UPDATE enterprise_am_history SET ends_at = $2 WHERE id = $1", [h.id, h.ends_at]);
+      await db().query("UPDATE enterprises SET account_manager_id = $2 WHERE id = $1", [other, rows[0].account_manager_id]);
+      clearVisibilityCache();
+    }
+  });
+
+  test("EDRs: others masked and not found by name, their money and IPs withheld; downloads only the AM's own", async (t) => {
+    // Security audit (team trial round 12): EDR Search, Failed EDR Search and EDR downloads follow the policy.
+    const latest = await chRows<{ t: string }>("SELECT toString(max(start_time)) AS t FROM edr");
+    if (!latest?.[0]?.t || latest[0].t.startsWith("1970")) return t.skip("EDR store not available");
+    const to = new Date(`${latest[0].t.replace(" ", "T")}Z`);
+    const from = new Date(to.getTime() - 6 * 3_600_000);
+    const period = { field: "startTime", op: "between", values: [from.toISOString(), to.toISOString()] };
+    const query = (extra: object[] = []) => ({ filter: { logic: "and", conditions: [period, ...extra] }, limit: 300 });
+    const { rows: o } = await db().query(
+      "SELECT id FROM enterprises WHERE account_manager_id = $1 AND deleted_at IS NULL",
+      [AM],
+    );
+    const own = new Set(o.map((r) => Number(r.id)));
+
+    const seen = await list("edrs", "queryEdrs", query());
+    const all = await list("edrs", "queryEdrs", query(), null);
+    assert.ok(seen.rows.length > 0 && all.rows.length > 0);
+    type E = Record<string, unknown> & { customerEnterpriseId: number; vendorEnterpriseId: number };
+    for (const r of seen.rows as E[]) {
+      if (own.has(r.customerEnterpriseId)) assert.equal(typeof r.customerRate, "number");
+      else {
+        assert.equal(r.customerRate, null);
+        assert.equal(r.revenue, null);
+        assert.equal(r.customerIp, null);
+        assert.match(String(r.customerEnterprise), /#\d+$/);
+      }
+      if (r.vendorEnterpriseId && !own.has(r.vendorEnterpriseId)) assert.equal(r.vendorIp, null);
+    }
+    // A withheld value matches no filter: only own clients' messages have a sell rate to compare.
+    const rated = await list("edrs", "queryEdrs", query([{ field: "customerRate", op: "gte", value: 0 }]));
+    assert.ok((rated.rows as E[]).every((r) => own.has(r.customerEnterpriseId)));
+    // Another AM's client cannot be found by its name, though it is in the period.
+    const theirs = (all.rows as E[]).find((r) => r.customerEnterpriseId && !own.has(r.customerEnterpriseId));
+    if (theirs) {
+      const named = [{ field: "customerEnterprise", op: "like", value: String(theirs.customerEnterprise) }];
+      const found = await list("edrs", "queryEdrs", query(named));
+      assert.ok(!(found.rows as E[]).some((r) => r.customerEnterpriseId === theirs.customerEnterpriseId));
+      const searched = await list("edrs", "queryEdrs", { ...query(), search: String(theirs.customerEnterprise) });
+      assert.ok(!(searched.rows as E[]).some((r) => r.customerEnterpriseId === theirs.customerEnterpriseId));
+      assert.ok((await list("edrs", "queryEdrs", query(named), null)).rows.length > 0);
+    }
+
+    // Someone else's download: not listed for the AM, not opened, not cancelled.
+    const d = await ok(
+      "requestEdrDownload",
+      call("POST", "/edr-downloads", {
+        kind: "edr",
+        query: { filter: { logic: "and", conditions: [period] } },
+        fileType: "csv",
+        templateId: null,
+        columns: ["startTime", "customerEnterprise", "customerRate"],
+      }),
+      201,
+    );
+    cleanup.push(() => call("POST", `/edr-downloads/${d.id}/cancel`, {}));
+    const mineOnly = await list("edr-downloads", "queryEdrDownloads", {});
+    assert.ok(!mineOnly.rows.some((x: { id: number }) => x.id === d.id));
+    assert.ok((await list("edr-downloads", "queryEdrDownloads", {}, null)).rows.some((x: { id: number }) => x.id === d.id));
+    await ok("downloadEdrFile", call("GET", `/edr-downloads/${d.id}/file`, undefined, AM), 403);
+    await ok("cancelEdrDownload", call("POST", `/edr-downloads/${d.id}/cancel`, {}, AM), 403);
   });
 
   test("removing the user's assignment falls back to the next one", async () => {

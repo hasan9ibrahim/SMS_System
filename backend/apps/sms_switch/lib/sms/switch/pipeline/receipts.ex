@@ -232,7 +232,12 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
   defp time_out(message_id, rec) do
     vt = rec.data.vendor_trunk_id
-    status = (Config.ready?() && (Config.vendor_trunk(vt) || %{})[:dlr_timeout_stat]) || "UNKNOWN"
+
+    # The status the message got when it was sent (per destination, team trial round 12); the trunk's for older ones.
+    status =
+      rec.data[:timeout_stat] ||
+        (Config.ready?() && (Config.vendor_trunk(vt) || %{})[:dlr_timeout_stat]) || "UNKNOWN"
+
     now = System.os_time(:millisecond)
 
     waiting = for n <- 1..rec.data.parts, not Map.has_key?(rec.finals, n), do: n
@@ -343,7 +348,8 @@ defmodule Sms.Switch.Pipeline.Receipts do
   # After the vendor trunk's DLR timeout (S-5.10): recorded as late.
   defp late?(data, receipt) do
     timeout_s =
-      (Config.ready?() && (Config.vendor_trunk(receipt.vendor_trunk_id) || %{})[:dlr_timeout_s]) ||
+      data[:timeout_s] ||
+        (Config.ready?() && (Config.vendor_trunk(receipt.vendor_trunk_id) || %{})[:dlr_timeout_s]) ||
         nil
 
     is_integer(timeout_s) and is_integer(data[:sent_at]) and

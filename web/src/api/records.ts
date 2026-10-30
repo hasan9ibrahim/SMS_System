@@ -240,6 +240,13 @@ export function useSaveTrunk(kind: TrunkKind) {
   });
 }
 
+/** A saved trunk's password, on request (the form's eye and copy buttons, team trial round 12). */
+export const fetchTrunkPassword = (kind: TrunkKind, id: number): Promise<string> =>
+  (kind === "customer"
+    ? unwrap(api.GET("/customer-trunks/{id}/password", { params: { path: { id } } }))
+    : unwrap(api.GET("/vendor-trunks/{id}/password", { params: { path: { id } } }))
+  ).then((r) => r.password);
+
 export function useTrunkRules(kind: TrunkKind, id: number) {
   return useQuery<TrunkRules>({
     queryKey: ["record", kind, id, "rules"],

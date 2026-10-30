@@ -1,7 +1,8 @@
 // Readable change history (§13.10, team trial round 1: "more detail on what the user changed so the
 // admin has an idea"). Each change gets the names of the records it touched and a one-line summary;
 // each field gets a label and plain before / after text, with ids of trunks, lists, tables and the
-// like shown by name and list fields split into what was added and removed.
+// like shown by name and list fields split into what was added, removed and changed. Times read as
+// "2026-10-30 16:49 UTC" and nested fields as "Billing › Customer › Credit limit" (team trial round 12).
 import type pg from "pg";
 import type { Change } from "@sms/contract";
 import { RECORD_TYPE_LABELS } from "../lists/fields.js";
@@ -51,6 +52,8 @@ const REF_TABLE: Record<string, string> = {
   categoryIds: "product_category",
   vendorCategoryIds: "product_category",
   accountManagerId: "user",
+  userId: "user",
+  managerId: "user",
   departmentId: "department",
   routeRuleId: "route_rule",
 };
@@ -71,15 +74,32 @@ const LABELS: Record<string, string> = {
   systemId: "System ID",
   iso: "ISO",
   archived: "Archived (deleted)",
+  // Periods (account managers, §13.30): "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC".
+  startsAt: "From",
+  endsAt: "Until",
 };
 
-export const fieldLabel = (field: string): string =>
-  LABELS[field] ??
-  field
+const partLabel = (part: string): string =>
+  LABELS[part] ??
+  part
     .replace(/Ids?$/, (m) => (m === "Ids" ? "s" : ""))
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .toLowerCase()
     .replace(/^./, (c) => c.toUpperCase());
+
+/** "routeType" → "Route type"; a nested field "billing.customer.creditLimit" → "Billing › Customer › Credit limit". */
+export const fieldLabel = (field: string): string =>
+  LABELS[field] ?? (field.includes(".") ? field.split(".").map(partLabel).join(" › ") : partLabel(field));
+
+const ISO_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+/** "2026-10-30T16:49:56.332Z" → "2026-10-30 16:49 UTC"; midnight UTC → the date alone. */
+export function showTime(v: string): string {
+  const t = new Date(v);
+  if (Number.isNaN(t.getTime())) return v;
+  const iso = t.toISOString();
+  return iso.slice(11, 19) === "00:00:00" ? iso.slice(0, 10) : `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
 
 /** Names of referenced records, by record type then id. */
 export type Names = Map<string, Map<number, string>>;
@@ -99,8 +119,14 @@ export function showValue(v: unknown, names: Names, key = ""): string {
   }
   if (ref && (typeof v === "number" || typeof v === "string")) return named(names, ref, v);
   if (typeof v === "boolean") return v ? "yes" : "no";
+  if (typeof v === "string" && ISO_TIME.test(v)) return showTime(v);
   if (typeof v === "object") {
     const o = v as Record<string, unknown>;
+    // An account manager period (§13.30): "Jana Okafor from 2026-10-08 until 2026-10-30 16:49 UTC (Handover)".
+    if ("userId" in o && "startsAt" in o)
+      return `${itemName(o, names)}${o.endsAt ? ` until ${showValue(o.endsAt, names)}` : ""}${
+        o.note ? ` (${String(o.note)})` : ""
+      }`;
     // A rate line (§13.12) reads as "20801 0.0450 from … until …".
     if ("rate" in o && "mccmnc" in o)
       return `${String(o.mccmnc)}${o.senderId ? `/${String(o.senderId)}` : ""} ${String(o.rate)}${
@@ -130,12 +156,43 @@ export function showValue(v: unknown, names: Names, key = ""): string {
   return String(v);
 }
 
+/** What makes two list items the same item, so an edited one reads as changed rather than removed and added. */
+function identity(x: unknown): string | null {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+  const o = x as Record<string, unknown>;
+  if (o.id !== undefined && o.id !== null) return `id:${String(o.id)}`;
+  if ("userId" in o && "startsAt" in o) return `am:${String(o.userId)}:${String(o.startsAt)}`;
+  if ("vendorTrunkId" in o)
+    return `vt:${String(o.vendorTrunkId)}:${o.isBackup ? `b${String(o.backupForVendorTrunkId ?? "")}` : ""}`;
+  return null;
+}
+
+/** The short name of a list item: the user and start of a period, the vendor, or its name or id. */
+function itemName(o: Record<string, unknown>, names: Names): string {
+  if ("userId" in o && "startsAt" in o) return `${named(names, "user", o.userId)} from ${showValue(o.startsAt, names)}`;
+  if ("vendorTrunkId" in o) return named(names, "vendor_trunk", o.vendorTrunkId);
+  for (const k of ["name", "label", "email", "mccmnc"]) if (typeof o[k] === "string" && o[k]) return String(o[k]);
+  return `#${String(o.id ?? "?")}`;
+}
+
+/** "Jana Okafor from 2026-10-08: ends at — → 2026-10-30 16:49 UTC". */
+function changedItem(before: Record<string, unknown>, after: Record<string, unknown>, names: Names): string {
+  const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+    (k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null),
+  );
+  const what = keys.map(
+    (k) => `${fieldLabel(k).toLowerCase()} ${showValue(before[k], names, k)} → ${showValue(after[k], names, k)}`,
+  );
+  return `${itemName(after, names)}: ${what.join(", ")}`;
+}
+
 export interface FieldText {
   label: string;
   beforeText: string;
   afterText: string;
   added?: string[];
   removed?: string[];
+  changed?: string[];
 }
 
 /** A field as text; list fields also say what was added and removed. */
@@ -151,8 +208,21 @@ export function describeField(field: string, before: unknown, after: unknown, na
     const bk = new Set(b.map(([k]) => k));
     const ak = new Set(a.map(([k]) => k));
     const one = (x: unknown) => showValue(x, names, typeof x === "object" ? "" : field);
-    out.added = a.filter(([k]) => !bk.has(k)).map(([, x]) => one(x));
-    out.removed = b.filter(([k]) => !ak.has(k)).map(([, x]) => one(x));
+    const added = a.filter(([k]) => !bk.has(k)).map(([, x]) => x);
+    const removed = b.filter(([k]) => !ak.has(k)).map(([, x]) => x);
+    // An item on both sides under the same identity was edited, not replaced.
+    const changed: string[] = [];
+    for (const r of [...removed]) {
+      const id = identity(r);
+      const i = id === null ? -1 : added.findIndex((x) => identity(x) === id);
+      if (i < 0) continue;
+      changed.push(changedItem(r as Record<string, unknown>, added[i] as Record<string, unknown>, names));
+      added.splice(i, 1);
+      removed.splice(removed.indexOf(r), 1);
+    }
+    out.added = added.map(one);
+    out.removed = removed.map(one);
+    if (changed.length) out.changed = changed;
   }
   return out;
 }
@@ -197,7 +267,9 @@ export function summarize(c: Change, entityNames: string[], fields: FieldText[])
       f.label === LABELS["*"]
         ? wholePart(f)
         : f.added || f.removed
-          ? `${f.label}${f.added?.length ? ` +${f.added.join(", +")}` : ""}${f.removed?.length ? ` −${f.removed.join(", −")}` : ""}`
+          ? `${f.label}${f.added?.length ? ` +${f.added.join(", +")}` : ""}${f.removed?.length ? ` −${f.removed.join(", −")}` : ""}${
+              f.changed?.length ? ` ~${f.changed.join(", ~")}` : ""
+            }`
           : `${f.label} ${f.beforeText} → ${f.afterText}`,
     );
   const shown = real.length ? real.length : parts.length ? whole.length : 0;

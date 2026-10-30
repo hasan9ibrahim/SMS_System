@@ -262,7 +262,7 @@ function FilesPart({ record }: { record: BusinessCompanyRecord }) {
         </tbody>
       </table>
       <details className="format-help" open>
-        <summary>Format File Variables</summary>
+        <summary>Format file and file name variables</summary>
         <div className="format-vars">
           {(vars.data?.formats ?? []).map((f) => (
             <div key={f.kind}>
@@ -270,7 +270,8 @@ function FilesPart({ record }: { record: BusinessCompanyRecord }) {
               <ul>
                 {f.variables.map((v) => (
                   <li key={v.key}>
-                    <code>{`{${v.key}}`}</code> <span className="muted">{v.description}</span>
+                    <code>{/^[[{]/.test(v.key) ? v.key : `{${v.key}}`}</code>{" "}
+                    <span className="muted">{v.description}</span>
                   </li>
                 ))}
               </ul>
@@ -381,7 +382,24 @@ function CompanyDialog({ record, done }: { record: BusinessCompanyRecord | null;
               path="customerRateFileName"
               label="Customer Rate File Name"
               maxLength={200}
-              hint="Variables {company} {enterprise} {trunk} {date}"
+              placeholder="Rates_[Trunk]_[Date]"
+              hint="e.g. [EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]; all variables in Format files"
+            />
+            <TextField
+              form={form}
+              path="soaFileName"
+              label="SOA File Name"
+              maxLength={200}
+              placeholder="SOA_[FromDate]_[ToDate]"
+              hint="e.g. SOA_[EnterpriseName]_[FromDate]_[ToDate]"
+            />
+            <TextField
+              form={form}
+              path="invoiceFileName"
+              label="Invoice File Name"
+              maxLength={200}
+              placeholder="[InvoiceRefNumber]"
+              hint="e.g. [InvoiceRefNumber]_[EnterpriseName]_[InvoiceDate]"
             />
             <TextArea form={form} path="description" label="Description" rows={2} />
           </div>

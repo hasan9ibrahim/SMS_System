@@ -6316,6 +6316,10 @@
      {
       "value": "http",
       "label": "HTTP"
+     },
+     {
+      "value": "service",
+      "label": "Service"
      }
     ],
     "operators": [
@@ -23894,6 +23898,7 @@
     "label": "Name",
     "type": "text",
     "defaultOperator": "like",
+    "matchAnywhere": true,
     "operators": [
      "like",
      "not_like",

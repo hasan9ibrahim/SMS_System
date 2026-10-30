@@ -8,6 +8,7 @@ import { TabProvider } from "./tabContext";
 import { useTabs, type Tab } from "./tabs";
 import { SplitPaneBar } from "./SplitPaneBar";
 import { useTabReloads } from "./reload";
+import { TabDialogs } from "../ui/feedback";
 
 class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   override state = { error: null as Error | null };
@@ -70,6 +71,7 @@ export const TabPane = memo(function TabPane({
     <div
       className={`pane${shown ? "" : " hidden"}${focused ? " focused" : ""}${side ? " pane-split" : ""}`}
       role="tabpanel"
+      data-tab-id={tab.id}
       aria-label={tab.title}
       hidden={!shown}
       style={
@@ -90,6 +92,8 @@ export const TabPane = memo(function TabPane({
             <PageRoutes path={tab.path} />
           </AccessGuard>
         </TabErrorBoundary>
+        {/* Its own dialogs, over this tab only (team trial round 12). */}
+        <TabDialogs tabId={tab.id} />
       </TabProvider>
     </div>
   );

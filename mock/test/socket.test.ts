@@ -151,3 +151,11 @@ test("live:dashboard: join params, then summary, movers and tops; history on liv
   );
   ws.close();
 });
+
+test("a socket opened from another site is refused (security audit, team trial round 12)", async () => {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/socket/websocket?vsn=2.0.0`, {
+    headers: { origin: "https://evil.example.test" },
+  });
+  const code = await new Promise<number>((resolve) => ws.once("close", (c) => resolve(c)));
+  assert.equal(code, 4403);
+});

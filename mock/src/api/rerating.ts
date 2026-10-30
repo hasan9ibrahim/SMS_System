@@ -16,6 +16,7 @@ import type {
 } from "@sms/contract";
 import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
+import { lit } from "../lists/chEngine.js";
 import { reratingList } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { recordChange, type DiffEntry } from "./records.js";
@@ -120,7 +121,7 @@ export async function computeRerating(db: Db, input: ReratingInput): Promise<Rer
     `submit_time < toDateTime64('${input.endDate} 00:00:00', 3) + INTERVAL 1 DAY`,
     // Exact codes: a 3-digit code is the All networks entry, not the whole country (team trial round 1).
     ...(codes.length ? [`${codeCol} IN (${list(codes)})`] : []),
-    ...(input.senderId ? [`src_addr = '${input.senderId.replace(/'/g, "")}'`] : []),
+    ...(input.senderId ? [`src_addr = ${lit(input.senderId)}`] : []),
   ];
   const groups = await chRows<{
     ent: number;

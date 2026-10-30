@@ -4,15 +4,18 @@ import { operations, type ContractOperation } from "./contract.js";
 import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
 import { registerSocket } from "./live/socket.js";
-import { auditCall } from "./api/audit.js";
+import { auditCall, auditSettled } from "./api/audit.js";
 import { GATE_OPEN, isBlocked } from "./admin/gate.js";
 import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
-import { restricts } from "./visibility/policy.js";
+import { clearVisibilityCache, restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
 import { db } from "./db.js";
-import { DEFAULT_USER_ID, requestUser, runAsRequestUser } from "./auth/user.js";
+import { DEFAULT_USER_ID, forwardedOperation, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
+import { clearRoutingCostCache } from "./api/rateLookup.js";
+import { clearRouteMaps } from "./api/routeMap.js";
+import { invalidateLiveRoutes } from "./live/routing.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
 const PUBLIC_OPS = new Set([
@@ -25,6 +28,23 @@ const PUBLIC_OPS = new Set([
   "checkPasswordSetup",
   "completePasswordSetup",
 ]);
+
+
+/**
+ * Writes that can move routes, costs or rates (team trial round 12: Rate lookup, Route rules costs and Route map kept
+ * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes.
+ */
+const ROUTING_WRITES =
+  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr)/;
+
+const clearRouteCaches = () => {
+  clearRoutingCostCache();
+  clearRouteMaps();
+  invalidateLiveRoutes();
+};
+
+/** Writes that can change who sees which enterprise: enterprises, users, hand-overs, undo, imports (not reads). */
+const VISIBILITY_WRITES = /^(?!query|get|list|export|download|check|preview|simulate|test).*(Enterprise(?!Doc)|User|handOver|undo|redo|Migration|Import|Cleanup)/;
 
 export const API_PREFIX = "/api/v1";
 
@@ -124,6 +144,17 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
             // The signed-in user: forwarded by the Elixir API, from the session cookie, or the default user
             // (src/auth/user.ts).
             const user = await requestUser(request, db);
+            // Defence in depth (security audit, team trial round 12): a call the API forwards names the operation
+            // it checked the user's access for; in production it must be this route's (the public ones excepted).
+            const fwd = forwardedOperation(request);
+            if (
+              fwd &&
+              !PUBLIC_OPS.has(op.operationId) &&
+              (fwd.op ? fwd.op !== op.operationId : production)
+            )
+              return sendProblem(reply, 403, "This call was not checked for this operation", {
+                code: "operation_mismatch",
+              });
             if (!user && !PUBLIC_OPS.has(op.operationId))
               return sendProblem(reply, 401, "Sign in to continue", { code: "sign_in_required" });
             const who = user ?? { userId: DEFAULT_USER_ID, sessionId: null };
@@ -156,10 +187,23 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   });
 
   // Audit Trail (§11): every call that changes something, after its answer is sent.
+  // Who sees which enterprise (§13.17) follows each enterprise's account manager and each user's manager: a write that
+  // can change them forgets the cached viewers before it answers, so an account manager's new enterprise shows under
+  // its name at once, not as "Enterprise #id" until the cache expires (team trial round 12).
+  app.addHook("onSend", async (request, reply, payload) => {
+    const op = (request.routeOptions.config as { op?: ContractOperation } | undefined)?.op;
+    if (op && request.method !== "GET" && reply.statusCode < 400) {
+      if (VISIBILITY_WRITES.test(op.operationId)) clearVisibilityCache();
+      if (ROUTING_WRITES.test(op.operationId)) clearRouteCaches();
+    }
+    return payload;
+  });
+
   app.addHook("onResponse", async (request, reply) => {
     const op = (request.routeOptions.config as { op?: ContractOperation }).op;
     if (op && !isPortalOperation(op.operationId)) auditCall(op, request, reply);
   });
+  app.addHook("onClose", () => auditSettled());
 
   app.setNotFoundHandler((request, reply) =>
     sendProblem(reply, 404, `No contract operation for ${request.method} ${request.url}`),

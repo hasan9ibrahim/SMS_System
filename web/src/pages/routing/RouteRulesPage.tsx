@@ -204,6 +204,8 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const create = useSaveRouteRule();
   const discard = useDiscardRouteRule();
   const started = useRef(false);
+  const idRef = useRef<number | null>(null);
+  const settled = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -215,9 +217,20 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
           ? toInput(from, { name: copyName(from.name), status: "inactive" })
           : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
       })
-      .then((r) => setId(r.record.id))
+      .then((r) => {
+        idRef.current = r.record.id;
+        setId(r.record.id);
+      })
       .catch((e) => setCreateError(problemText(e)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The window can go without × or Save, now that it lives in its tab (team trial round 12): its tab closed, or
+  // the page reloaded. The draft goes with it, as × would.
+  useEffect(
+    () => () => {
+      if (!settled.current && idRef.current !== null) void discard.mutateAsync(idRef.current).catch(() => undefined);
+    },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const rule = useRouteRule(id);
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +242,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const [busy, setBusy] = useState(false);
   const close = async () => {
     setBusy(true);
+    settled.current = true;
     if (id !== null) await discard.mutateAsync(id).catch((e) => toast({ tone: "error", message: problemText(e) }));
     done(null);
   };
@@ -245,6 +259,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
     const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive" });
     setBusy(false);
     if (err) return setError(err);
+    settled.current = true;
     done(id);
   };
   return (
@@ -419,7 +434,7 @@ function VendorsCell({ row, onMore }: { row: RouteRuleRow; onMore: () => void })
             setOpen((v) => !v);
           }}
         >
-          {row.vendorsLabel}
+          <VendorLevels label={row.vendorsLabel} />
         </button>
       </HoverList>
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} className="split-pop">
@@ -433,6 +448,34 @@ function VendorsCell({ row, onMore }: { row: RouteRuleRow; onMore: () => void })
         />
       </Popover>
     </>
+  );
+}
+
+/**
+ * The vendors label, one line per level ("L1 … | L2 …" from the server; team trial round 12: level 1 only before).
+ * Two levels show; more add a muted "+N", and pointing at the cell lists every vendor.
+ */
+function VendorLevels({ label }: { label: string }) {
+  const levels = label.split(" | ");
+  if (levels.length === 1) return <>{label}</>;
+  return (
+    <span className="rr-levels">
+      {levels.slice(0, 2).map((l, i) => {
+        const m = /^(L\d+) (.*)$/.exec(l);
+        return (
+          <span key={i} className="rr-level">
+            {m ? (
+              <>
+                <span className="muted">{m[1]}</span> {m[2]}
+              </>
+            ) : (
+              l
+            )}
+            {i === 1 && levels.length > 2 && <span className="muted"> +{levels.length - 2}</span>}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
@@ -567,8 +610,9 @@ export function RouteRulesPage() {
       id: { width: 70, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.id}</strong> },
       name: { width: 200, render: (r: RouteRuleRow) => <span className="strong">{r.name}</span> },
       priority: { width: 80, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.priority}</strong> },
+      // Wide enough for "YYYY-MM-DD HH:MM" in tabular figures; On beside it keeps its filter inside (round 12).
       updatedAt: {
-        width: 140,
+        width: 180,
         render: (r: RouteRuleRow) => <span className="num">{r.updatedAt.slice(0, 16).replace("T", " ")}</span>,
       },
       updatedBy: { width: 120, render: (r: RouteRuleRow) => r.updatedBy ?? <span className="muted">—</span> },
@@ -584,9 +628,9 @@ export function RouteRulesPage() {
         },
       },
       category: { width: 90, render: (r: RouteRuleRow) => <span className="muted">{r.categoryLabel}</span> },
-      customerTrunks: { width: 240, render: (r: RouteRuleRow) => <TrunksCell row={r} /> },
+      customerTrunks: { width: 220, render: (r: RouteRuleRow) => <TrunksCell row={r} /> },
       destination: {
-        width: 220,
+        width: 200,
         render: (r: RouteRuleRow) => <DestinationCell row={r} />,
       },
       vendors: {
@@ -638,7 +682,7 @@ export function RouteRulesPage() {
           ),
       },
       status: {
-        width: 50,
+        width: 72,
         render: (r: RouteRuleRow) => (
           <button
             type="button"

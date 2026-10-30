@@ -37,6 +37,18 @@ function ChoiceFilter({
     if (field.type === "boolean") return onChange({ field: field.field, op: "eq", value: next.has("true") });
     onChange({ field: field.field, op: "in", values: [...next] });
   };
+  // What the boxes show while the list is open (team trial round 12): a ticked box, "Select all" included, unticks on a
+  // second click, down to none ticked. None ticked filters nothing (same as All) until a value is ticked.
+  const [draft, setDraft] = useState<Set<string> | null>(null);
+  const ticked = draft ?? (selected.size === 0 ? new Set(options.map((o) => o.value)) : selected);
+  const set = (next: Set<string>) => {
+    setDraft(next);
+    apply(next);
+  };
+  const close = () => {
+    setOpen(false);
+    setDraft(null);
+  };
   const label =
     selected.size === 0
       ? "All"
@@ -50,20 +62,24 @@ function ChoiceFilter({
         type="button"
         className={`gf-select${selected.size ? " in-use" : ""}`}
         aria-label={`Filter ${field.label}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         <span>{label}</span>
         <Icon name="chevronDown" size={11} />
       </button>
-      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} className="choice-pop">
+      <Popover anchor={ref} open={open} onClose={close} className="choice-pop">
+        {/* The count on top, above the list (team trial round 12). */}
+        <div className="muted small pad-x choice-count">
+          {ticked.size ? `Selected ${ticked.size} of ${options.length}` : "None ticked: showing all"}
+        </div>
         <label className="choice-row strong">
           <input
             type="checkbox"
-            checked={selected.size === 0}
-            onChange={() => {
-              apply(new Set());
-              setOpen(false);
+            checked={ticked.size === options.length}
+            ref={(el) => {
+              if (el) el.indeterminate = ticked.size > 0 && ticked.size < options.length;
             }}
+            onChange={() => set(ticked.size === options.length ? new Set() : new Set(options.map((o) => o.value)))}
           />
           Select all
         </label>
@@ -72,20 +88,17 @@ function ChoiceFilter({
           <label key={o.value} className="choice-row">
             <input
               type="checkbox"
-              checked={selected.size === 0 || selected.has(o.value)}
-              onChange={(e) => {
-                const base = selected.size === 0 ? new Set(options.map((x) => x.value)) : new Set(selected);
-                if (e.target.checked) base.add(o.value);
-                else base.delete(o.value);
-                apply(base);
+              checked={ticked.has(o.value)}
+              onChange={() => {
+                const next = new Set(ticked);
+                if (next.has(o.value)) next.delete(o.value);
+                else next.add(o.value);
+                set(next);
               }}
             />
             {o.label}
           </label>
         ))}
-        <div className="muted small pad-x">
-          Selected {selected.size || options.length} of {options.length}
-        </div>
       </Popover>
     </>
   );

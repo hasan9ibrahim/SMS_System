@@ -6,6 +6,7 @@ import type { LcrProfileCore } from "../lcr/rank.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
+  TranslationTestResult,
   RouteVendorCost,
   RouteVendorCostRequest,
   ArchiveRequest,
@@ -25,10 +26,10 @@ import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { listFields } from "../lists/fields.js";
 import { routeRuleList } from "../lists/defs.js";
-import { compileQuery, runList } from "../lists/engine.js";
+import { exportRows, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
-import { decide, quickMatch, type MessageContext, type VendorOption } from "../routing/evaluate.js";
+import { decide, quickMatch, ROUTABLE_VENDOR_SQL, type MessageContext, type VendorOption } from "../routing/evaluate.js";
 import { archiveGate } from "./enterprises.js";
 import {
   archivedInfo,
@@ -48,6 +49,8 @@ import { ruleTraffic } from "./routeTraffic.js";
 import { skipEgressBlocked } from "./egress.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { csvText } from "../csvSafe.js";
+import { runTrunkRules } from "./translationRules.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Route rule ${id} not found`);
@@ -365,6 +368,13 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     .sort(
       (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup) || (b.sharePct ?? 0) - (a.sharePct ?? 0),
     );
+  // A percentage split: the vendor alone on its level takes 100 % (team trial round 12; its share is not asked).
+  if (out.huntPolicy === "percentage") {
+    const vs = out.vendors as RouteVendor[];
+    out.vendors = vs.map((v) =>
+      !v.isBackup && vs.filter((x) => !x.isBackup && x.level === v.level).length === 1 ? { ...v, sharePct: 100 } : v,
+    );
+  }
   out.whitelists = (out.whitelists as RouteWhitelist[]).map((w) => ({
     vendorTrunkId: w.vendorTrunkId,
     numberListId: w.numberListId ?? null,
@@ -498,6 +508,9 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
     ).rows.map((x) => [Number(x.vendor_trunk_id), x.at]),
   );
   await c.query("DELETE FROM route_rule_vendors WHERE route_rule_id = $1", [id]);
+  // The rule's own row changes too, so every screen that caches the rules by their last change sees it (an undo of
+  // a vendor change showed the old vendors on Rate lookup and Route map; team trial round 12).
+  await c.query("UPDATE route_rules SET updated_at = now() WHERE id = $1", [id]);
   for (const v of vendors)
     await c.query(
       `INSERT INTO route_rule_vendors (route_rule_id, level, vendor_trunk_id, share_pct, is_backup, warmup_count, warmup_reset, warmup_per,
@@ -521,6 +534,7 @@ async function writeVendors(c: pg.PoolClient, id: number, vendors: RouteVendor[]
 
 async function writeWhitelists(c: pg.PoolClient, id: number, lists: RouteWhitelist[]) {
   await c.query("DELETE FROM route_rule_whitelists WHERE route_rule_id = $1", [id]);
+  await c.query("UPDATE route_rules SET updated_at = now() WHERE id = $1", [id]);
   for (const w of lists)
     await c.query(
       "INSERT INTO route_rule_whitelists (route_rule_id, vendor_trunk_id, number_list_id, numbers) VALUES ($1, $2, $3, $4)",
@@ -577,8 +591,7 @@ export function queryRouteRules(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 
@@ -587,8 +600,12 @@ export function exportRouteRules(request: FastifyRequest, reply: FastifyReply) {
   const errors = checkListQuery(query, listFields.route_rules);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    const q = compileQuery(routeRuleList as never, { ...query, limit: 100_000, cursor: null } as ListQuery);
-    const { rows } = await pool.query(q.sql, q.values);
+    // As the viewer sees the list: masked trunk and vendor names, withheld margins (§13.17, security audit).
+    const rows = (await exportRows(pool, routeRuleList, {
+      ...query,
+      limit: 100_000,
+      cursor: null,
+    } as ListQuery)) as unknown as Record<string, unknown>[];
     const cols: [string, string][] = [
       ["ID", "id"],
       ["Rule", "name"],
@@ -606,10 +623,7 @@ export function exportRouteRules(request: FastifyRequest, reply: FastifyReply) {
       ["Start (UTC)", "startsAt"],
       ["Stop (UTC)", "stopsAt"],
     ];
-    const lines = rows.slice(0, q.limit).map((r) => {
-      const row = routeRuleList.mapRow(r) as unknown as Record<string, unknown>;
-      return cols.map(([, k]) => csvCell(row[k])).join(",");
-    });
+    const lines = rows.map((row) => cols.map(([, k]) => csvCell(row[k])).join(","));
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", 'attachment; filename="route_rules.csv"')
@@ -1084,7 +1098,7 @@ export async function vendorOptions(
           WHERE rt.vendor_trunk_id = vt.id AND l.mccmnc = ANY($1) AND l.sender_id IS NULL AND NOT l.is_blocked
             AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
           ORDER BY length(l.mccmnc) DESC LIMIT 1) c ON true
-      WHERE vt.deleted_at IS NULL AND vt.status = 'active' AND ($2::bigint[] IS NULL OR vt.id = ANY($2))`,
+      WHERE vt.deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL} AND ($2::bigint[] IS NULL OR vt.id = ANY($2))`,
     [mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : [], onlyIds],
   );
   return new Map(
@@ -1119,14 +1133,36 @@ async function checkTestInput(db: Db, input: RouteTestRequest): Promise<FieldErr
   return rows[0] ? [] : [{ path: "/customerTrunkId", message: "unknown customer trunk" }];
 }
 
+/**
+ * The customer trunk's ingress translation, run first as the switch does (intake: translation, HLR, rate, route): the
+ * route rules see the translated sender, receiver and content (team trial round 12: a content change by an ingress
+ * rule did not show in the simulator).
+ */
+async function ingressOf(
+  pool: pg.Pool,
+  input: RouteTestRequest,
+): Promise<{ input: RouteTestRequest; ingress: TranslationTestResult | null }> {
+  if (!input.customerTrunkId) return { input, ingress: null };
+  const r = await runTrunkRules(pool, "customer", input.customerTrunkId, {
+    sender: input.sender ?? "",
+    receiver: input.receiver,
+    text: input.content ?? "",
+  });
+  if (!r || !r.steps.length) return { input, ingress: null };
+  const ingress: TranslationTestResult = { before: r.before, after: r.after, blocked: r.blocked, steps: r.steps };
+  const receiver = /^[0-9]{5,15}$/.test(r.after.receiver) ? r.after.receiver : input.receiver;
+  return { input: { ...input, sender: r.after.sender, receiver, content: r.after.text }, ingress };
+}
+
 export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
-  const input = request.body as RouteTestRequest;
+  const raw = request.body as RouteTestRequest;
   return withDb(reply, async (pool): Promise<RouteDecision | FastifyReply> => {
     const rule = await loadRule(pool, id);
     if (!rule) return notFound(reply, id);
-    const errors = await checkTestInput(pool, input);
+    const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
+    const { input, ingress } = await ingressOf(pool, raw);
     const m = await messageContext(pool, input, listIdsOf([rule]));
     const dynamic = rule.routeType === "dynamic" || (rule.routeType === "qbr" && rule.vendors.length === 0);
     const ids = dynamic
@@ -1143,7 +1179,7 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
       (mm) => decide(withProfile, mm, options),
       (d) => d.vendor,
     );
-    return { ...result, egressSkipped: skipped };
+    return { ...result, egressSkipped: skipped, ingress };
   });
 }
 
@@ -1224,10 +1260,11 @@ export function routeThrough(
 }
 
 export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
-  const input = request.body as RouteTestRequest;
+  const raw = request.body as RouteTestRequest;
   return withDb(reply, async (pool) => {
-    const errors = await checkTestInput(pool, input);
+    const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
+    const { input, ingress } = await ingressOf(pool, raw);
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(pool, input, listIdsOf(rules));
     const options = await vendorOptions(pool, m.mccmnc, null);
@@ -1238,7 +1275,7 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
       (mm) => routeThrough(rules, mm, options),
       (r) => r.decision?.vendor,
     );
-    return { ...result, egressSkipped: skipped };
+    return { ...result, egressSkipped: skipped, ingress };
   });
 }
 
@@ -1254,17 +1291,62 @@ const testMessage = (input: RouteTestRequest) => ({
  * lines of the trunk's buy table over the destinations the rule matches; one figure when flat, else min and max,
  * in the table's currency and in EUR (the base) at the latest exchange rates.
  */
+/**
+ * The costs for a list of destinations as routing finds them (team trial round 12): each code's own line, else its
+ * country's ("All networks") line, which the column used to leave out.
+ */
+async function listedCosts(pool: pg.Pool, vendorTrunkIds: number[], codes: string[]): Promise<RouteVendorCost[]> {
+  const { rows } = await pool.query(
+    `WITH picked AS (
+       SELECT DISTINCT ON (rt.vendor_trunk_id, c.code) rt.vendor_trunk_id AS id, rt.currency, l.rate,
+              l.rate / cl.rate_per_eur AS eur, c.code
+         FROM unnest($2::text[]) AS c(code)
+         JOIN rate_tables rt ON rt.kind = 'vendor' AND rt.deleted_at IS NULL AND rt.vendor_trunk_id = ANY($1::bigint[])
+         JOIN rate_lines l ON l.rate_table_id = rt.id AND l.sender_id IS NULL AND NOT l.is_blocked
+              AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
+              AND l.mccmnc IN (c.code, left(c.code, 3))
+         LEFT JOIN currency_latest cl ON cl.iso = l.currency
+        ORDER BY rt.vendor_trunk_id, c.code, (l.mccmnc = c.code) DESC)
+     SELECT id, min(currency) AS currency, min(rate) AS min, max(rate) AS max, min(eur) AS min_eur, max(eur) AS max_eur,
+            count(*)::int AS destinations
+       FROM picked GROUP BY id`,
+    [vendorTrunkIds, codes],
+  );
+  const { rows: tables } = await pool.query(
+    "SELECT vendor_trunk_id AS id, min(currency) AS currency FROM rate_tables WHERE kind = 'vendor' AND deleted_at IS NULL AND vendor_trunk_id = ANY($1::bigint[]) GROUP BY 1",
+    [vendorTrunkIds],
+  );
+  const byId = new Map(rows.map((r) => [Number(r.id), r]));
+  const ccy = new Map(tables.map((r) => [Number(r.id), String(r.currency).trim()]));
+  const num = (v: unknown, d: number) => (v === null || v === undefined ? null : Number(Number(v).toFixed(d)));
+  return vendorTrunkIds.map((id) => {
+    const r = byId.get(id);
+    return {
+      vendorTrunkId: id,
+      currency: r ? String(r.currency).trim() : (ccy.get(id) ?? null),
+      min: num(r?.min, 6),
+      max: num(r?.max, 6),
+      minEur: num(r?.min_eur, 6),
+      maxEur: num(r?.max_eur, 6),
+      destinations: r ? Number(r.destinations) : 0,
+    };
+  });
+}
+
 export function routeVendorCosts(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as RouteVendorCostRequest;
   return withDb(reply, async (pool): Promise<RouteVendorCost[]> => {
     const params: unknown[] = [b.vendorTrunkIds];
     let where = "";
-    if (b.mccmncPattern) {
+    // The list wins over the pattern when both are set, as in routing (R1, team trial round 12).
+    const listed = b.mccmncMode !== "all" && (b.mccmncs ?? []).length > 0;
+    if (listed && b.mccmncMode === "inclusive") return listedCosts(pool, b.vendorTrunkIds, b.mccmncs);
+    if (listed) {
+      params.push(b.mccmncs);
+      where = `AND NOT (l.mccmnc = ANY($${params.length}::text[]))`;
+    } else if (b.mccmncPattern) {
       params.push(b.mccmncPattern);
       where = `AND l.mccmnc ~* $${params.length}`;
-    } else if (b.mccmncMode !== "all") {
-      params.push(b.mccmncs);
-      where = `AND ${b.mccmncMode === "exclusive" ? "NOT " : ""}(l.mccmnc = ANY($${params.length}::text[]))`;
     }
     const { rows } = await pool.query(
       `SELECT rt.vendor_trunk_id AS id, rt.currency, min(l.rate) AS min, max(l.rate) AS max,

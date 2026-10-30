@@ -5,7 +5,7 @@
 // also sends it (simulated outcome in this phase). Team trial round 1: a vendor trunk can be tested
 // directly (instead of Service Type Routing), several receivers run at once, and the data coding and
 // TON / NPI follow the text and the addresses until changed by hand.
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouteRule } from "../../api/routing";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
 import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
@@ -15,10 +15,9 @@ import { PageHeader } from "../../page/PageHeader";
 import { ListLookup } from "../../records/parts";
 import { usePageStatus } from "../../shell/tabContext";
 import { toast } from "../../ui/feedback";
-import { Button, StatusDot } from "../../ui/primitives";
+import { Button, Popover, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
-import { DestinationPick } from "../routing/pickers";
-import { useDestinationTree, type TreeCountry } from "../rates/DestinationTree";
+import { codeChips, DestinationTree, useDestinationTree, type TreeCountry } from "../rates/DestinationTree";
 import { Icon } from "../../ui/Icon";
 import { messageEncoding, msgStatusTone, needsUcs2 } from "./monitorModel";
 
@@ -414,18 +413,65 @@ function simDests(tree: TreeCountry[], picked: string[]): string[] {
   return out;
 }
 
+/**
+ * Destinations as a compact field (team trial round 12): a button opening the country / network tree, the picks as
+ * chips under it, so the field sits in one row with the trunks.
+ */
 function SimDestinationPick({ value, onChange }: { value: string[]; onChange: (codes: string[]) => void }) {
   const { tree } = useDestinationTree();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  const chips = useMemo(() => codeChips(tree, value), [tree, value]);
   return (
-    <DestinationPick
-      value={value}
-      onChange={(codes) => {
-        const next = simDests(tree, codes);
-        if (next.length > MAX_DESTS && next.length > value.length)
-          return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
-        onChange(next);
-      }}
-    />
+    <div className="sim-dests">
+      <span className="lookup">
+        <button
+          ref={ref}
+          type="button"
+          className="lookup-btn"
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span>
+            {value.length ? (
+              `${value.length} destination${value.length === 1 ? "" : "s"}`
+            ) : (
+              <span className="muted">Pick countries or networks…</span>
+            )}
+          </span>
+          <Icon name="chevronDown" size={13} />
+        </button>
+      </span>
+      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} className="sim-dest-pop">
+        <DestinationTree
+          selected={value}
+          height={300}
+          onChange={(codes) => {
+            const next = simDests(tree, codes);
+            if (next.length > MAX_DESTS && next.length > value.length)
+              return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
+            onChange(next);
+          }}
+        />
+      </Popover>
+      {chips.length > 0 && (
+        <div className="chips">
+          {chips.map((c) => (
+            <span key={c.key} className="chip">
+              {c.label}
+              <button
+                type="button"
+                aria-label={`Remove ${c.label}`}
+                onClick={() => onChange(value.filter((v) => !c.codes.includes(v)))}
+              >
+                <Icon name="x" size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -436,9 +482,8 @@ export function RouteSimulatorPage() {
   const [trunk, setTrunk] = useState<TrunkListRow | null>(null);
   const trunkId = trunk?.id ?? null;
   const [sender, setSender] = useState("INFO");
-  const [receivers, setReceivers] = useState("447700900123");
-  // Send to numbers, or just pick destinations: a test number is made from each network's dial code.
-  const [mode, setMode] = useState<"numbers" | "destinations">("numbers");
+  // No number filled in (team trial round 12): the user types the numbers, or picks destinations, or both.
+  const [receivers, setReceivers] = useState("");
   const [dests, setDests] = useState<string[]>([]);
   const [mccmnc, setMccmnc] = useState("");
   const [srcTon, setSrcTon] = useState(5);
@@ -463,10 +508,11 @@ export function RouteSimulatorPage() {
   });
   const list = parseReceivers(receivers);
   const realNumber = testNumber.replace(/\D/g, "");
-  const runs =
-    mode === "numbers"
-      ? list.map((r) => ({ key: r, receiver: r, mccmnc: null }))
-      : dests.map((d) => ({ key: d, receiver: testSms && realNumber ? realNumber : null, mccmnc: d }));
+  // Numbers and destinations together (team trial round 12, no switch between them): one run each.
+  const runs = [
+    ...list.map((r) => ({ key: r, receiver: r as string | null, mccmnc: null as string | null })),
+    ...dests.map((d) => ({ key: d, receiver: testSms && realNumber ? realNumber : null, mccmnc: d as string | null })),
+  ];
   // Auto values: coding from the text, TON / NPI from the sender and the first receiver.
   const autoSrc = autoTonNpi(sender);
   const autoDst = autoTonNpi(list[0] ?? "");
@@ -478,22 +524,16 @@ export function RouteSimulatorPage() {
   const isAuto = !touched.coding && !touched.src && !touched.dst;
   const go = async () => {
     if (!trunkId) return toast({ tone: "warning", message: "Choose the customer trunk" });
-    if (!runs.length)
-      return toast({
-        tone: "warning",
-        message: mode === "numbers" ? "Enter at least one receiver" : "Pick at least one destination",
-      });
-    if (mode === "numbers" && runs.length > 20)
-      return toast({ tone: "warning", message: "At most 20 numbers at once" });
-    if (mode === "destinations" && testSms && (!realNumber || runs.length !== 1))
+    if (!runs.length) return toast({ tone: "warning", message: "Enter a number or pick a destination" });
+    if (list.length > 20) return toast({ tone: "warning", message: "At most 20 numbers at once" });
+    if (dests.length > MAX_DESTS) return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
+    if (testSms && dests.length && (!realNumber || dests.length !== 1))
       return toast({
         tone: "warning",
         message: !realNumber
           ? "Enter the number the real test SMS goes to"
           : "A real test SMS goes to one destination at a time",
       });
-    if (mode === "destinations" && runs.length > MAX_DESTS)
-      return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
     setBusy(true);
     const out: typeof results = [];
     for (const run of runs) {
@@ -542,148 +582,63 @@ export function RouteSimulatorPage() {
       </select>
     </label>
   );
-  const to =
-    mode === "numbers"
-      ? list.length > 1
-        ? `${list[0]} +${list.length - 1}`
-        : list[0] || "—"
-      : dests.length
-        ? `${dests.length} destination${dests.length === 1 ? "" : "s"}`
-        : "—";
-  // The page in two columns (team trial round 5): numbered input cards on the left; a summary with the run button
-  // and, under it, the route step by step on the right.
+  const to = [
+    list.length ? (list.length > 1 ? `${list[0]} +${list.length - 1}` : list[0]) : null,
+    dests.length ? `${dests.length} destination${dests.length === 1 ? "" : "s"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  // One column (team trial round 12): Route (trunk, numbers, destinations, vendor) and Message (Sender ID,
+  // content) as two compact cards, the run bar, then the route step by step across the full width.
   return (
     <div className="page rs-page">
       <PageHeader page={page} title="Route simulator" />
       <form
-        className="sim-layout"
+        className="sim-flow"
         onSubmit={(e) => {
           e.preventDefault();
           void go();
         }}
       >
-        <div className="sim-main">
-          <section className="sim-card">
-            <h2 className="sim-step">
-              <span className="sim-num">1</span> Who is sending
-            </h2>
-            <div className="sim-grid">
-              <div className="field">
-                <span>
-                  Customer trunk <span className="req">*</span>
-                </span>
-                <ListLookup<TrunkListRow>
-                  list="customer_trunks"
-                  value={trunkId}
-                  onChange={setTrunk}
-                  labelOf={(t) => `${t.id} · ${t.name}`}
-                  detailOf={(t) => t.enterpriseName}
-                  placeholder="Search trunk name or enterprise…"
-                />
-              </div>
-              <label className="field">
-                <span>Sender ID</span>
-                <input value={sender} maxLength={20} onChange={(e) => setSender(e.target.value)} />
-              </label>
-            </div>
-          </section>
-          <section className="sim-card">
-            <h2 className="sim-step">
-              <span className="sim-num">2</span> Send to
-              <span className="segmented sim-seg" role="radiogroup" aria-label="Send to">
-                {(["numbers", "destinations"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    role="radio"
-                    aria-checked={mode === m}
-                    className={mode === m ? "on" : ""}
-                    onClick={() => setMode(m)}
-                  >
-                    {m === "numbers" ? "Numbers" : "Destination"}
-                  </button>
-                ))}
-              </span>
-            </h2>
-            {mode === "numbers" ? (
-              <div className="sim-grid">
-                <label className="field">
-                  <span>
-                    Numbers <span className="req">*</span>
-                  </span>
-                  <input
-                    value={receivers}
-                    maxLength={400}
-                    placeholder="447700900123, 33612345678"
-                    onChange={(e) => setReceivers(e.target.value)}
-                  />
-                  <span className="muted small">
-                    {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
-                  </span>
-                </label>
-                <label className="field">
-                  <span>MCCMNC</span>
-                  <input
-                    value={mccmnc}
-                    maxLength={6}
-                    placeholder="Detected from the number"
-                    onChange={(e) => setMccmnc(e.target.value.replace(/\D/g, ""))}
-                  />
-                </label>
-              </div>
-            ) : (
-              <>
-              <div className="field">
-                <SimDestinationPick value={dests} onChange={setDests} />
-                <span className="muted small">Up to {MAX_DESTS} networks</span>
-              </div>
-              {testSms && (
-                // A real test needs a real phone (team trial round 6): the made-up number is replaced by this one.
-                <label className="field">
-                  <span>
-                    Number for the real test SMS<span className="req">*</span>
-                  </span>
-                  <input
-                    value={testNumber}
-                    inputMode="tel"
-                    placeholder="A phone on the picked network, e.g. 2348031234567"
-                    onChange={(e) => setTestNumber(e.target.value)}
-                  />
-                </label>
-              )}
-              </>
-            )}
-          </section>
-          <section className="sim-card">
-            <h2 className="sim-step">
-              <span className="sim-num">3</span> Message
-            </h2>
-            <textarea
-              className="sim-text"
-              rows={3}
-              value={text}
-              maxLength={1600}
-              aria-label="Message text"
-              onChange={(e) => setText(e.target.value)}
-            />
-            <div className="tag-row sim-counter">
-              <span className="chip-tag green">{enc.segments} SMS</span>
-              <span className="chip-tag">{enc.label.replace(" (SMSC default)", "")}</span>
-              <span className="chip-tag">
-                {enc.chars} / {perSms * enc.segments} chars
-              </span>
-              <span className="chip-tag">{enc.bytes} bytes</span>
-              {effCoding < 2 && needsUcs2(text) && (
-                <span className="chip-tag amber">Characters outside GSM: use UCS-2</span>
-              )}
-            </div>
-          </section>
-          <section className="sim-card">
-            <h2 className="sim-step">
-              <span className="sim-num">4</span> Vendor
-            </h2>
+        <section className="sim-card">
+          <h2 className="sim-step">
+            <span className="sim-num">1</span> Route
+            <span className="muted small sim-hint">Numbers, destinations or both; one result each</span>
+          </h2>
+          <div className="sim-row route">
             <div className="field">
-              <span>Vendor trunk (test directly, skips routing)</span>
+              <span>
+                Customer trunk <span className="req">*</span>
+              </span>
+              <ListLookup<TrunkListRow>
+                list="customer_trunks"
+                value={trunkId}
+                onChange={setTrunk}
+                labelOf={(t) => `${t.id} · ${t.name}`}
+                detailOf={(t) => t.enterpriseName}
+                placeholder="Search trunk or enterprise…"
+              />
+            </div>
+            <label className="field">
+              <span>Numbers</span>
+              <input
+                value={receivers}
+                maxLength={400}
+                inputMode="tel"
+                placeholder="e.g. 447700900123, 33612345678"
+                onChange={(e) => setReceivers(e.target.value)}
+              />
+              <span className="muted small">
+                {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
+              </span>
+            </label>
+            <div className="field">
+              <span>Destinations</span>
+              <SimDestinationPick value={dests} onChange={setDests} />
+              {!dests.length && <span className="muted small">Up to {MAX_DESTS} networks</span>}
+            </div>
+            <div className="field">
+              <span>Vendor trunk</span>
               <ListLookup<TrunkListRow>
                 list="vendor_trunks"
                 value={vendorId}
@@ -693,129 +648,164 @@ export function RouteSimulatorPage() {
                 placeholder="Any (by the route rules)"
                 limit={1000}
               />
+              <span className="muted small">{vendor ? "Tested directly, skips routing" : "Optional"}</span>
             </div>
-          </section>
-          <section className="sim-card">
-            <div className="sim-adv-head">
-              <div>
-                <h2 className="sim-step">Advanced settings</h2>
-                <p className="muted small">
-                  {isAuto ? "Auto · " : ""}TON {tonLabel(effSrc.ton)} · NPI {npiLabel(effSrc.npi)} → TON{" "}
-                  {tonLabel(effDst.ton)} · NPI {npiLabel(effDst.npi)} · coding {CODINGS[effCoding]}
-                </p>
-              </div>
-              <button type="button" className="link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
-                {advanced ? "Hide" : "Change"}{" "}
-                <Icon name="chevronDown" size={12} className={advanced ? "flip" : undefined} />
-              </button>
-            </div>
-            {advanced && (
-              <div className="sim-grid four">
-                {select(
-                  "Source TON",
-                  effSrc.ton,
-                  (v) => (setSrcTon(v), setSrcNpi(effSrc.npi), setTouched((t) => ({ ...t, src: true }))),
-                  TON.map((l, i) => [i, l]),
-                  !touched.src,
+          </div>
+        </section>
+        <section className="sim-card">
+          <h2 className="sim-step">
+            <span className="sim-num">2</span> Message
+          </h2>
+          <div className="sim-row message">
+            <label className="field">
+              <span>Sender ID</span>
+              <input value={sender} maxLength={20} onChange={(e) => setSender(e.target.value)} />
+            </label>
+            <label className="field">
+              <span>Content</span>
+              <textarea
+                className="sim-text"
+                rows={2}
+                value={text}
+                maxLength={1600}
+                onChange={(e) => setText(e.target.value)}
+              />
+              <span className="tag-row sim-counter">
+                <span className="chip-tag green">{enc.segments} SMS</span>
+                <span className="chip-tag">{enc.label.replace(" (SMSC default)", "")}</span>
+                <span className="chip-tag">
+                  {enc.chars} / {perSms * enc.segments} chars
+                </span>
+                <span className="chip-tag">{enc.bytes} bytes</span>
+                {effCoding < 2 && needsUcs2(text) && (
+                  <span className="chip-tag amber">Characters outside GSM: use UCS-2</span>
                 )}
-                {select(
-                  "Source NPI",
-                  effSrc.npi,
-                  (v) => (setSrcNpi(v), setSrcTon(effSrc.ton), setTouched((t) => ({ ...t, src: true }))),
-                  NPI,
-                  !touched.src,
-                )}
-                {select(
-                  "Dest TON",
-                  effDst.ton,
-                  (v) => (setDstTon(v), setDstNpi(effDst.npi), setTouched((t) => ({ ...t, dst: true }))),
-                  TON.map((l, i) => [i, l]),
-                  !touched.dst,
-                )}
-                {select(
-                  "Dest NPI",
-                  effDst.npi,
-                  (v) => (setDstNpi(v), setDstTon(effDst.ton), setTouched((t) => ({ ...t, dst: true }))),
-                  NPI,
-                  !touched.dst,
-                )}
-                {select(
-                  "Data coding",
-                  effCoding,
-                  (v) => (setCoding(v), setTouched((t) => ({ ...t, coding: true }))),
-                  CODINGS.map((l, i) => [i, l]),
-                  !touched.coding,
-                )}
-                {!isAuto && (
-                  <button
-                    type="button"
-                    className="link sim-span4"
-                    onClick={() => setTouched({ coding: false, src: false, dst: false })}
-                  >
-                    Back to automatic coding and TON / NPI
-                  </button>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
-        <aside className="sim-side">
-          <section className="sim-card">
-            <h2 className="sim-step">Summary</h2>
-            <dl className="sim-summary">
-              <dt>From</dt>
-              <dd>{trunk ? trunk.name : <span className="tone-error">Pick a customer trunk</span>}</dd>
-              <dt>Sender ID</dt>
-              <dd>{sender || "—"}</dd>
-              <dt>To</dt>
-              <dd className="num">{to}</dd>
-              <dt>Message</dt>
-              <dd>
-                {enc.segments} SMS · {enc.label.replace(" (SMSC default)", "")}
-              </dd>
-              <dt>Vendor</dt>
-              <dd>{vendor ? vendor.name : "By route rules"}</dd>
-            </dl>
-            <label className="sim-test">
-              <input type="checkbox" checked={testSms} onChange={(e) => setTestSms(e.target.checked)} />
-              <span>
-                <strong>Also send a real test SMS</strong>
-                <span className="muted small">Off = simulate only, nothing is sent</span>
               </span>
             </label>
-            <Button type="submit" variant="primary" icon="play" disabled={busy} className="sim-go">
-              {busy ? "Simulating…" : `Simulate route${runs.length > 1 ? ` (${runs.length})` : ""}`}
-            </Button>
-          </section>
-          <section className="sim-card sim-results">
-            {results.length === 0 ? (
-              <div className="sim-empty">
-                <Icon name="route" size={22} />
-                <strong>The route shows here</strong>
-                <span className="muted small">Run a simulation to see each step the message would take</span>
-              </div>
-            ) : (
-              results.map((x) => (
-                <section key={x.receiver} className="rs-one" aria-label={`Result for ${x.receiver}`}>
-                  {results.length > 1 && (
-                    <h2 className="rs-receiver">
-                      {x.r && x.r.destination ? (
-                        // Country and network first, then the MCCMNC; a number keeps its number in front.
-                        <>
-                          {x.r.mccmnc === x.receiver ? "" : `${x.receiver} · `}
-                          {x.r.destination} <span className="num muted">{x.r.mccmnc}</span>
-                        </>
-                      ) : (
-                        x.receiver
-                      )}
-                    </h2>
-                  )}
-                  {x.r ? <Result r={x.r} /> : <p className="error-text">{x.error}</p>}
-                </section>
-              ))
-            )}
-          </section>
-        </aside>
+          </div>
+          <div className="sim-adv-head">
+            <p className="muted small">
+              <strong>Advanced</strong> · {isAuto ? "Auto · " : ""}TON {tonLabel(effSrc.ton)} · NPI{" "}
+              {npiLabel(effSrc.npi)} → TON {tonLabel(effDst.ton)} · NPI {npiLabel(effDst.npi)} · coding{" "}
+              {CODINGS[effCoding]}
+              {mccmnc ? ` · MCCMNC ${mccmnc}` : ""}
+            </p>
+            <button type="button" className="link" aria-expanded={advanced} onClick={() => setAdvanced((v) => !v)}>
+              {advanced ? "Hide" : "Change"}{" "}
+              <Icon name="chevronDown" size={12} className={advanced ? "flip" : undefined} />
+            </button>
+          </div>
+          {advanced && (
+            <div className="sim-grid six">
+              {select(
+                "Source TON",
+                effSrc.ton,
+                (v) => (setSrcTon(v), setSrcNpi(effSrc.npi), setTouched((t) => ({ ...t, src: true }))),
+                TON.map((l, i) => [i, l]),
+                !touched.src,
+              )}
+              {select(
+                "Source NPI",
+                effSrc.npi,
+                (v) => (setSrcNpi(v), setSrcTon(effSrc.ton), setTouched((t) => ({ ...t, src: true }))),
+                NPI,
+                !touched.src,
+              )}
+              {select(
+                "Dest TON",
+                effDst.ton,
+                (v) => (setDstTon(v), setDstNpi(effDst.npi), setTouched((t) => ({ ...t, dst: true }))),
+                TON.map((l, i) => [i, l]),
+                !touched.dst,
+              )}
+              {select(
+                "Dest NPI",
+                effDst.npi,
+                (v) => (setDstNpi(v), setDstTon(effDst.ton), setTouched((t) => ({ ...t, dst: true }))),
+                NPI,
+                !touched.dst,
+              )}
+              {select(
+                "Data coding",
+                effCoding,
+                (v) => (setCoding(v), setTouched((t) => ({ ...t, coding: true }))),
+                CODINGS.map((l, i) => [i, l]),
+                !touched.coding,
+              )}
+              {/* The numbers' network, when it should not be detected from the number. */}
+              <label className="field">
+                <span>MCCMNC of the numbers</span>
+                <input
+                  value={mccmnc}
+                  maxLength={6}
+                  placeholder="Detected"
+                  onChange={(e) => setMccmnc(e.target.value.replace(/\D/g, ""))}
+                />
+              </label>
+              {!isAuto && (
+                <button
+                  type="button"
+                  className="link sim-span-all"
+                  onClick={() => setTouched({ coding: false, src: false, dst: false })}
+                >
+                  Back to automatic coding and TON / NPI
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+        <div className="sim-run">
+          <span className="sim-run-sum muted small">
+            {trunk ? trunk.name : <span className="tone-error">Pick a customer trunk</span>} · {sender || "—"} →{" "}
+            {to || "—"} · {enc.segments} SMS · {vendor ? vendor.name : "by route rules"}
+          </span>
+          <label className="toggle-inline sim-test-toggle">
+            <input type="checkbox" checked={testSms} onChange={(e) => setTestSms(e.target.checked)} />
+            Also send a real test SMS
+          </label>
+          {testSms && dests.length > 0 && (
+            // A real test needs a real phone (team trial round 6): the made-up number is replaced by this one.
+            <input
+              className="sim-test-number"
+              value={testNumber}
+              inputMode="tel"
+              aria-label="Number for the real test SMS"
+              placeholder="Phone for the test SMS, e.g. 2348031234567"
+              onChange={(e) => setTestNumber(e.target.value)}
+            />
+          )}
+          <Button type="submit" variant="primary" icon="play" disabled={busy}>
+            {busy ? "Simulating…" : `Simulate route${runs.length > 1 ? ` (${runs.length})` : ""}`}
+          </Button>
+        </div>
+        <section className="sim-card sim-results">
+          {results.length === 0 ? (
+            <div className="sim-empty">
+              <Icon name="route" size={22} />
+              <strong>The route shows here</strong>
+              <span className="muted small">Run a simulation to see each step the message would take</span>
+            </div>
+          ) : (
+            results.map((x) => (
+              <section key={x.receiver} className="rs-one" aria-label={`Result for ${x.receiver}`}>
+                {results.length > 1 && (
+                  <h2 className="rs-receiver">
+                    {x.r && x.r.destination ? (
+                      // Country and network first, then the MCCMNC; a number keeps its number in front.
+                      <>
+                        {x.r.mccmnc === x.receiver ? "" : `${x.receiver} · `}
+                        {x.r.destination} <span className="num muted">{x.r.mccmnc}</span>
+                      </>
+                    ) : (
+                      x.receiver
+                    )}
+                  </h2>
+                )}
+                {x.r ? <Result r={x.r} /> : <p className="error-text">{x.error}</p>}
+              </section>
+            ))
+          )}
+        </section>
       </form>
     </div>
   );

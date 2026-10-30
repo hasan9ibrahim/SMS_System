@@ -388,7 +388,31 @@ export function runRule(
   return { step, state: next };
 }
 
-/** Runs rules in order; a block ends the run, and so does a matched rule set to Stop. */
+/**
+ * Whether a rule only maps receipts (a DLR map and nothing else). On a message that is not a receipt it has nothing
+ * to do, so it never stops the run there (team trial round 12: such a rule with no conditions, set to Stop, matched
+ * every message and left every rule after it unreached, content changes included).
+ */
+export function onlyMapsReceipts(rule: EngineRule): boolean {
+  return (
+    (rule.dlrMap ?? []).length > 0 &&
+    rule.action !== "block" &&
+    !rule.senderConversion &&
+    !rule.receiverConversion &&
+    rule.senderTon === null &&
+    rule.senderNpi === null &&
+    rule.destTon === null &&
+    rule.destNpi === null &&
+    rule.billingType === null &&
+    rule.registeredDelivery === null &&
+    !(rule.contentWords ?? []).length &&
+    !rule.contentNumberFormat &&
+    !(rule.contentRegex && rule.contentReplacement !== null) &&
+    !rule.msgTemplate
+  );
+}
+
+/** Runs rules in order; a block ends the run, and so does a matched rule set to Stop that applies to the message. */
 export function runRules(
   rules: { rule: EngineRule; continueAfter?: boolean }[],
   message: TestMessage,
@@ -406,7 +430,7 @@ export function runRules(
       blocked = true;
       break;
     }
-    if (r.step.matched && !r.step.continueAfter) break;
+    if (r.step.matched && !r.step.continueAfter && !(before.dlrStatus === null && onlyMapsReceipts(rule))) break;
   }
   return { before, after: state, blocked, steps };
 }

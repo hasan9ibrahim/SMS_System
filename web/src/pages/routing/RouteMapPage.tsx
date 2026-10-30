@@ -26,13 +26,13 @@ const STATUS: Record<RouteMapRow["status"], { label: string; tone: string; help:
 const TYPE: Record<string, string> = { static: "Static", dynamic: "Least cost", qbr: "Quality", block: "Block" };
 const rate = (v: number | null) => (v === null ? "—" : v.toFixed(6));
 
-/** Opens the route rules page filtered to one rule, in a new tab. */
+/** Opens the route rules page filtered to one rule, in this tab (Back returns here, team trial round 12). */
 export function useOpenRule() {
   const navigate = useTabNavigate();
   return (id: number, name: string) =>
     navigate(
       `/routing/rules?g=${encodeState({ ...emptyState(), columns: { id: { field: "id", op: "eq", value: id } } })}`,
-      { newTab: true, title: `Rule · ${name}` },
+      { title: `Rule · ${name}` },
     );
 }
 

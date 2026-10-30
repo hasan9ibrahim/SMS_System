@@ -194,6 +194,20 @@ describe("HLR providers API", { skip }, () => {
     await undo(created.change);
   });
 
+  test("a provider URL to this server or a private network is refused (security audit, round 12)", async () => {
+    for (const url of [
+      "http://127.0.0.1:8123/?query={DNID}",
+      "http://localhost/x?n={DNID}",
+      "http://10.1.2.3/x?n={DNID}",
+      "http://[::1]/x?n={DNID}",
+      "file:///etc/passwd?{DNID}",
+    ]) {
+      const res = await call("POST", "/hlr-providers", provider({ name: `Test HLR private ${run}`, url }));
+      assert.equal(res.statusCode, 400, url);
+      assert.ok(JSON.stringify(res.json().errors).includes("/url"), url);
+    }
+  });
+
   test("provider list at full volume carries live status and stats", async () => {
     const page = await ok(
       "queryHlrProviders",

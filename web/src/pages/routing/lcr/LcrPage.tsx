@@ -326,9 +326,10 @@ function TableView() {
             placeholder={t ? `${t.country} · ${t.network} (${t.mccmnc})` : "Find a destination…"}
           />
         </div>
+        {/* Laptop screens (team trial round 12): Now / Next Monday on the date line, profile and ranking together. */}
         <div className="field">
           <span>Point in time (UTC)</span>
-          <div className="bulk-row">
+          <div className="bulk-row lcr-line">
             <DateTimeInput
               value={at ? at.slice(0, 16) : ""}
               onChange={(e) => set("at", e.target.value ? new Date(`${e.target.value}:00Z`).toISOString() : null)}
@@ -342,23 +343,26 @@ function TableView() {
           </div>
         </div>
         <div className="field">
-          <span>LCR profile</span>
-          <ListLookup<{ id: number; name: string }>
-            list="lcr_profiles"
-            value={profileId}
-            onChange={(r) => set("profile", r ? String(r.id) : null)}
-            labelOf={(r) => r.name}
-            placeholder="None: rank every vendor"
-          />
+          <span>LCR profile and ranking</span>
+          <div className="bulk-row lcr-line lcr-profile">
+            <ListLookup<{ id: number; name: string }>
+              list="lcr_profiles"
+              value={profileId}
+              onChange={(r) => set("profile", r ? String(r.id) : null)}
+              labelOf={(r) => r.name}
+              placeholder="None: rank every vendor"
+            />
+            <label className="toggle-inline">
+              <input type="checkbox" checked={weighted} onChange={(e) => setWeighted(e.target.checked)} />{" "}
+              Quality-weighted score
+            </label>
+          </div>
         </div>
-        <div className="field">
-          <span>Ranking</span>
-          <label className="toggle-inline">
-            <input type="checkbox" checked={weighted} onChange={(e) => setWeighted(e.target.checked)} />{" "}
-            Quality-weighted score
-          </label>
-          {weighted && <WeightsEditor value={weights} onChange={setWeights} />}
-        </div>
+        {weighted && (
+          <div className="lcr-weights-row">
+            <WeightsEditor value={weights} onChange={setWeights} />
+          </div>
+        )}
       </div>
       <div className="lcr-whatif bulk-row">
         <strong>What-if</strong>
@@ -421,7 +425,7 @@ function TableView() {
         )}
       </div>
       {t?.impact && (
-        <div className="stat-cards">
+        <div className="stat-cards compact">
           <div className="stat-card">
             <span className="stat-label">Routes that change</span>
             <span className={`stat-value${t.impact.routesChanged ? " tone-warning" : ""}`}>

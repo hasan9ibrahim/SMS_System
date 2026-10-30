@@ -212,11 +212,13 @@ export function trunkCurrencySql(kind: "customer" | "vendor", alias: string): st
 /**
  * Live connection (team trial round 2): up when bound with every session; a vendor trunk missing sessions, or down
  * for less than its Bind down alert delay (bind_alert_after_min, default 2), is reconnecting (the switch retries on
- * its reconnect schedule); after that it is down and the Bind Down Alert goes out.
+ * its reconnect schedule); after that it is down and the Bind Down Alert goes out. A service trunk has no
+ * connection: always up (team trial round 12).
  */
 const connectionSql = (kind: "customer" | "vendor") =>
   kind === "vendor"
-    ? `(CASE WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
+    ? `(CASE WHEN t.protocol = 'service' THEN 'up'
+             WHEN tb.status = 'online' AND tb.connections >= t.max_connections THEN 'up'
              WHEN tb.status = 'online' THEN 'reconnecting'
              WHEN tb.status = 'offline' AND t.status = 'active'
                   AND tb.since > now() - make_interval(mins => t.bind_alert_after_min) THEN 'reconnecting'
@@ -1212,24 +1214,30 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     const codes = (r.mccmncs as string[]) ?? [];
     const allVendors = (r.vendors as { n: string; s: number | null; l: number; b: boolean }[] | null) ?? [];
     const vendors = allVendors.filter((v) => !v.b);
-    const level1 = vendors.filter((v) => v.l === (vendors[0]?.l ?? 1));
     const type = r.route_type as RouteRuleRow["routeType"];
     const hunt = r.hunt_policy as string;
     const lcrCount = vendors.length || (r.vendor_trunk_mode === "inclusive" ? (r.scope_count as number) : 0);
+    // One level's vendors: a vendor alone takes everything, so no "100" (team trial round 6).
+    const levelText = (vs: typeof vendors) =>
+      vs.length === 1
+        ? vs[0]!.n
+        : hunt === "percentage"
+          ? vs.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
+          : vs.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");
+    // Every level, "L1 … | L2 …" (team trial round 12: level 1 only before, the rest only on hover).
+    const levels = [...new Set(vendors.map((v) => v.l))];
     const vendorsLabel =
       type === "block"
         ? "—"
         : type === "dynamic"
           ? `LCR · ${lcrCount ? `${lcrCount} vendor${lcrCount === 1 ? "" : "s"}` : "all vendors"}`
-          : level1.length === 0
+          : vendors.length === 0
             ? type === "qbr"
               ? "Quality · all vendors"
               : "No vendor"
-            : level1.length === 1
-              ? level1[0]!.n // one vendor takes everything: no "100%" (team trial round 6)
-              : hunt === "percentage"
-                ? level1.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
-                : level1.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");
+            : levels.length === 1
+              ? levelText(vendors)
+              : levels.map((l) => `L${l} ${levelText(vendors.filter((v) => v.l === l))}`).join(" | ");
     return {
       id: r.id as number,
       name: r.name as string,
@@ -2489,7 +2497,8 @@ export const NETWORK_FROM = `(
       FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
       JOIN trunk_binds tb ON tb.side = 'vendor' AND tb.trunk_id = t.id
       LEFT JOIN users u ON u.id = tb.changed_by_id
-     WHERE t.deleted_at IS NULL
+     -- A service trunk has no connection (team trial round 12).
+     WHERE t.deleted_at IS NULL AND t.protocol <> 'service'
   ) nb`;
 export const networkBindList: ListDef<NetworkBindRow> = {
   fields: listFields.network_binds,

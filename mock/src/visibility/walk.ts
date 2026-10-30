@@ -5,7 +5,7 @@
 import { db } from "../db.js";
 import type { Viewer } from "./policy.js";
 
-interface Maps {
+export interface Maps {
   at: number;
   type: Map<number, string>;
   customerTrunk: Map<number, number>;
@@ -14,7 +14,8 @@ interface Maps {
 let maps: Promise<Maps> | null = null;
 let mapsAt = 0;
 
-function loadMaps(): Promise<Maps> {
+/** Each enterprise's type and each trunk's enterprise, cached for a minute. */
+export function loadMaps(): Promise<Maps> {
   if (maps && Date.now() - mapsAt < 60_000) return maps;
   mapsAt = Date.now();
   maps = (async () => {

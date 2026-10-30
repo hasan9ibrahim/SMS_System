@@ -66,7 +66,7 @@ function blank(): Form {
     vatNumber: null,
     accountNumber: null,
     billingTimezone: "UTC",
-    rateNoticeDays: 7,
+    rateNoticeDays: 0,
     rateNoticeDaysDecrease: 0,
     rateNoticeDaysNew: 0,
     allNetworksCode: "mcc",
@@ -139,7 +139,7 @@ const ALL_NETWORKS = [
 
 /**
  * How the partner writes a country's all-networks rate: one of the usual forms, or Custom: MCC plus any suffix
- * ("MCC99" = 26299; team trial round 3).
+ * ("MCC99" = 26299; team trial round 3), with any symbol in it but spaces ("MCC-ALL", "MCC/00"; round 12).
  */
 function AllNetworksField({ form }: { form: FormApi<Form> }) {
   const v = String(form.get("allNetworksCode") ?? "mcc");
@@ -172,9 +172,9 @@ function AllNetworksField({ form }: { form: FormApi<Form> }) {
             <input
               aria-label="Custom suffix after the MCC"
               value={suffix}
-              maxLength={6}
+              maxLength={10}
               placeholder="99"
-              onChange={(e) => form.set("allNetworksCode", `MCC${e.target.value.replace(/[^0-9A-Za-z*#._-]/g, "")}`)}
+              onChange={(e) => form.set("allNetworksCode", `MCC${e.target.value.replace(/\s/g, "")}`)}
             />
           </span>
         )}
@@ -381,6 +381,7 @@ export function GeneralTab({
               path="accountManagerId"
               label="Account manager"
               required
+              searchable
               options={opts(ref.data?.accountManagers, (u) => u.displayName)}
               hint="Change it later on the Account managers tab"
             />
@@ -404,6 +405,7 @@ export function GeneralTab({
             path="address.countryId"
             label="Country"
             required
+            searchable
             options={opts(ref.data?.countries, (c) => `${c.name} (${c.iso})`)}
           />
           <TextField form={form} path="address.zip" label="ZIP / postcode" maxLength={20} />
@@ -419,6 +421,7 @@ export function GeneralTab({
             path="billingTimezone"
             label="Billing time zone"
             required
+            searchable
             options={tzOptions(ref.data?.timezones ?? ["UTC"])}
             hint="Day and month totals are cut at midnight in this zone"
           />

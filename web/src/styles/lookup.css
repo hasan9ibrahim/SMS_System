@@ -572,6 +572,61 @@ button.chip.accent {
 .checklist-empty {
   padding: 10px;
 }
+/* Every multi-select (team trial round 12): "Selected N of M" and Check all / Uncheck all on top, then the search
+   box joined to its list in one box. */
+.checklist-box {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-panel);
+}
+.checklist-box:focus-within {
+  border-color: var(--color-accent);
+}
+.checklist-box > .checklist-search {
+  flex: none;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+}
+.checklist-box > .checklist-items,
+.checklist-box > .pick-list {
+  border: 0;
+  border-radius: 0;
+}
+.columns-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  width: 280px;
+}
+.columns-pop .checklist-bar {
+  gap: 12px;
+}
+.columns-pop-list {
+  max-height: min(360px, 50vh);
+  overflow: auto;
+  padding: 2px 0;
+}
+.columns-pop .choice-row {
+  padding: 4px 8px;
+}
+.chip-checks-bar {
+  gap: 16px;
+  padding: 8px 10px 0;
+}
+.choice-pop .choice-count {
+  padding: 4px 12px 6px;
+}
+.checklist-bar .link:disabled {
+  color: var(--color-text-secondary);
+  cursor: default;
+  text-decoration: none;
+}
 
 /* Column filters under the headers (team trial round 2) */
 .vt-filters {

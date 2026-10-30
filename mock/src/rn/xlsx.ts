@@ -37,11 +37,25 @@ function entries(buf: Buffer): Entry[] {
   return out;
 }
 
+/**
+ * A part of the workbook may unpack to this much at most (security audit, team trial round 12): rate sheets arrive by
+ * e-mail from anyone, and a "zip bomb" of a few hundred KB would otherwise unpack to gigabytes.
+ */
+export const MAX_PART_BYTES = 64 * 1024 * 1024;
+
 function read(buf: Buffer, e: Entry): string {
   const start = e.offset + 30 + buf.readUInt16LE(e.offset + 26) + buf.readUInt16LE(e.offset + 28);
   const data = buf.subarray(start, start + e.size);
   if (e.method === 0) return data.toString("utf8");
-  if (e.method === 8) return inflateRawSync(data).toString("utf8");
+  if (e.method === 8) {
+    try {
+      return inflateRawSync(data, { maxOutputLength: MAX_PART_BYTES }).toString("utf8");
+    } catch (err) {
+      if ((err as { code?: string }).code === "ERR_BUFFER_TOO_LARGE")
+        throw new SheetFileError(`${e.name} unpacks to more than ${MAX_PART_BYTES / 1024 / 1024} MB: not a rate sheet`);
+      throw new SheetFileError(`${e.name} could not be read (${(err as Error).message})`);
+    }
+  }
   throw new SheetFileError(`unsupported compression in ${e.name}`);
 }
 

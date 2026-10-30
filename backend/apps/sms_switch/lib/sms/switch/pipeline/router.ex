@@ -23,6 +23,7 @@ defmodule Sms.Switch.Pipeline.Router do
           optional(:hlr_ported) => boolean() | nil,
           optional(:count_rule_tps) => boolean(),
           optional(:parts) => pos_integer(),
+          optional(:rate_sender) => String.t() | nil,
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -113,9 +114,10 @@ defmodule Sms.Switch.Pipeline.Router do
 
   defp count_warmup(_rules, _decision, _input), do: :ok
 
+  # A service trunk has no connection to wait for (team trial round 12).
   defp bound?(vendor_trunk_id) do
     check = Application.get_env(:sms_switch, __MODULE__, [])[:bound?] || (&Vendor.bound?/1)
-    check.(vendor_trunk_id)
+    (Config.vendor_trunk(vendor_trunk_id) || %{})[:service] == true or check.(vendor_trunk_id)
   end
 
   defp network(%{all_networks: true}), do: "All networks"
@@ -140,7 +142,7 @@ defmodule Sms.Switch.Pipeline.Router do
 
         cond do
           not egress.blocked and bound?(vt) ->
-            cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms)
+            cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms, input[:rate_sender])
             _ = count_warmup(rules, decision, input)
             {:ok, %{decision: decision, vendor_trunk_id: vt, cost: cost, egress: egress}}
 
@@ -190,7 +192,13 @@ defmodule Sms.Switch.Pipeline.Router do
                vendor: %{vendor_trunk_id: vendor_trunk_id, level: 0, decided_by: :manual}
              },
              vendor_trunk_id: vendor_trunk_id,
-             cost: Config.vendor_rate(vendor_trunk_id, input.destination.mccmnc, input.now_ms),
+             cost:
+               Config.vendor_rate(
+                 vendor_trunk_id,
+                 input.destination.mccmnc,
+                 input.now_ms,
+                 input[:rate_sender]
+               ),
              egress: egress
            }}
         end

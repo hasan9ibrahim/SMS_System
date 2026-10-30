@@ -251,10 +251,32 @@ a.btn {
   position: relative;
 }
 .pane {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
+}
+/* A tab's own dialogs (team trial round 12): over its pane only, so the tab strip and other tabs stay usable. */
+.pane-dialogs {
+  display: contents;
+}
+.modal-backdrop.in-tab {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+/* Never taller than the tab: the body scrolls, the footer (Save) stays in view. */
+.modal-backdrop.in-tab .modal {
+  max-height: 100%;
+  min-height: 0;
+}
+.modal-backdrop.in-tab .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .panes.split .pane:not(.hidden) + .pane:not(.hidden),
 .panes.split .pane:not(.hidden) ~ .pane:not(.hidden) {
@@ -623,14 +645,18 @@ a.btn {
 }
 .tabs {
   display: flex;
+  flex: 1 1 auto;
   align-items: stretch;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
 }
+/* Tabs shrink (Chrome style) down to a small width, titles truncated, so all of them show (team trial round 12). */
 .tab {
   position: relative;
   display: flex;
+  flex: 0 1 auto;
+  min-width: 56px;
   align-items: center;
   gap: 7px;
   max-width: 240px;
@@ -658,8 +684,41 @@ a.btn {
   max-width: 90px;
 }
 .tab-title {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.tab > svg,
+.tab-close,
+.tab-live,
+.tab-alert,
+.tab-dirty {
+  flex: none;
+}
+.tab.active {
+  min-width: 110px;
+}
+.tabs.crowded .tab {
+  min-width: 28px;
+  padding: 0 6px;
+  gap: 4px;
+}
+.tabs.crowded .tab.active {
+  min-width: 110px;
+}
+.tabs.crowded .tab:not(.active):not(:hover) .tab-close {
+  display: none;
+}
+.tab-new,
+.tab-group,
+.tab.home,
+.tabs.crowded .tab.home {
+  flex: none;
+  min-width: 0;
+}
+.tab-menu-host {
+  display: contents;
 }
 .tab-close {
   display: grid;
@@ -1221,13 +1280,84 @@ a.btn {
 .change.undone {
   opacity: 0.6;
 }
+/* History grouped by day; each change is a head line and one row per field (team trial round 12). */
+.change-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 14px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-head-tint);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
 .change-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.change-time {
+  min-width: 40px;
+  color: var(--color-text-secondary);
+}
+.change-who {
+  font-weight: 600;
 }
 .change-diff {
-  margin: 4px 0 2px;
+  margin: 4px 0 2px 48px;
+}
+.change-fields {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 6px 0 2px 48px;
+}
+.change-fields dt {
+  color: var(--color-text-secondary);
+}
+.change-fields dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.change-fields .change-more {
+  grid-column: 2;
+}
+.change-before {
+  color: var(--color-text-secondary);
+}
+.change-arrow {
+  margin: 0 6px;
+  color: var(--color-text-secondary);
+}
+.change-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.change-note {
+  margin: 4px 0 0 48px;
+}
+@media (max-width: 760px) {
+  .change-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0;
+    margin-left: 0;
+  }
+  .change-fields dd {
+    margin-bottom: 6px;
+  }
+  .change-fields .change-more {
+    grid-column: 1;
+  }
+  .change-diff,
+  .change-note {
+    margin-left: 0;
+  }
 }
 .conflicts li {
   margin-bottom: 6px;
@@ -2477,8 +2607,10 @@ select.chip-select {
   border-top: var(--border-width) solid var(--color-border);
   background: var(--color-head-tint);
 }
+/* A 320 px basis keeps the switches, Views and Columns on the search's line on a laptop; the search still grows
+   into the room left (team trial round 12). */
 .pill-search {
-  flex: 1 1 560px;
+  flex: 1 1 320px;
 }
 .pill-search .pill-search-input,
 .pill-search .pill-search-input:focus,
@@ -2760,4 +2892,49 @@ body.resizing-split-h {
   margin: 0 -10px;
   border: 0;
   box-shadow: none;
+}
+
+/* Theme row in the user menu (team trial round 12): one row, the themes under it when opened. */
+.theme-picker {
+  padding-bottom: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.theme-picker-current {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.theme-picker-option {
+  padding-left: 22px;
+}
+.theme-picker-option.on {
+  font-weight: 600;
+}
+
+/* Route simulator: what the trunk's ingress translation did first (team trial round 12). */
+.sim-ingress {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.sim-ingress.blocked {
+  border-color: var(--color-error);
+}
+.sim-ingress ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* A list page whose top area is tall (a report's settings and "what stands out" on a laptop) keeps about six rows of
+   its grid and scrolls, instead of squeezing the grid to its header row (team trial round 12 audit). A page that fits
+   looks the same as before. */
+@media (min-width: 761px) {
+  .page:has(> .list-body) {
+    overflow-y: auto;
+  }
+  .page > .list-body {
+    min-height: 300px;
+  }
 }

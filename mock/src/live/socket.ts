@@ -22,11 +22,14 @@ import pg from "pg";
 import { EVALUATE_EVERY_MS, evaluateRound, incidentEvent, notifies, toEvent } from "../alerts/engine.js";
 import { currentUserId, loadUser } from "../api/session.js";
 import { allows } from "../auth/access.js";
-import { requestUser } from "../auth/user.js";
+import { cookieToken, requestUser, sessionOpen } from "../auth/user.js";
 import { db, PG_CONFIG } from "../db.js";
 import { isLeader } from "../jobs/leader.js";
 import { production } from "../mode.js";
 import { createFeedSimulator, feedStep, startFeed } from "./feed.js";
+import { liveView, type LiveView } from "./visibility.js";
+import { cachedViewer, restricts } from "../visibility/policy.js";
+import { loadMaps } from "../visibility/walk.js";
 import { analyticsParams, analyticsSnapshot, type AnalyticsParams } from "./analytics.js";
 import {
   computeMovers,
@@ -47,8 +50,12 @@ interface Client {
   socket: WebSocket;
   /** The signed-in user, the department (incident notifications) and what the access group gives. */
   userId: number;
+  /** The session the socket was opened with, checked again every minute (null: forwarded or sign-in off). */
+  sessionId: number | null;
   departmentId: number | null;
   permissions: string[];
+  /** What the viewer's visibility policy lets them see (§13.17); null when it restricts nothing. */
+  view: LiveView | null;
   topics: Map<string, string | null>; // topic -> join_ref
   movers: { windowMinutes: number; customerMinMessages: number; vendorMinMessages: number; refreshSeconds: number };
   analytics: AnalyticsParams | null;
@@ -78,13 +85,25 @@ export function liveSimulator() {
 }
 
 function getSimulator() {
-  loading ??= (production ? createFeedSimulator() : createSimulator()).then((s) => (sim = s));
+  // A failed start is tried again on the next use instead of failing every join from then on (team trial round 12).
+  loading ??= (production ? createFeedSimulator() : createSimulator())
+    .then((s) => (sim = s))
+    .catch((err: Error) => {
+      loading = null;
+      throw err;
+    });
   return loading;
+}
+
+/** The simulator for a step that may wait for it; a failed start is logged, never left unhandled. */
+function whenSimulator(fn: (s: Simulator) => void) {
+  getSimulator().then(fn, (err: Error) => console.warn(`live screens: ${err.message}; trying again shortly`));
 }
 
 function send(c: Client, topic: string, event: string, payload: object) {
   if (!c.topics.has(topic)) return;
-  c.socket.send(JSON.stringify([c.topics.get(topic) ?? null, null, topic, event, payload]));
+  const body = c.view ? c.view.shape(topic, event, payload) : payload;
+  c.socket.send(JSON.stringify([c.topics.get(topic) ?? null, null, topic, event, body]));
 }
 
 function push(topic: string, event: string, payload: object) {
@@ -107,9 +126,54 @@ function moversFor(s: Simulator, c: Client, now: number) {
   );
 }
 
+let lastStart = 0;
+let lastRecheck = Date.now();
+let rechecking = false;
+/** How often each socket's session, access group and visibility policy are read again. */
+const RECHECK_EVERY_MS = 60_000;
+
+/**
+ * Signed out, expired or deactivated users lose the live feed within a minute; a changed access group or visibility
+ * policy applies to the topics and payloads from then on (security audit, team trial round 12).
+ */
+async function recheckClients() {
+  for (const c of [...clients]) {
+    const open = c.sessionId === null || (await sessionOpen(db(), c.sessionId));
+    const user = open ? await loadUser(db(), c.userId) : null;
+    if (!user) {
+      clients.delete(c);
+      c.socket.close(4401, "sign in required");
+      continue;
+    }
+    c.permissions = user.permissions;
+    for (const topic of [...c.topics.keys()]) if (!mayJoin(c, topic)) c.topics.delete(topic);
+    c.view = await viewOf(c.userId);
+  }
+}
+
+/** The viewer's live view, or null when their policy restricts nothing (§13.17). */
+async function viewOf(userId: number): Promise<LiveView | null> {
+  const v = await cachedViewer(db(), userId, false);
+  return restricts(v) ? liveView(v, await loadMaps()) : null;
+}
+
 function tick() {
-  if (!sim) return;
   const now = Date.now();
+  if (!rechecking && clients.size && now - lastRecheck >= RECHECK_EVERY_MS) {
+    lastRecheck = now;
+    rechecking = true;
+    recheckClients()
+      .catch((err: Error) => console.warn(`live socket re-check: ${err.message}`))
+      .finally(() => (rechecking = false));
+  }
+  if (!sim) {
+    // Not started (the stores did not answer): try again every 10 seconds.
+    if (!loading && now - lastStart >= 10_000) {
+      lastStart = now;
+      whenSimulator(() => undefined);
+    }
+    return;
+  }
   if (production) feedStep(sim, now);
   else step(sim, now);
   ticks++;
@@ -159,7 +223,7 @@ export function startLive() {
   lastEvaluation = Date.now() - EVALUATE_EVERY_MS + 20_000; // first round once the history is in
   timer = setInterval(tick, 1000);
   timer.unref();
-  void getSimulator();
+  whenSimulator(() => undefined);
 }
 
 /** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes, 100 messages per card, every second. */
@@ -251,21 +315,52 @@ async function socketUser(req: import("fastify").FastifyRequest) {
   const { rows } = await db().query("SELECT department_id FROM users WHERE id = $1", [who.userId]);
   return {
     userId: who.userId,
+    sessionId: who.sessionId,
     departmentId: rows[0]?.department_id == null ? null : Number(rows[0].department_id),
     permissions: user.permissions,
+    view: await viewOf(who.userId),
   };
+}
+
+/**
+ * A browser opening the socket from another site is refused (cross-site WebSocket hijacking): its Origin must name the
+ * host the page was served from. Calls without an Origin (the Elixir API, tools) are not browsers and pass. Host names
+ * only: nginx forwards the host without its port.
+ */
+export function sameOrigin(origin: string | undefined, host: string | undefined): boolean {
+  if (!origin) return true;
+  try {
+    const name = (h: string) => h.replace(/:\d+$/, "").replace(/^\[|\]$/g, "").toLowerCase();
+    return !!host && name(new URL(origin).host) === name(host);
+  } catch {
+    return false;
+  }
 }
 
 export async function registerSocket(app: FastifyInstance) {
   await app.register(websocket);
   app.addHook("onClose", async () => stopLive());
   app.get("/socket/websocket", { websocket: true }, (socket, req) => {
+    const host = req.headers.host;
+    if (!sameOrigin(req.headers.origin, host)) {
+      req.log.warn({ origin: req.headers.origin, host }, "live socket refused: opened from another site");
+      socket.close(4403, "origin not allowed");
+      return;
+    }
     // Frames that arrive while the user is looked up wait for it, so the first joins are not lost.
     const ready: Promise<Client | null> = socketUser(req)
-      .catch(() => null)
+      .catch((err: Error) => {
+        req.log.warn(`live socket: the user could not be read (${err.message})`);
+        return null;
+      })
       .then((who) => {
         if (!who) {
-          // Not signed in: the GUI shows Sign in from its API calls; the socket tries again later.
+          // Not signed in: the GUI shows Sign in from its API calls; the socket tries again later. Logged, so a live
+          // feed that never connects can be told apart from a network problem (team trial round 12).
+          req.log.warn(
+            { cookie: !!cookieToken(req), forwarded: !!req.headers["x-sms-proxy-secret"] },
+            "live socket refused: no signed-in user (no session cookie, or the session ended)",
+          );
           socket.close(4401, "sign in required");
           return null;
         }
@@ -319,7 +414,7 @@ function onFrame(client: Client, data: unknown) {
     client.topics.set(topic, joinRef);
     reply("ok");
     // Panels fill at once instead of after the first 5-second push.
-    void getSimulator().then((s) => {
+    whenSimulator((s) => {
       const now = Date.now();
       if (topic === "live:tps") send(client, topic, "history", historyEvent(s, now));
       if (topic === "live:dashboard") {

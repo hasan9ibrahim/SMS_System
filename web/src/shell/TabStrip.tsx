@@ -2,7 +2,7 @@
 // tabs with an alert, "+" for a new tab, open-tabs list on the right. Tabs reorder by drag;
 // dragging a tab out of the window opens it in its own window, dragging it back docks it.
 // Tabs can be grouped under a label and colour, Chrome style (team trial round 8).
-import { useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import type { TabGroup, WorkspaceTab } from "@sms/contract";
 import { pageForPath } from "../nav/registry";
 import { Icon } from "../ui/Icon";
@@ -55,6 +55,10 @@ function TabButton({
   const ref = useRef<HTMLDivElement>(null);
   const page = pageForPath(tab.path);
   const isHome = tab.id === HOME_TAB_ID;
+  // The active tab is always in view, however many are open (team trial round 12).
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [active]);
 
   const onDragStart = (e: DragEvent) => {
     if (isHome) return e.preventDefault();
@@ -126,7 +130,7 @@ function TabButton({
       role="tab"
       aria-selected={active}
       tabIndex={active ? 0 : -1}
-      className={`tab${active ? " active" : ""}${tab.pinned ? " pinned" : ""}${group ? ` grouped tg-${group.color}` : ""}${
+      className={`tab${isHome ? " home" : ""}${active ? " active" : ""}${tab.pinned ? " pinned" : ""}${group ? ` grouped tg-${group.color}` : ""}${
         dropSide ? ` drop-${dropSide}` : ""
       }`}
       draggable={!isHome}
@@ -160,12 +164,18 @@ function TabButton({
           <Icon name="x" size={12} />
         </button>
       )}
-      <Popover anchor={ref} open={menuOpen} onClose={() => setMenuOpen(false)}>
-        <Menu items={items} onClose={() => setMenuOpen(false)} />
-      </Popover>
+      {/* The menu renders in a portal, but React still bubbles its clicks to this tab: without the stop, "Close"
+          re-activated the tab it had just closed and left a grey page (team trial round 12). */}
+      <span className="tab-menu-host" onClick={stop} onMouseUp={stop} onContextMenu={stop}>
+        <Popover anchor={ref} open={menuOpen} onClose={() => setMenuOpen(false)}>
+          <Menu items={items} onClose={() => setMenuOpen(false)} />
+        </Popover>
+      </span>
     </div>
   );
 }
+
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 const colorName = (c: TabGroup["color"]) => c[0]!.toUpperCase() + c.slice(1);
 
@@ -378,7 +388,9 @@ export function TabStrip() {
       onDragOver={(e) => e.dataTransfer.types.includes(TAB_DRAG_TYPE) && e.preventDefault()}
       onDrop={onDrop}
     >
-      <div className="tabs" role="tablist" aria-label="Open pages">
+      {/* Tabs shrink and truncate their titles so all of them show (team trial round 12); with many open, only the
+          active and hovered tab keep their close button. */}
+      <div className={`tabs${tabs.length > 10 ? " crowded" : ""}`} role="tablist" aria-label="Open pages">
         {tabs.map((t, i) => {
           const group = groups.find((g) => g.id === t.groupId);
           // The group's label goes before its first tab; a folded group hides its tabs.

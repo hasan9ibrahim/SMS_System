@@ -1,6 +1,7 @@
 // Product categories (§6.1): traffic classes such as DIRECT, HQ and OTP. Add, rename and
 // delete (archive, blocked while trunks, rate tables or rules use the category, §13.29);
-// "Show deleted" is the spec's Delete History. Each save is one undoable change (§13.10).
+// "Show deleted" is the spec's Delete History. Each save is one undoable change (§13.10). Several selected rows are
+// deleted together with the Delete button at the top right (team trial round 12), each one its own change.
 import type { ProductCategory, ProductCategoryInput } from "@sms/contract";
 import { useMe } from "../../api/hooks";
 import { useSaveCategory } from "../../api/masterData";
@@ -9,7 +10,7 @@ import { TextField, useForm } from "../../form/form";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
-import { isAdminUser, useDeleteRecord } from "../../records/parts";
+import { isAdminUser, useBulkDelete, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { problemText } from "../routing/dialogs";
 import { useState } from "react";
@@ -53,6 +54,7 @@ const openDialog = (row: ProductCategory | null) =>
 
 export function ProductCategoriesPage() {
   const deleteOne = useDeleteRecord();
+  const deleteMany = useBulkDelete();
   const { data: me } = useMe();
   const restore = useRestore("product_category");
   const notifySaved = useNotifySaved();
@@ -92,6 +94,28 @@ export function ProductCategoriesPage() {
               onSelect: () => void deleteOne("product_category", r.id, r.name),
             },
       ]}
+      selection={{
+        bulk: (ids, clear, rows) => [
+          {
+            label: `Delete ${ids.length} categor${ids.length === 1 ? "y" : "ies"}…`,
+            icon: "trash",
+            danger: true,
+            disabled: !rows.some((r) => !r.archivedAt),
+            hint: rows.some((r) => !r.archivedAt) ? undefined : "Already deleted",
+            onSelect: async () => {
+              if (
+                await deleteMany(
+                  "product_category",
+                  rows.filter((r) => !r.archivedAt),
+                  "category",
+                  "categories",
+                )
+              )
+                clear();
+            },
+          },
+        ],
+      }}
       columns={{
         id: { width: 80 },
         name: { width: 220, render: (r) => <strong>{r.name}</strong> },

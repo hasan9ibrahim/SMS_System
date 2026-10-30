@@ -48,6 +48,7 @@ import {
 } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { spreadsheetXml } from "../billing/files.js";
+import { contentDisposition, fillFileName, nowValues } from "../billing/fileNames.js";
 import { edrCoverage } from "../billing/edrFigures.js";
 import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
 import { exportList, notFound, setArchived } from "./masterData.js";
@@ -56,6 +57,7 @@ import { getCurrentUser } from "./session.js";
 import { mccmncLookup } from "./translationRules.js";
 import { inTransaction } from "./views.js";
 import { production } from "../mode.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -160,6 +162,12 @@ interface TrunkInfo {
   connections: number;
   rateTableId: number | null;
   currency: string | null;
+  /** For the rate file name (team trial round 12): the company's pattern and the values it may use. */
+  fileName: string | null;
+  enterpriseAlias: string | null;
+  timezone: string | null;
+  productCategory: string | null;
+  rateTable: string | null;
 }
 
 async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
@@ -169,7 +177,11 @@ async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
             (SELECT rt.id FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
               WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS rate_table_id,
             (SELECT rt.currency FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
-              WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS currency
+              WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS currency,
+            (SELECT rt.name FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
+              WHERE x.customer_trunk_id = t.id ORDER BY x.position LIMIT 1) AS rate_table,
+            bc.customer_rate_file_name, e.alias, e.billing_timezone,
+            (SELECT pc.name FROM product_categories pc WHERE pc.id = t.product_category_id) AS product_category
        FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
        JOIN business_companies bc ON bc.id = e.business_company_id
       WHERE t.id = $1 AND t.deleted_at IS NULL`,
@@ -193,7 +205,32 @@ async function trunkInfo(c: Db, id: number): Promise<TrunkInfo | null> {
     connections: Number(r.max_connections),
     rateTableId: r.rate_table_id === null ? null : Number(r.rate_table_id),
     currency: r.currency ? String(r.currency).trim() : null,
+    fileName: r.customer_rate_file_name ?? null,
+    enterpriseAlias: r.alias ?? null,
+    timezone: r.billing_timezone ?? null,
+    productCategory: r.product_category ?? null,
+    rateTable: r.rate_table ?? null,
   };
+}
+
+/** The rate sheet's file name from the business company's Customer Rate File Name (team trial round 12). */
+export function rateFileName(t: TrunkInfo, ext: string, username: string | null): string {
+  return fillFileName(
+    t.fileName,
+    {
+      ...nowValues(username),
+      company: t.company,
+      enterpriseName: t.enterprise,
+      enterpriseAlias: t.enterpriseAlias,
+      currency: t.currency,
+      timezone: t.timezone,
+      trunk: t.name,
+      productCategoryName: t.productCategory,
+      rateTable: t.rateTable,
+    },
+    `Rates_${t.name.replace(/\W+/g, "_")}_${today()}`,
+    ext,
+  );
 }
 
 /** Current and scheduled lines of the trunk's rate table (blocked lines left out). */
@@ -218,12 +255,17 @@ async function rateSheet(c: Db, t: TrunkInfo) {
   }));
 }
 
-export function sheetFile(t: TrunkInfo, lines: Awaited<ReturnType<typeof rateSheet>>, fileType: "excel" | "csv") {
+export function sheetFile(
+  t: TrunkInfo,
+  lines: Awaited<ReturnType<typeof rateSheet>>,
+  fileType: "excel" | "csv",
+  username: string | null,
+) {
   const head = ["Country", "Network", "MCCMNC", "Dial Code", "Rate", "Currency", "Effective Date", "Change"];
-  const name = `Rates_${t.name.replace(/\W+/g, "_")}_${today()}.${fileType === "csv" ? "csv" : "xls"}`;
+  const name = rateFileName(t, fileType === "csv" ? "csv" : "xls", username);
   if (fileType === "csv") {
     const cell = (v: unknown) => {
-      const s = String(v ?? "");
+      const s = csvText(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const csv = [
@@ -253,8 +295,8 @@ export function downloadRateSheet(request: FastifyRequest, reply: FastifyReply) 
     const t = await trunkInfo(pool, id);
     if (!t) return notFound(reply, "Customer trunk", id);
     if (!t.rateTableId) return sendProblem(reply, 409, `${t.name} has no rate table`);
-    const f = sheetFile(t, await rateSheet(pool, t), fileType);
-    return reply.type(f.type).header("content-disposition", `attachment; filename="${f.name}"`).send(f.body);
+    const f = sheetFile(t, await rateSheet(pool, t), fileType, (await getCurrentUser()).username);
+    return reply.type(f.type).header("content-disposition", contentDisposition(f.name)).send(f.body);
   });
 }
 
@@ -354,6 +396,12 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
   const skippedTables: { rateTableId: number; rateTable: string; reason: string }[] = [];
   // Rate tables (Rate Manager, team trial round 4): every live customer trunk using one of them.
   const ids = new Set(b.trunkIds ?? []);
+  // [Username] in the file name: who sends (system for automatic sends such as market move auto-apply).
+  const sender =
+    userId === null
+      ? null
+      : (((await pool.query("SELECT username FROM users WHERE id = $1", [userId])).rows[0]?.username as string) ??
+        null);
   if (b.rateTableIds?.length) {
     const { rows } = await pool.query(
       `SELECT rt.id, rt.name, rt.kind, array_remove(array_agg(t.id ORDER BY t.id), NULL) AS trunks
@@ -388,7 +436,7 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
     if (!b.sendEmail) continue;
     const m = await rateMail(pool, t);
     const lines = await rateSheet(pool, t);
-    const sheet = sheetFile(t, lines, b.fileType);
+    const sheet = sheetFile(t, lines, b.fileType, sender);
     const status = await logEmail(pool, {
       type: "send_rate",
       enterpriseId: t.enterpriseId,

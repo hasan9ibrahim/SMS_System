@@ -30,6 +30,7 @@ import {
   timeBounds,
   timeCondition,
   toGridRow,
+  withheldCells,
   type EdrGridRow,
 } from "./monitorModel";
 import { RequestDialog } from "./parts";
@@ -45,7 +46,7 @@ export const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
   fetchListPage<EdrRow>("edrs", body).then((p) => {
     const rows = p.rows.map(toGridRow);
     for (const r of rows) seen.set(r.id, r);
-    return { ...p, rows };
+    return { ...p, rows, masked: withheldCells(rows) };
   });
 /** Today 00:00 – 23:59 UTC on Start Time, the page's default period (team trial round 2). */
 const todayCondition = () => {
@@ -164,6 +165,25 @@ function StatusChip({
             Final attempt only
           </label>
           <div className="menu-sep" />
+          {/* Count and Check all / Uncheck all above the statuses (team trial round 12). None ticked = all. */}
+          <div className="checklist-bar chip-checks-bar">
+            <span className="muted">
+              {picked.length ? `Selected ${picked.length} of ${statuses.length}` : "None ticked: showing all"}
+            </span>
+            <span className="checklist-actions">
+              <button
+                type="button"
+                className="link"
+                disabled={picked.length === statuses.length}
+                onClick={() => set("msgStatus", { field: "msgStatus", op: "in", values: statuses.map((o) => o.value) })}
+              >
+                Check all
+              </button>
+              <button type="button" className="link" disabled={!picked.length} onClick={() => set("msgStatus", null)}>
+                Uncheck all
+              </button>
+            </span>
+          </div>
           {statuses.map((o) => (
             <label key={o.value} className="choice-row">
               <input type="checkbox" checked={picked.includes(o.value)} onChange={() => toggle(o.value)} />

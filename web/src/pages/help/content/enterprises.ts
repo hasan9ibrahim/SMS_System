@@ -739,7 +739,15 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Shows every saved change to this enterprise: who, when, and what changed (old and new values). You can undo a change from here. See [[undo-and-history]].",
+            text: "Shows every saved change to this enterprise, newest first and grouped by day (Today, Yesterday, then the date). Each change has one line with the time (UTC), who saved it, what kind of change it was and its number, then one row per field: the old value in grey → the new value. See [[undo-and-history]].",
+          },
+          {
+            kind: "list",
+            items: [
+              "List fields such as **Account managers** or e-mail lists show **+** for what was added, **−** for what was removed and **~** for an item that stayed but changed (for example an account manager period that now has an end date).",
+              "A save that touched many fields shows the first six; click **Show all N fields** for the rest.",
+              "**Undo** is on the changes you may undo: your own, and for administrators, directors and department managers those of the people they cover. See [[change-history]].",
+            ],
           },
         ],
       },
@@ -991,7 +999,10 @@ export const topics: HelpTopic[] = [
               { name: "Enterprise", what: "The vendor that owns the trunk." },
               { name: "UserName", what: "Our login (system_id) at the vendor." },
               { name: "Product Category", what: "The quality / product class of the route, e.g. DIRECT, SIM, WHS." },
-              { name: "Protocol", what: "SMPP or HTTP." },
+              {
+                name: "Protocol",
+                what: "SMPP, HTTP or Service. A service trunk sends nothing to a network: routed to it, the message is ended by the switch and the client gets the receipt set on the trunk (Receipt status, after Receipt after seconds; 0 = at once). One outcome per trunk: add a trunk for each outcome you need (delivered, undelivered, rejected, expired…). It has no connection, so it never shows as down.",
+              },
               { name: "TPS", what: "TPS (messages per second) we send per session." },
               { name: "State", what: "Active or Inactive: whether the trunk may carry traffic." },
               {
@@ -1636,6 +1647,11 @@ export const topics: HelpTopic[] = [
                 name: "Status on receipt timeout",
                 what: "The status recorded when no receipt arrives in time.",
                 values: "DELIVRD, EXPIRED, UNDELIV, REJECTD or UNKNOWN (default).",
+              },
+              {
+                name: "Receipt timeout applies to",
+                what: "The destinations the receipt timeout and its status apply to. Messages to other destinations wait the default 48 hours, then get UNKNOWN.",
+                values: "Every destination (default), or countries and networks picked in the tree.",
               },
             ],
           },

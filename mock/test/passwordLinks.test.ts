@@ -21,6 +21,9 @@ const run = Date.now().toString(36).slice(-5);
 const users: number[] = [];
 
 after(async () => {
+  // Close first: closing waits for the audit rows still being written after the last replies, so none lands after
+  // the clean-up (a late row kept a test user from being deleted, CI 2026-10-30).
+  await app.close();
   if (ready) {
     await db().query("DELETE FROM password_links WHERE user_id = ANY($1)", [users]);
     await db().query("DELETE FROM email_logs WHERE user_id = ANY($1)", [users]);
@@ -30,7 +33,6 @@ after(async () => {
     await db().query("DELETE FROM user_sessions WHERE user_id = ANY($1)", [users]);
     await db().query("DELETE FROM users WHERE id = ANY($1)", [users]);
   }
-  await app.close();
   await closeDb();
 });
 

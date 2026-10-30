@@ -213,51 +213,59 @@ defmodule Sms.Switch.Pipeline.Config do
 
   @doc """
   The customer's rate for a destination (§5.4): the first of the trunk's rate tables, in order, with a current,
-  unblocked line for the network, else for its country's All networks code.
+  unblocked line for the network, else for its country's All networks code. With the message's sender (as the
+  customer sent it), a Sender ID line of that table comes first, as in Rate Lookup and Re-rating (§6.2).
   """
-  @spec sell_rate(integer(), String.t(), integer()) :: rate() | nil
-  def sell_rate(customer_trunk_id, mccmnc, now_ms) do
+  @spec sell_rate(integer(), String.t(), integer(), String.t() | nil) :: rate() | nil
+  def sell_rate(customer_trunk_id, mccmnc, now_ms, sender \\ nil) do
     case customer_trunk(customer_trunk_id) do
       nil ->
         nil
 
       trunk ->
-        codes = codes(mccmnc)
+        keys = keys(mccmnc, sender)
 
         Enum.find_value(trunk.rate_table_ids, fn table ->
-          Enum.find_value(codes, &line(table, &1, now_ms))
+          Enum.find_value(keys, &line(table, &1, now_ms))
         end)
     end
   end
 
   @doc """
   A vendor trunk's buy rate for a destination: a current, unblocked line for the network in any of its rate tables,
-  else for the country's All networks code.
+  else for the country's All networks code; a Sender ID line for `sender` before either.
   """
-  @spec vendor_rate(integer(), String.t(), integer()) :: rate() | nil
-  def vendor_rate(vendor_trunk_id, mccmnc, now_ms) do
+  @spec vendor_rate(integer(), String.t(), integer(), String.t() | nil) :: rate() | nil
+  def vendor_rate(vendor_trunk_id, mccmnc, now_ms, sender \\ nil) do
     case vendor_trunk(vendor_trunk_id) do
       nil ->
         nil
 
       trunk ->
-        Enum.find_value(codes(mccmnc), fn code ->
-          Enum.find_value(trunk.rate_table_ids, &line(&1, code, now_ms))
+        Enum.find_value(keys(mccmnc, sender), fn key ->
+          Enum.find_value(trunk.rate_table_ids, &line(&1, key, now_ms))
         end)
     end
   end
+
+  # The rate keys to try in order: the sender's lines (network, then country), then the generic ones.
+  defp keys(mccmnc, sender) when sender in [nil, ""], do: codes(mccmnc)
+  defp keys(mccmnc, sender), do: Enum.map(codes(mccmnc), &{sender, &1}) ++ codes(mccmnc)
 
   defp codes(<<mcc::binary-size(3), _::binary>> = mccmnc) when byte_size(mccmnc) > 3,
     do: [mccmnc, mcc]
 
   defp codes(mccmnc), do: [mccmnc]
 
-  defp line(table, code, now) do
-    case :ets.lookup(@rates, {table, code}) do
-      [{_, lines}] -> lines |> Enum.find(&current?(&1, now)) |> rate_of(table, code)
+  defp line(table, key, now) do
+    case :ets.lookup(@rates, {table, key}) do
+      [{_, lines}] -> lines |> Enum.find(&current?(&1, now)) |> rate_of(table, code_of(key))
       [] -> nil
     end
   end
+
+  defp code_of({_sender, code}), do: code
+  defp code_of(code), do: code
 
   defp current?({from, to, _id, _micro, _currency, blocked}, now),
     do: not blocked and from <= now and (is_nil(to) or now < to)

@@ -226,10 +226,12 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const [rnNote, setRnNote] = useState("");
   const [sendRn, setSendRn] = useState(table.kind === "customer");
   const [error, setError] = useState<string | null>(null);
+  // A vendor table holds costs: its lines are called costs (team trial round 12).
+  const noun = table.kind === "vendor" ? "cost" : "rate";
   const submit = (notice: NoticeChoice | null = null) => {
     const value = Number(rate);
     if (!picked.length) return setError("Choose at least one destination.");
-    if (!rate || !Number.isFinite(value) || value < 0) return setError("Enter the rate.");
+    if (!rate || !Number.isFinite(value) || value < 0) return setError(`Enter the ${noun}.`);
     const items: RateLineEdit[] = picked.map((mccmnc) => ({
       action: "set",
       mccmnc,
@@ -251,7 +253,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
           if (r.change)
             notifySaved(
               r.change,
-              `Added ${r.applied} rate${r.applied === 1 ? "" : "s"}`,
+              `Added ${r.applied} ${noun}${r.applied === 1 ? "" : "s"}`,
             );
           showRnSummary(r.notifications);
           done();
@@ -272,7 +274,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   };
   return (
     <Modal
-      title={`Add rates to ${table.name}`}
+      title={`Add ${noun}s to ${table.name}`}
       width={680}
       onClose={done}
       footer={
@@ -280,7 +282,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
           {table.kind === "customer" && <SendRnCheck checked={sendRn} onChange={setSendRn} />}
           <Button onClick={done}>Cancel</Button>
           <Button variant="primary" onClick={() => submit()} disabled={change.isPending}>
-            Add {picked.length || ""} rate{picked.length === 1 ? "" : "s"}
+            Add {picked.length || ""} {noun}{picked.length === 1 ? "" : "s"}
           </Button>
         </>
       }
@@ -294,7 +296,7 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
       <div className="fgrid cols-3">
         <label className="field">
           <span>
-            Rate ({table.currency})<span className="req">*</span>
+            {table.kind === "vendor" ? "Cost" : "Rate"} ({table.currency})<span className="req">*</span>
           </span>
           <input type="number" min={0} step="0.0001" value={rate} onChange={(e) => setRate(e.target.value)} />
           {rate !== "" && table.currency !== platformCurrency && Number.isFinite(Number(rate)) && (

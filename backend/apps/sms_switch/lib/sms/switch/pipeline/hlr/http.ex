@@ -17,6 +17,48 @@ defmodule Sms.Switch.Pipeline.Hlr.Http do
     opts = [timeout: timeout, connect_timeout: timeout, autoredirect: false]
     {method, request} = build(provider, number)
 
+    if public_target?(provider.url),
+      do: send_request(method, request, opts, provider),
+      else: {:error, :private_address}
+  end
+
+  @doc """
+  Whether a provider URL is http(s) to a public address (security audit, team trial round 12): an HLR provider set
+  to this server's own services (ClickHouse, Patroni, the API) would have them run what its Data holds. The host is
+  resolved now, at each lookup, so a name that later points inside is refused too.
+  """
+  @spec public_target?(String.t(), boolean()) :: boolean()
+  def public_target?(url, allow \\ allow_private_hosts?()) do
+    case URI.parse(String.replace(url, ["{DNID}", "{USERNAME}", "{PASSWORD}"], "x")) do
+      %URI{scheme: scheme, host: host}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+        allow or public_host?(host)
+
+      _ ->
+        false
+    end
+  end
+
+  defp allow_private_hosts?,
+    do: Keyword.get(Application.get_env(:sms_switch, __MODULE__, []), :allow_private_hosts, false)
+
+  defp public_host?(host) do
+    case :inet.getaddrs(String.to_charlist(host), :inet) do
+      {:ok, addrs} -> Enum.all?(addrs, &public_ip?/1)
+      _ -> false
+    end
+  end
+
+  # Not this-network, private, loopback, shared (CGNAT), link-local, multicast or reserved.
+  defp public_ip?({a, b, _, _}), do: not (a in [0, 10, 127] or a >= 224 or private_pair?(a, b))
+
+  defp private_pair?(100, b), do: b in 64..127
+  defp private_pair?(169, b), do: b == 254
+  defp private_pair?(172, b), do: b in 16..31
+  defp private_pair?(192, b), do: b == 168
+  defp private_pair?(_, _), do: false
+
+  defp send_request(method, request, opts, provider) do
     case :httpc.request(method, request, opts, body_format: :binary) do
       {:ok, {{_, status, _}, _headers, body}} when status in 200..299 ->
         parse(body, provider.mapping)

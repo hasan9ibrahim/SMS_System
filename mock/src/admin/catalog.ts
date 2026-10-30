@@ -13,7 +13,6 @@ export const ACTIONS: AccessCatalog["actions"] = [
   { key: "approve", label: "Approve", description: "Approve or reject requests (maker-checker)" },
   { key: "start_stop", label: "Start / stop", description: "Start or stop binds and jobs" },
   { key: "change_password", label: "Change passwords", description: "Set other users' temporary passwords" },
-  { key: "undo_others", label: "Undo others", description: "Undo changes made by other users (§13.10)" },
   { key: "export_credentials", label: "Export credentials", description: "Sensitive exports, 2FA required (§13.22)" },
 ];
 
@@ -147,7 +146,8 @@ export const MODULES: AccessCatalog["modules"] = [
   m("team-report", "Team", "reports", READ),
   m("scheduled", "Scheduled reports", "reports", CRUD),
   m("daily-traffic", "Daily traffic alerts", "reports", [...CRUD, "send"]),
-  m("change-history", "Change history", "admin", ["view", "undo_others"]),
+  // Undoing others' changes follows the person, not a permission (team trial round 12, api/changes.ts changeScope).
+  m("change-history", "Change history", "admin", ["view"]),
   m("users", "Users", "admin", [...CRUD, "change_password"]),
   m("access-groups", "GUI access groups", "admin", CRUD),
   m("visibility", "Visibility policies", "admin", ["view", "edit"]),

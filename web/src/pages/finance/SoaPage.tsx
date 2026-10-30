@@ -53,6 +53,7 @@ import {
   signedAmount,
 } from "./soaModel";
 import { MailBody } from "../../ui/MailPreview";
+import { openEditor as editTransaction } from "./TransactionsPage";
 
 const page = pageForPath("/finance/soa")!;
 const muted = (v: string) => <span className="muted">{v}</span>;
@@ -480,13 +481,15 @@ function SideView({ st, s }: { st: SoaStatement; s: SoaSide }) {
           </tr>
           {s.lines.map((l) => {
             const a = lineAction(l);
+            // A payment, credit note or adjustment opens its transaction to edit (team trial round 12).
+            const tx = !a && l.refType === "transaction" && l.refId !== null ? l.refId : null;
             return (
               <LineRow
                 key={l.key}
                 l={l}
                 ccy={s.currency}
-                onAction={a ? () => void act(l) : undefined}
-                actionLabel={a === "take_back" ? "Take back" : "Remove"}
+                onAction={a ? () => void act(l) : tx !== null ? () => void editTransaction(tx) : undefined}
+                actionLabel={a === "take_back" ? "Take back" : a ? "Remove" : "Edit"}
               />
             );
           })}

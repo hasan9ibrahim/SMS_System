@@ -38,6 +38,9 @@ const lastSession = ready
   ? Number((await db().query("SELECT coalesce(max(id), 0) AS id FROM user_sessions")).rows[0].id)
   : 0;
 after(async () => {
+  // Close first: closing waits for the audit rows still being written after the last replies, so none lands after
+  // the clean-up (a late row kept a test user from being deleted, CI 2026-10-30).
+  await app.close();
   if (ready) {
     const q = (sql: string, p: unknown[] = [started]) => db().query(sql, p);
     if (myHash)
@@ -61,7 +64,6 @@ after(async () => {
     await q("DELETE FROM business_companies WHERE inserted_at >= $1");
     await q("DELETE FROM audit_log WHERE at >= $1");
   }
-  await app.close();
   await closeDb();
 });
 
@@ -228,7 +230,7 @@ describe("§11 lists", { skip }, () => {
 
 describe("§11 users, §13.28 passwords", { skip }, () => {
   const form = async (): Promise<UserInput> => {
-    const { rows } = await db().query("SELECT id FROM departments WHERE name = 'NOC'");
+    const { rows } = await db().query("SELECT id FROM departments WHERE name = 'NOC Support and Technical'");
     return {
       username: `test.user.${run}`,
       firstName: "Testa",
@@ -418,7 +420,7 @@ describe("§11 departments, access groups, templates, portal users", { skip }, (
     assert.equal(record.manager, "Daniel Khoury");
     await fails(
       "createDepartment",
-      call("POST", "/departments", { name: "NOC", status: "active", managerId: null, description: null }),
+      call("POST", "/departments", { name: "NOC Support and Technical", status: "active", managerId: null, description: null }),
       400,
     );
     const blocked = await fails("archiveDepartment", call("POST", "/departments/3/archive", {}), 409);
@@ -655,6 +657,8 @@ describe("§11 business companies", { skip }, () => {
       invoiceNumberStart: r.invoiceNumberStart,
       companyIp: r.companyIp,
       customerRateFileName: r.customerRateFileName,
+      soaFileName: r.soaFileName,
+      invoiceFileName: r.invoiceFileName,
       address: r.address,
       bank: r.bank,
       defaultTemplates: r.defaultTemplates,
@@ -754,6 +758,34 @@ describe("§11 business companies", { skip }, () => {
       400,
     );
     assert.match(wrongType.errors[0].message, /another type/);
+    // File names (team trial round 12): known variables save, an unknown one is refused with its name.
+    const named = await ok(
+      "updateBusinessCompany",
+      call("PUT", `/business-companies/${copy.id}`, {
+        ...withSecrets,
+        customerRateFileName: "{EnterpriseName}{ProductCategoryName}{Currency}{Username}{Date and Time}{Trunk}{Company}",
+        soaFileName: "SOA_[EnterpriseName]_[BeneficiaryAddress]_[FromDate]_[ToDate]",
+        invoiceFileName: "[InvoiceRefNumber]_[CompanyRegisteredName]_[PARAM1001]",
+      }),
+    );
+    assert.equal(named.record.invoiceFileName, "[InvoiceRefNumber]_[CompanyRegisteredName]_[PARAM1001]");
+    const badName = await fails(
+      "updateBusinessCompany",
+      call("PUT", `/business-companies/${copy.id}`, { ...withSecrets, soaFileName: "SOA_[InvoiceRefNumber]" }),
+      400,
+    );
+    assert.equal(badName.errors[0].path, "/soaFileName");
+    assert.match(badName.errors[0].message, /\[InvoiceRefNumber\]/);
+    const formatVars = await ok("listFormatVariables", call("GET", "/business-companies/format-variables"));
+    const keys = (kind: string) =>
+      formatVars.formats.find((f: { kind: string }) => f.kind === kind).variables.map((v: { key: string }) => v.key);
+    for (const k of ["[EnterpriseName]", "[ProductCategoryName]", "[Currency]", "[Timezone]"])
+      assert.ok(keys("customer_rate_format").includes(k), `rate format has ${k}`);
+    for (const k of ["[BeneficiaryAddress]", "[FromDate]", "[ToDate]"]) assert.ok(keys("soa_format").includes(k));
+    for (const k of ["[InvoiceRefNumber]", "[PARAM1001]", "[FaxNumber]", "[SIDTitle]"])
+      assert.ok(keys("invoice_format").includes(k));
+    for (const k of ["[EnterpriseName]", "[ProductCategoryName]", "[Currency]", "[Username]", "[DateTime]", "[Trunk]"])
+      assert.ok(keys("customer_rate_file_name").includes(k), `rate file name has ${k}`);
 
     await fails(
       "uploadCompanyFile",

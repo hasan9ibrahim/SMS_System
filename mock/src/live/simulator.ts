@@ -258,12 +258,19 @@ export function levelAt(segs: Segment[], t: number): number {
 
 // ---------------------------------------------------------------- loading
 
-export async function loadFromStores(): Promise<{
+/**
+ * The live trunks, vendors and today's figures. `feed` (production, live/feed.ts): every live vendor is kept, not only
+ * those with traffic last week, and an EDR store that does not answer leaves the figures empty instead of failing
+ * (team trial round 12: a server whose EDR store was slow at start stopped the whole service). `stats: false` reads
+ * only the trunk lists (the feed's refresh every minute).
+ */
+export async function loadFromStores(opts: { feed?: boolean; stats?: boolean } = {}): Promise<{
   trunks: SimTrunk[];
   vendors: SimVendor[];
   today: DayTotals;
   destMix: DestMix[];
 }> {
+  const withStats = opts.stats !== false;
   const now = Date.now();
   const today: DayTotals = {
     day: platformDay(now),
@@ -312,17 +319,24 @@ export async function loadFromStores(): Promise<{
          FROM edr WHERE submit_time >= ${PLATFORM_DAY_START_SQL} AND toString(${col}) NOT IN ('0', '') GROUP BY id`,
       15_000,
     );
-  const [cStats, vStats, dStats, cDay, vDay, dDay] = await Promise.all([
-    stats("c_trunk_id"),
-    stats("v_trunk_id"),
-    stats("c_mccmnc"),
-    day("c_enterprise_id"),
-    day("v_enterprise_id"),
-    day("c_mccmnc"),
-  ]);
+  const none = async () => [] as Stat[];
+  const [cStats, vStats, dStats, cDay, vDay, dDay] = await Promise.all(
+    withStats
+      ? [
+          stats("c_trunk_id"),
+          stats("v_trunk_id"),
+          stats("c_mccmnc"),
+          day("c_enterprise_id"),
+          day("v_enterprise_id"),
+          day("c_mccmnc"),
+        ]
+      : [none(), none(), none(), none(), none(), none()],
+  );
   // No EDR store yet (it starts after the server, or is busy): load again later rather than run a day with no
-  // vendors and no destinations (team trial round 2; createSimulator retries every minute).
-  if (cStats === null || vStats === null || dStats === null) throw new Error("the EDR store did not answer");
+  // vendors and no destinations (team trial round 2; createSimulator retries every minute). The production feed
+  // starts without them: its figures come from the switch's events, and today's are read again every minute.
+  if (!opts.feed && (cStats === null || vStats === null || dStats === null))
+    throw new Error("the EDR store did not answer");
   const cBy = new Map((cStats ?? []).map((s) => [Number(s.id), s]));
   const vBy = new Map((vStats ?? []).map((s) => [Number(s.id), s]));
   const cTotal = [...cBy.values()].reduce((s, x) => s + Number(x.n), 0) || 1;
@@ -401,7 +415,7 @@ export async function loadFromStores(): Promise<{
         day: emptyDay(),
       };
     })
-    .filter((v) => v.weight > 0);
+    .filter((v) => opts.feed || v.weight > 0);
 
   for (const s of cDay ?? []) {
     const id = Number(s.id);

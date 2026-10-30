@@ -40,6 +40,8 @@ import { getCurrentUser } from "./session.js";
 import { mccmncLookup } from "./translationRules.js";
 import { inTransaction } from "./views.js";
 import { ruleTargetDependencies } from "./ruleTargets.js";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -199,11 +201,47 @@ export function getHlrProvider(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => (await loadHlrProvider(pool, id)) ?? notFound(reply, "HLR provider", id));
 }
 
+/** 0.0.0.0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12, 192.168/16, multicast and up; ::1, fc00::/7, fe80::/10. */
+export function privateAddress(ip: string): boolean {
+  if (isIP(ip) === 4) {
+    const [a, b] = ip.split(".").map(Number) as [number, number];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224;
+  }
+  const v6 = ip.toLowerCase();
+  return v6 === "::1" || v6 === "::" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6) || v6.startsWith("::ffff:");
+}
+
+/**
+ * Why a provider URL may not be used, or null (security audit, team trial round 12): http(s) to a public address only,
+ * never this server's own services. In production the name is resolved too; the switch checks again at each lookup.
+ */
+async function providerTarget(url: string): Promise<string | null> {
+  let u: URL;
+  try {
+    u = new URL(url.replace(/\{(DNID|USERNAME|PASSWORD)\}/g, "x"));
+  } catch {
+    return "not a valid URL";
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return "use an http:// or https:// address";
+  const host = u.hostname.replace(/^\[|\]$/g, "");
+  if (/^localhost$|\.localhost$|\.local$|\.internal$/i.test(host) || (isIP(host) && privateAddress(host)))
+    return "a provider must be on the internet, not on this server or a private network";
+  if (production && !isIP(host)) {
+    const addrs = await lookup(host, { all: true }).catch(() => []);
+    if (addrs.some((a) => privateAddress(a.address)))
+      return `${host} points to a private address: a provider must be on the internet`;
+  }
+  return null;
+}
+
 async function checkProvider(db: Db, input: HlrProviderInput, exceptId: number): Promise<FieldError[] | string> {
   const errors: FieldError[] = [];
   if (!input.name.trim()) errors.push({ path: "/name", message: "required" });
   if (!input.url.includes("{DNID}") && !(input.postData ?? "").includes("{DNID}"))
     errors.push({ path: "/url", message: "put {DNID} where the number goes (in the URL or the POST data)" });
+  const target = await providerTarget(input.url);
+  if (target) errors.push({ path: "/url", message: target });
   for (const [i, line] of (input.extraHeaders ?? "").split(/\r?\n/).entries())
     if (line.trim() && !/^[A-Za-z0-9-]+:\s*\S/.test(line))
       errors.push({ path: "/extraHeaders", message: `line ${i + 1}: write it as "Name: value"` });

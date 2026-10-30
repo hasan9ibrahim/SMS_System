@@ -21,7 +21,8 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
   const navigate = useTabNavigate();
   const page = pageForPath(`/enterprises/${kind}-trunks`)!;
   const open = (id: number, name: string, forceNew = false) =>
-    navigate(`/enterprises/${kind}-trunks/${id}`, { newTab: true, forceNew, title: `${LABEL[kind]} · ${name}` });
+    // In this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
+    navigate(`/enterprises/${kind}-trunks/${id}`, { forceNew, title: `${LABEL[kind]} · ${name}` });
   const clone = (id: number, name: string) =>
     navigate(`/enterprises/${kind}-trunks/new?clone=${id}`, {
       newTab: true,

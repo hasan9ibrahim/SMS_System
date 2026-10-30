@@ -10,7 +10,7 @@ import { ListScreen } from "../../page/ListScreen";
 import { RepushDialog } from "./EdrSearchPage";
 import { ask } from "../../ui/feedback";
 import { Button } from "../../ui/primitives";
-import { fmtSeconds, timeBounds, timeCondition, uuidKey } from "./monitorModel";
+import { fmtSeconds, timeBounds, timeCondition, uuidKey, withheldCells } from "./monitorModel";
 import { DownloadsList, RequestDialog, useView, ViewTabs } from "./parts";
 import { RangeChip } from "../../ui/DateRange";
 
@@ -23,10 +23,10 @@ type View = (typeof VIEWS)[number]["key"];
 type Row = Omit<FailedEdrRow, "id"> & { id: number; uuid: string };
 
 const fetchFailed = (body: ListQuery): Promise<ListPage<Row>> =>
-  fetchListPage<FailedEdrRow>("failed_edrs", body).then((p) => ({
-    ...p,
-    rows: p.rows.map((r) => ({ ...r, id: uuidKey(r.id), uuid: r.id })),
-  }));
+  fetchListPage<FailedEdrRow>("failed_edrs", body).then((p) => {
+    const rows = p.rows.map((r) => ({ ...r, id: uuidKey(r.id), uuid: r.id }));
+    return { ...p, rows, masked: withheldCells(rows) };
+  });
 
 function Tabs() {
   const [view, go] = useView<View>(

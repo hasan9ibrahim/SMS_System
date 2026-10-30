@@ -27,7 +27,8 @@ export async function refuseMasked(reply: FastifyReply, enterpriseId: number): P
   return true;
 }
 
-async function contactsHidden(enterpriseId: number): Promise<boolean> {
+/** True when the viewer's policy hides this enterprise's contact details and credentials (§13.17). */
+export async function contactsHidden(enterpriseId: number): Promise<boolean> {
   const v = await restrictingViewer();
   if (!v) return false;
   const s = v.policy.items.contacts;

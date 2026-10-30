@@ -6,7 +6,7 @@ export const SECTIONS = [
   { key: "business", label: "Business results" },
   { key: "rates", label: "Rates & routing" },
   { key: "billing", label: "Billing" },
-  { key: "noc", label: "NOC" },
+  { key: "noc", label: "NOC Support and Technical" },
   { key: "activity", label: "System activity" },
 ] as const;
 export type Section = (typeof SECTIONS)[number]["key"];

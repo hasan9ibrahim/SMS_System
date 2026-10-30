@@ -137,6 +137,17 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
       }),
     staleTime: 30_000,
   });
+  // "of M": every client table, the search aside (team trial round 12).
+  const offered = useQuery({
+    queryKey: ["list", "bulk-tables", "total"],
+    queryFn: () =>
+      fetchPickPage<TablePick>("rate_tables", {
+        limit: 1,
+        withTotal: true,
+        filter: { logic: "and", conditions: [{ field: "kind", op: "in", values: ["customer"] }] },
+      }),
+    staleTime: 60_000,
+  });
   // Every client table, for Exclusive.
   const all = useQuery({
     queryKey: ["list", "bulk-tables", "all"],
@@ -211,46 +222,56 @@ function TableScope({ ids, onChange }: { ids: number[]; onChange: (ids: number[]
           <span className="muted small">{mode === "inclusive" ? "Nothing chosen yet." : "Nothing excluded."}</span>
         )}
       </div>
-      <input
-        type="search"
-        placeholder="Search tables, customer trunks or enterprises…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        aria-label="Search client rate tables"
-      />
-      <div className="pick-list">
-        {rows.length > 0 && (
-          <label className="choice-row select-all">
-            <input
-              type="checkbox"
-              checked={allShown}
-              onChange={() =>
-                setTicked(
-                  allShown
-                    ? ticked.filter((id) => !rows.some((r) => r.id === id))
-                    : [...new Set([...ticked, ...rows.map((r) => r.id)])],
-                )
-              }
-            />
-            <span className="strong">Select all shown</span>
-            <span className="muted small">
-              {rows.length}
-              {results.data?.total && results.data.total > rows.length ? ` of ${results.data.total}` : ""}
-            </span>
-          </label>
-        )}
-        {rows.map((r) => (
-          <label key={r.id} className="choice-row">
-            <input type="checkbox" checked={ticked.includes(r.id)} onChange={() => toggle(r.id)} />
-            <span>{r.name}</span>
-            <span className="muted small">
-              {[r.category, r.currency]
-                .filter(Boolean)
-                .join(" · ")}
-            </span>
-          </label>
-        ))}
-        {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+      <div className="checklist-bar">
+        <span className="muted">
+          {mode === "inclusive" ? "Selected" : "Excluded"} {ticked.length.toLocaleString("en-US")}
+          {offered.data ? ` of ${offered.data.total.toLocaleString("en-US")}` : ""}
+          {q.trim() && results.data ? ` · ${(results.data.total ?? rows.length).toLocaleString("en-US")} match` : ""}
+        </span>
+        <span className="checklist-actions">
+          <button
+            type="button"
+            className="link"
+            disabled={!rows.length || allShown}
+            onClick={() => setTicked([...new Set([...ticked, ...rows.map((r) => r.id)])])}
+          >
+            {q.trim() || (results.data?.total ?? 0) > rows.length ? "Check shown" : "Check all"}
+          </button>
+          <button
+            type="button"
+            className="link"
+            disabled={!ticked.length}
+            onClick={() => setTicked(q.trim() ? ticked.filter((id) => !rows.some((r) => r.id === id)) : [])}
+          >
+            {q.trim() ? "Uncheck shown" : "Uncheck all"}
+          </button>
+        </span>
+      </div>
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input
+            placeholder="Search tables, customer trunks or enterprises…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search client rate tables"
+          />
+        </div>
+        <div className="pick-list">
+          {rows.map((r) => (
+            <label key={r.id} className="choice-row">
+              <input type="checkbox" checked={ticked.includes(r.id)} onChange={() => toggle(r.id)} />
+              <span>{r.name}</span>
+              <span className="muted small">
+                {[r.category, r.currency]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </span>
+            </label>
+          ))}
+          {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
+        </div>
       </div>
     </div>
   );

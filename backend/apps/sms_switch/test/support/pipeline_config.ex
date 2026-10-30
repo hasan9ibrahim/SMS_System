@@ -188,9 +188,9 @@ defmodule Sms.Switch.Test.PipelineConfig do
   end
 
   @doc "A rate line row: table, line id, MCCMNC, rate (EUR unless given), current since an hour ago."
-  def rate(table, id, mccmnc, rate, currency \\ "EUR") do
+  def rate(table, id, mccmnc, rate, currency \\ "EUR", sender \\ nil) do
     from = DateTime.add(DateTime.utc_now(), -3_600)
-    [table, id, mccmnc, Decimal.new(rate), currency, from, nil, false]
+    [table, id, mccmnc, Decimal.new(rate), currency, from, nil, false, sender]
   end
 
   @doc "A route rule vendor row."

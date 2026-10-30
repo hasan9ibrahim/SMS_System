@@ -124,6 +124,7 @@ import {
   archiveTrunk,
   createTrunk,
   getTrunk,
+  getTrunkPassword,
   getTrunkDependencies,
   getTrunkRules,
   restoreTrunk,
@@ -551,7 +552,7 @@ import {
   sendTroubleTicket,
   updateEdrTemplate,
 } from "./api/observation.js";
-import { cancelEdrDownload, downloadEdrFile, requestEdrDownload } from "./api/edrDownloads.js";
+import { cancelEdrDownload, downloadEdrFile, queryEdrDownloads, requestEdrDownload } from "./api/edrDownloads.js";
 import {
   downloadSignalingCapture,
   exportNetworkBinds,
@@ -642,6 +643,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryCustomerTrunks: queryList("customer_trunks"),
   createCustomerTrunk: createTrunk("customer"),
   getCustomerTrunk: getTrunk("customer"),
+  getCustomerTrunkPassword: getTrunkPassword("customer"),
   updateCustomerTrunk: updateTrunk("customer"),
   getCustomerTrunkDependencies: getTrunkDependencies("customer"),
   archiveCustomerTrunk: archiveTrunk("customer"),
@@ -653,6 +655,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   queryVendorTrunks: queryList("vendor_trunks"),
   createVendorTrunk: createTrunk("vendor"),
   getVendorTrunk: getTrunk("vendor"),
+  getVendorTrunkPassword: getTrunkPassword("vendor"),
   updateVendorTrunk: updateTrunk("vendor"),
   getVendorTrunkDependencies: getTrunkDependencies("vendor"),
   archiveVendorTrunk: archiveTrunk("vendor"),
@@ -1053,7 +1056,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveEdrTemplate,
   restoreEdrTemplate,
   requestEdrDownload,
-  queryEdrDownloads: queryList("edr_downloads"),
+  queryEdrDownloads,
   cancelEdrDownload,
   downloadEdrFile,
   queryNetworkBinds: queryList("network_binds"),

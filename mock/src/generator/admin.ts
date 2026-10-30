@@ -17,6 +17,8 @@ export const DEMO_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
 
 // NOC and Support are one department (team trial round 1, 2026-10-18).
 export const DEPARTMENTS = ["Management", "Sales", "NOC", "Rates", "Billing", "Admin"];
+/** Names shown for the generator's department keys (team trial round 12). */
+export const DEPARTMENT_NAME: Record<string, string> = { NOC: "NOC Support and Technical" };
 
 // Permission keys are page keys of the menu (admin/catalog.ts, §11).
 export const ACCESS_GROUPS: {
@@ -41,7 +43,6 @@ export const ACCESS_GROUPS: {
         "approve",
         "start_stop",
         "change_password",
-        "undo_others",
         "export_credentials",
       ],
     },
@@ -49,7 +50,7 @@ export const ACCESS_GROUPS: {
   {
     name: "Department Manager",
     description: "Every page except credential exports; can undo the team's changes",
-    permissions: { "*": ["view", "add", "edit", "export", "send", "approve", "undo_others"] },
+    permissions: { "*": ["view", "add", "edit", "export", "send", "approve"] },
   },
   {
     name: "Account Manager",
@@ -277,7 +278,10 @@ async function adminColumns(
       state: rng.chance(0.5) ? city(rng) : null,
       zip: rng.digits(5),
       company_ip: `198.51.100.${10 + i}`, // TEST-NET-2, never routable
-      customer_rate_file_name: "{company}_{trunk}_rates_{date}",
+      // File names with variables (team trial round 12, src/billing/fileNames.ts).
+      customer_rate_file_name: "[Company]_[Trunk]_rates_[Date]",
+      soa_file_name: "SOA_[EnterpriseName]_[FromDate]_[ToDate]",
+      invoice_file_name: "[InvoiceRefNumber]_[EnterpriseName]",
       bank_beneficiary_name: `${c.name as string} (fake)`,
       bank_beneficiary_address: `${c.address_line1 as string}, ${c.city as string}`,
       bank_name: `Fake ${companyName(rng).split(" ")[0]} Bank`,
@@ -297,7 +301,8 @@ async function adminColumns(
   for (const [i, name] of DEPARTMENTS.entries()) {
     await sink.insert("departments", {
       id: i + 1,
-      name,
+      // The generator's key stays "NOC"; the department is called NOC Support and Technical (team trial round 12).
+      name: DEPARTMENT_NAME[name] ?? name,
       status: "active",
       manager_id: managerOf[name] ?? managers.get(name) ?? null,
       description: `${name} department (fake)`,

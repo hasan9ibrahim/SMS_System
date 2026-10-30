@@ -9,7 +9,7 @@ export const topics: HelpTopic[] = [
     title: "Change history",
     group: "Admin",
     summary:
-      "Every save anyone makes, with who, when and exactly which fields changed, and an Undo button per change. **My changes** is the same page showing only your own saves.",
+      "Every save, with who, when and exactly which fields changed, and an Undo button per change. You see your own saves; administrators and directors see everyone's, and a department's manager sees that department's. **My changes** shows only your own saves.",
     keywords: ["undo", "history", "my changes", "audit", "revert", "rollback", "who changed", "before after", "diff"],
     sections: [
       {
@@ -18,11 +18,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'Every time someone saves a record (a route rule, a rate, a trunk, a user, a template and so on) the system writes one **change**. This page lists all of them, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
+            text: 'Every time someone saves a record (a route rule, a rate, a trunk, a user, a template and so on) the system writes one **change**. This page lists the ones you may see, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
           },
           {
             kind: "text",
-            text: "Open **My changes** from your avatar menu (top right) to see the same page filtered to your own saves. Everyone can use it for their own work; supervisors and admins use the full list to follow the team.",
+            text: "Open **My changes** from your avatar menu (top right) to see the same page filtered to your own saves. Everyone can use it for their own work. Administrators and directors (the Management department) see the full list; a department's manager sees the changes of the people in that department, to follow the team.",
           },
         ],
       },
@@ -125,7 +125,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "warning",
-            text: "You can always undo your own changes. Undoing someone else's change needs the **Undo others** permission in your [[access-groups|GUI access group]]. Without it, the Undo button is not shown on their rows.",
+            text: "You see and can undo your own changes. Administrators and directors (the **Management** department) see and undo everyone's; a department's manager ([[departments]]) sees and undoes the changes of the people in that department. Other people's changes are not listed for anyone else.",
           },
           {
             kind: "tip",
@@ -478,7 +478,6 @@ export const topics: HelpTopic[] = [
       "menu",
       "buttons",
       "RBAC",
-      "undo others",
       "export credentials",
     ],
     sections: [
@@ -584,7 +583,6 @@ export const topics: HelpTopic[] = [
               { name: "Approve", what: "Approve or reject requests (one person makes, another checks)." },
               { name: "Start / stop", what: "Start or stop binds and jobs." },
               { name: "Change passwords", what: "Set other users' temporary passwords (Users, Customer portal)." },
-              { name: "Undo others", what: "Undo changes made by other users ([[change-history]])." },
               {
                 name: "Export credentials",
                 what: "Sensitive exports with trunk connection details. Also needs 2FA, and only admins can actually include credentials ([[migration]]).",
@@ -648,7 +646,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "Keep **Undo others** and **Change passwords** for supervisors and admins only.",
+            text: "Keep **Change passwords** for supervisors and admins only. Seeing and undoing other people's changes follows the person (administrator, director or department manager), not a permission ([[change-history]]).",
           },
         ],
       },
@@ -1097,9 +1095,21 @@ export const topics: HelpTopic[] = [
               { name: "Business Company IP", what: "Optional IP address of the company, up to 45 characters." },
               {
                 name: "Customer Rate File Name",
-                what: "The file name of rate sheets sent to customers.",
+                what: "The file name of rate sheets sent to or downloaded for customers. Write variables as `[Key]` or `{Key}`, in any case; spaces are ignored, so `{Date and Time}` works.",
                 values:
-                  "Variables `{company}` `{enterprise}` `{trunk}` `{date}`; default `{company}_{trunk}_rates_{date}`",
+                  "e.g. `[EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]`; also `[Trunk]` `[Company]` `[Username]` `[Timezone]` `[RateTable]`. Empty: `Rates_<trunk>_<date>`",
+              },
+              {
+                name: "SOA File Name",
+                what: "The file name of statements of account (e-mailed and downloaded).",
+                values:
+                  "e.g. `SOA_[EnterpriseName]_[FromDate]_[ToDate]`; also `[BeneficiaryAddress]` `[Currency]` `[Company]` `[Username]` `[Date]`. Empty: `SOA_<from>_<to>`",
+              },
+              {
+                name: "Invoice File Name",
+                what: "The file name of invoice PDFs (e-mailed and downloaded).",
+                values:
+                  "e.g. `[InvoiceRefNumber]_[EnterpriseName]_[InvoiceDate]`; also `[InvoiceDueDate]` `[CurrencyCode]` `[CompanyRegisteredName]` `[RegistrationNumber]` (or `[PARAM1001]`) `[VATNumber]` `[GrandTotal]`. Empty: the invoice number",
               },
               { name: "Description", what: "Optional free text." },
             ],
@@ -1248,7 +1258,19 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "A missing file shows **missing** in amber. **Upload…** replaces a file; click a file name to download it. **Format File Variables** lists the `{variables}` each format can use, e.g. `{invoice_no}`, `{due_date}`, `{total}` for invoices or `{mccmnc}`, `{rate}`, `{change_type}` for rate sheets.",
+            text: "A missing file shows **missing** in amber. **Upload…** replaces a file; click a file name to download it. **Format file and file name variables** lists the keys each format file can hold (the old platform's `[EnterpriseName]`, `[InvoiceRefNumber]`, `[FromDate]` and so on) and every variable the three file names accept.",
+          },
+          {
+            kind: "list",
+            items: [
+              "Dates and times in file names are UTC: `[Date]` is `2026-10-30`, `[Time]` is `16-49`, `[DateTime]` (or `{Date and Time}`) is `2026-10-30_16-49`.",
+              "`[Username]` is who sent or downloaded the file; automatic sends (auto invoices, market move re-pricing) use `system`.",
+              "Characters a file name cannot hold (`/ \\ : * ? \" < > |`) become `_`. Saving refuses a variable the file does not know and names it.",
+            ],
+          },
+          {
+            kind: "warning",
+            text: "The uploaded format files are kept with the company for now; invoices, rate sheets and statements are still laid out by the platform's own layout. Their keys are listed so a format file from the old platform can be checked.",
           },
           { kind: "tip", text: "Files can be uploaded only after the company is saved." },
         ],
@@ -1916,7 +1938,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Use it to move a whole platform's data in or out in one go: users, enterprises, trunks, rate tables and rates, route rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
+            text: "Use it to move a whole platform's data in or out in one go: departments, product categories, users, enterprises, trunks, rate tables and rates, number lists, route rules, translation rules, HLR rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
           },
           {
             kind: "text",
@@ -1980,7 +2002,7 @@ export const topics: HelpTopic[] = [
               { name: "From", what: "Where the data comes from.", values: "CSV files (default), Export package" },
               {
                 name: "Entity / File",
-                what: 'One row per entity, in the order they are loaded: Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rates; Route rules; Opening balances. Choose a CSV file for each you need. **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
+                what: 'One row per entity, in the order they are loaded: Departments; Product categories; Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rates; Number lists; Route rules; Translation rules; HLR rules; Opening balances. Choose a CSV file for each you need. Later files may name records of earlier ones in the same import (the department of a new user, the number list of a new translation rule). **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
               },
               {
                 name: "Columns",
@@ -1988,7 +2010,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "If it exists",
-                what: "What to do when a record already exists. Rates and opening balances are always added. A user in the file whose username belongs to a deleted user is restored with the file's details (a deleted user keeps its username), whatever this says; the dry run lists it as a warning.",
+                what: "What to do when a record already exists. Rates, number list values and opening balances are always added (a value already in its list is skipped). Translation rules that exist are skipped: edit them on their page. A user in the file whose username belongs to a deleted user is restored with the file's details (a deleted user keeps its username), whatever this says; the dry run lists it as a warning.",
                 values: "Skip (default), Update, Add new",
               },
               {
@@ -2003,6 +2025,21 @@ export const topics: HelpTopic[] = [
                 name: "2FA code",
                 what: "Your 6-digit code from the authenticator app. Needed when the files hold trunk credentials (System ID, username, password, host, port). Admins only.",
               },
+            ],
+          },
+        ],
+      },
+      {
+        id: "lists-and-rules",
+        title: "Number lists, translation rules and HLR rules",
+        blocks: [
+          {
+            kind: "list",
+            items: [
+              "**Number lists**: one row per value (or several values in one cell, separated by , or ;) with the list's **name** and **type** (tag, random, sender_id_template). Rows with the same name go into one list. A list that already exists keeps its type and gets only the values it lacks.",
+              "**Translation rules**: the rule's conditions (Sender ID, receiver and content patterns, destinations, Sender ID and receiver lists by name), its conversions (type and value, or a number list for random_number and sender_id_template), TON / NPI and the customer or vendor trunks it applies to (by name, or **all**). The dry run runs the same checks as the rule form.",
+              "**HLR rules**: name, the **HLR provider** by name, the receiver pattern (DNID) and the customer trunks (empty = every trunk). Add HLR providers by hand first: they hold the provider's URL and credentials.",
+              "Undoing the import's change archives the lists and rules it made and removes the values it added to lists that were already there.",
             ],
           },
         ],

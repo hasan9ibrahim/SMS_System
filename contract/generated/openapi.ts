@@ -307,7 +307,9 @@ export type paths = {
     /**
      * Change history (server-side filter, sort and paging)
      * @description One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
-     *     History tab, on `userId` for "My changes".
+     *     History tab, on `userId` for "My changes". Whose changes (team trial round 12): everyone's for
+     *     administrators and directors (the Management department), the people of their department for a
+     *     department's manager, and else the user's own. Each row says whether the viewer may undo it (`canUndo`).
      */
     post: operations["queryChanges"];
     delete?: never;
@@ -331,8 +333,9 @@ export type paths = {
      *     other fields are kept. If someone else has since changed one of those fields,
      *     the server answers 409 with both values; the GUI then asks the user to keep the
      *     current value, restore theirs, or cancel, and calls again with `resolution`.
-     *     The undo is itself a change and is returned. Users may undo their own changes;
-     *     undoing someone else's needs the "undo others' changes" permission (403 otherwise).
+     *     The undo is itself a change and is returned. Users may undo their own changes; someone else's
+     *     only an administrator, a director (the Management department) or the manager of that user's
+     *     department (team trial round 12; 403 otherwise).
      */
     post: operations["undoChange"];
     delete?: never;
@@ -659,6 +662,28 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/customer-trunks/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The customer trunk's password, shown on request
+     * @description Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+     *     the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+     *     enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+     */
+    get: operations["getCustomerTrunkPassword"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/customer-trunks/{id}/dependencies": {
     parameters: {
       query?: never;
@@ -831,6 +856,28 @@ export type paths = {
      * @description Saves the whole record; the change lists only the fields that differ (§13.10).
      */
     put: operations["updateVendorTrunk"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/vendor-trunks/{id}/password": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The vendor trunk's password, shown on request
+     * @description Team trial round 12: the trunk form shows the password behind an eye button, to view or copy. Needs Edit on
+     *     the trunk's page (contract/access.json); refused (403) when the viewer's visibility policy hides the
+     *     enterprise's credentials (§13.17). Every look is written to the Audit Trail (§11).
+     */
+    get: operations["getVendorTrunkPassword"];
+    put?: never;
     post?: never;
     delete?: never;
     options?: never;
@@ -3088,7 +3135,8 @@ export type paths = {
     put?: never;
     /**
      * Duplicate a translation rule (Clone, Duplicate to trunk)
-     * @description An independent copy, inactive unless `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
+     * @description An independent copy with the rule's status (team trial round 12: a clone of an active rule stays active),
+     *     active when `targetTrunk` is given: "Duplicate to trunk" (§13.2) copies the
      *     rule for one trunk only so a partner can have a variant. One undoable change.
      */
     post: operations["cloneTranslationRule"];
@@ -6280,7 +6328,9 @@ export type paths = {
     };
     /**
      * The exported file
-     * @description CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+     * @description CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls). The file shows the EDRs as the user who
+     *     asked for it may see them (§13.17); a user whose visibility policy restricts anything opens and lists only
+     *     their own downloads (403 for another user's).
      */
     get: operations["downloadEdrFile"];
     put?: never;
@@ -8123,7 +8173,9 @@ export type paths = {
     };
     /**
      * Format File Variables help (§11)
-     * @description The variables the invoice, customer rate, SOA formats and the rate file name may use.
+     * @description The variables the invoice, customer rate and SOA format files may use, and those of the three file names
+     *     (`customer_rate_file_name`, `soa_file_name`, `invoice_file_name`; team trial round 12). Keys are written
+     *     [Key] or {Key}.
      */
     get: operations["listFormatVariables"];
     put?: never;
@@ -10881,6 +10933,12 @@ export type components = {
       added?: string[];
       /** @description List fields only, what the save removed (as text). */
       removed?: string[];
+      /**
+       * @description List fields only, items kept by the save but with other details (team trial round 12), e.g.
+       *     "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC". An item is the same when its id
+       *     (or, for account managers, the user and start) matches.
+       */
+      changed?: string[];
     };
     Change: {
       id: components["schemas"]["Id"];
@@ -10902,6 +10960,8 @@ export type components = {
       undoOfId: components["schemas"]["Id"] | null;
       /** @description Set when a later undo reverted this change. */
       undoneById: components["schemas"]["Id"] | null;
+      /** @description On History lists: whether the viewer may undo it (team trial round 12). Own changes; others' only for administrators, directors (the Management department) and the manager of the user's department. False once undone, for an undo itself and for re-rating requests. Undo still needs Edit on the record's page. */
+      canUndo?: boolean;
     };
     ChangePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Change"][];
@@ -11030,7 +11090,8 @@ export type components = {
     /**
      * @description How this partner writes "all networks of a country" in rate sheets (team trial round 2): `mcc` = 262,
      *     `mcc0` = 2620, `mcc00` = 26200, `mcc000` = 262000, `mccStar` = 262*. Team trial round 3: any other form as
-     *     `MCC` plus up to 6 characters, e.g. `MCC99` = 26299, `MCCxx` = 262xx. Incoming RNs from the partner read
+     *     `MCC` plus up to 10 characters, any symbol but a space (team trial round 12), e.g. `MCC99` = 26299,
+     *     `MCCxx` = 262xx, `MCC-ALL` = 262-ALL. Incoming RNs from the partner read
      *     that code as the country rate (MCC); rate notifications to the partner write the country rate that way.
      * @default mcc
      */
@@ -11057,8 +11118,11 @@ export type components = {
       accountNumber?: string | null;
       /** @description Day and month totals are cut at midnight in this zone (§13.31). */
       billingTimezone?: string;
-      /** @description Notice period for rate increases (§13.14, §13.32). */
-      rateNoticeDays?: number;
+      /**
+       * @description Notice period for rate increases (§13.14, §13.32). 0 by default (team trial round 12).
+       * @default 0
+       */
+      rateNoticeDays: number;
       /**
        * @description Notice period for rate decreases (team trial round 2). 0 = none.
        * @default 0
@@ -11141,6 +11205,7 @@ export type components = {
       address?: string | null;
       bank?: string | null;
       bankAddress?: string | null;
+      /** @description The account's currency: a system currency or any text, e.g. USDT (team trial round 12). */
       currency?: string | null;
       accountNumber?: string | null;
       iban?: string | null;
@@ -11204,8 +11269,11 @@ export type components = {
       /** @description File content, base64 (at most 10 MB decoded). */
       dataBase64: string;
     };
-    /** @enum {string} */
-    TrunkProtocol: "smpp" | "http";
+    /**
+     * @description service: a vendor trunk that sends nothing (team trial round 12): routed to, the message is ended by the switch and the client gets a receipt with the trunk's Status on receipt timeout after its Receipt timeout (seconds; 0 = at once). One outcome per trunk: make several for several outcomes. Its connection fields are not used; customer trunks cannot be service.
+     * @enum {string}
+     */
+    TrunkProtocol: "smpp" | "http" | "service";
     /**
      * @description The event that makes a message billable (§7).
      * @enum {string}
@@ -11263,8 +11331,12 @@ export type components = {
       categoryId?: components["schemas"]["Id"] | null;
       billingType?: components["schemas"]["BillingType"];
       status?: components["schemas"]["RecordStatus"];
-      /** @enum {string} */
-      bindType?: "TX" | "RX" | "TR" | "AUTO";
+      /**
+       * @description A new customer trunk starts on AUTO, which accepts any bind (team trial round 12); a vendor trunk on TR.
+       * @default AUTO
+       * @enum {string}
+       */
+      bindType: "TX" | "RX" | "TR" | "AUTO";
       considerHlrRate?: boolean;
       serviceTypeRouting?: boolean;
       partWiseRouting?: boolean;
@@ -11332,6 +11404,10 @@ export type components = {
       /** @description Vendor trunks own one buy table (§13.12); null for customer trunks. */
       ownRateTableId: components["schemas"]["Id"] | null;
     };
+    TrunkPassword: {
+      /** @description Empty when none is set. */
+      password: string;
+    };
     CustomerTrunkDetail: components["schemas"]["TrunkDetailCommon"] &
       WithRequired<
         components["schemas"]["CustomerTrunkFields"],
@@ -11361,8 +11437,11 @@ export type components = {
       categoryId?: components["schemas"]["Id"];
       billingType?: components["schemas"]["BillingType"];
       status?: components["schemas"]["RecordStatus"];
-      /** @enum {string} */
-      bindType?: "TX" | "RX" | "TR";
+      /**
+       * @default TR
+       * @enum {string}
+       */
+      bindType: "TX" | "RX" | "TR";
       username?: string;
       /** @description Required on create; omit to keep. */
       password?: string;
@@ -11436,6 +11515,8 @@ export type components = {
       dlrTimeoutS?: number;
       /** @enum {string} */
       dlrTimeoutStat?: "DELIVRD" | "EXPIRED" | "UNDELIV" | "REJECTD" | "UNKNOWN";
+      /** @description The destinations (MCCMNC codes) the Receipt timeout and its status apply to (team trial round 12). Empty (the default) = every destination; a message to another destination waits the default 48 hours for its receipt, then gets UNKNOWN. */
+      dlrTimeoutMccmncs?: string[];
       bindAddrTon?: number;
       bindAddrNpi?: number;
       bindAddrRange?: string | null;
@@ -15296,7 +15377,8 @@ export type components = {
       customerEnterprise: string | null;
       customerTrunkId: number;
       customerTrunk: string | null;
-      customerIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerIp: string | null;
       customerPort: number;
       /** @description SMPP session that submitted (§13.1). */
       customerSessionId: string;
@@ -15341,10 +15423,11 @@ export type components = {
       vendorDestination: string;
       customerBillingType: string;
       customerRateTableId: number;
-      customerRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerRate: number | null;
       customerCurrency: string;
-      /** @description Rate in the base currency. */
-      customerSysRate: number;
+      /** @description Rate in the base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      customerSysRate: number | null;
       /** @description Customer translation rules applied. */
       translationRuleIds: number[];
       /** @description Status reported to the customer. */
@@ -15355,16 +15438,19 @@ export type components = {
       /** @description 0 = not routed. */
       vendorTrunkId: number;
       vendorTrunk: string | null;
-      vendorIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorIp: string | null;
       vendorPort: number;
       /** @description The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2). A filter on it matches any of them. */
       vendorMsgId: string;
       vendorMccmnc: string;
       vendorBillingType: string;
       vendorRateTableId: number;
-      vendorRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorRate: number | null;
       vendorCurrency: string;
-      vendorSysRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorSysRate: number | null;
       vendorExRate: number;
       vendorTranslationRuleIds: number[];
       routeRuleId: number;
@@ -15392,14 +15478,14 @@ export type components = {
       isBuffered: boolean;
       isCustomerBillable: boolean;
       isVendorBillable: boolean;
-      /** @description Customer currency. */
-      revenue: number;
-      /** @description Vendor currency. */
-      cost: number;
-      /** @description Base currency. */
-      revenueSys: number;
-      /** @description Base currency. */
-      costSys: number;
+      /** @description Customer currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      revenue: number | null;
+      /** @description Vendor currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      cost: number | null;
+      /** @description Base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      revenueSys: number | null;
+      /** @description Base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      costSys: number | null;
       hlrProviderId: number;
       hlrProvider: string | null;
       /** @description none, cached or live. */
@@ -15422,7 +15508,8 @@ export type components = {
       customerEnterprise: string | null;
       customerTrunkId: number;
       customerTrunk: string | null;
-      customerIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerIp: string | null;
       customerPort: number;
       customerMsgId: string;
       senderId: string;
@@ -16734,8 +16821,23 @@ export type components = {
       /** @description Invoice Number sequence start. */
       invoiceNumberStart: number;
       companyIp: string | null;
-      /** @description Customer Rate File Name, with format variables. */
+      /**
+       * @description Name of the rate sheet a client receives, with variables written [Key] or {Key} (any case; spaces and
+       *     underscores ignored), e.g. "[EnterpriseName]_[ProductCategoryName]_[Currency]_[Date and Time]". The keys
+       *     are those of the `customer_rate_file_name` entry of `GET /business-companies/format-variables`; an
+       *     unknown key answers 400. Empty: "Rates_<trunk>_<date>" (team trial round 12).
+       */
       customerRateFileName: string | null;
+      /**
+       * @description Name of the statement of account file, with the `soa_file_name` variables (e.g. [EnterpriseName],
+       *     [FromDate], [ToDate]). Empty: "SOA_<from>_<to>" (team trial round 12).
+       */
+      soaFileName: string | null;
+      /**
+       * @description Name of the invoice PDF, with the `invoice_file_name` variables (e.g. [InvoiceRefNumber],
+       *     [EnterpriseName], [InvoiceDate]). Empty: the invoice number (team trial round 12).
+       */
+      invoiceFileName: string | null;
       address: components["schemas"]["CompanyAddress"];
       bank: components["schemas"]["CompanyBank"];
       defaultTemplates: components["schemas"]["CompanyDefaultTemplates"];
@@ -18004,17 +18106,24 @@ export type components = {
      */
     MigrationSensitivity: "general" | "business" | "financial" | "credentials";
     /**
-     * @description Imported in this order, so every reference exists when it is needed.
+     * @description Imported in this order, so every reference exists when it is needed. Departments, product categories,
+     *     number lists (one row per value, rows of one list merged), translation rules and HLR rules were added in
+     *     team trial round 12 ("migrate whatever the client has: translation rules, HLR rules, number lists").
      * @enum {string}
      */
     MigrationImportEntity:
+      | "departments"
+      | "product_categories"
       | "users"
       | "enterprises"
       | "customer_trunks"
       | "vendor_trunks"
       | "rate_tables"
       | "rate_lines"
+      | "number_lists"
       | "route_rules"
+      | "translation_rules"
+      | "hlr_rules"
       | "opening_balances";
     MigrationField: {
       field: string;
@@ -18729,6 +18838,8 @@ export type components = {
       note: string | null;
     };
     RouteDecision: {
+      /** @description The customer trunk's ingress translation, run first (team trial round 12; rule Test only). */
+      ingress?: components["schemas"]["TranslationTestResult"] | null;
       ruleId: components["schemas"]["Id"];
       matched: boolean;
       checks: components["schemas"]["RouteCheck"][];
@@ -18758,6 +18869,8 @@ export type components = {
       result: components["schemas"]["TrunkRulesTestResult"];
     };
     RouteSimulation: {
+      /** @description The customer trunk's ingress translation rules, run first as the switch does (team trial round 12): the rules are tried on the translated message. Null without a customer trunk or rules. */
+      ingress?: components["schemas"]["TranslationTestResult"] | null;
       /** @description Vendors skipped because their own vendor translation rules block the message. */
       egressSkipped: components["schemas"]["EgressSkip"][];
       /** @description Rules tried in priority order, up to the deciding one (at most 100 listed). */
@@ -20798,6 +20911,32 @@ export interface operations {
       503: components["responses"]["Unavailable"];
     };
   };
+  getCustomerTrunkPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The password */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkPassword"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
   getCustomerTrunkDependencies: {
     parameters: {
       query?: never;
@@ -21103,6 +21242,32 @@ export interface operations {
         };
       };
       400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVendorTrunkPassword: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The password */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["TrunkPassword"];
+        };
+      };
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
@@ -28921,6 +29086,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -28948,6 +29114,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -30312,6 +30479,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -30342,6 +30510,7 @@ export interface operations {
       };
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };
@@ -30367,6 +30536,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       503: components["responses"]["Unavailable"];
     };

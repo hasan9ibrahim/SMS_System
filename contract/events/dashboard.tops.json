@@ -63,11 +63,18 @@
           "minimum": 0
         },
         "money": {
-          "type": "number",
-          "description": "Revenue for a client, cost for a vendor."
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Revenue for a client, cost for a vendor. Null when withheld by the viewer's visibility policy (\u00a713.17)."
         },
         "margin": {
-          "type": "number"
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Null when withheld by the viewer's visibility policy (\u00a713.17)."
         },
         "asr": {
           "type": [
@@ -121,10 +128,18 @@
           "minimum": 0
         },
         "revenue": {
-          "type": "number"
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Null when withheld by the viewer's visibility policy (\u00a713.17)."
         },
         "margin": {
-          "type": "number"
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Null when withheld by the viewer's visibility policy (\u00a713.17)."
         },
         "asr": {
           "type": [

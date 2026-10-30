@@ -484,7 +484,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Columns with fixed values (status, type, yes/no) show a drop-down instead. Tick the values you want; **Select all** removes the filter. The button shows **All**, the single value, or for example **2 of 5**.",
+            text: "Columns with fixed values (status, type, yes/no) show a drop-down instead. **Selected N of M** is at the top; tick the values you want; **Select all** removes the filter. The button shows **All**, the single value, or for example **2 of 5**.",
           },
           {
             kind: "fields",
@@ -614,7 +614,8 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**Columns** at the right of the filter card lists every field. Tick or untick to show or hide a column. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
+              "**Columns** at the right of the filter card lists every field. Tick or untick to show or hide a column; the search box on top of the list finds a column by name. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
+              "Every multi-select list works the same way: **Selected N of M** and **Check all** / **Uncheck all** sit above the search box, and the search box sits on top of the list. While you search, the links become **Check shown** / **Uncheck shown** and act only on what the search found.",
               "**Default columns** in the same menu goes back to the standard set.",
               "Drag the right edge of a column header to make it wider or narrower.",
             ],
@@ -936,7 +937,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "You can undo your own changes. Users whose access group has **Undo others' changes** (and administrators) can undo anyone's.",
+              "You see and undo your own changes. Administrators and directors (the Management department) see and undo anyone's; a department's manager sees and undoes the changes of the people in that department.",
               "An undo is itself a change with its own number, so it can be undone again and the trail stays complete.",
               "Undoing a delete brings the record back with its original ID and settings.",
               "An undo takes effect straight away, like a normal save; routing uses the restored rule at once.",

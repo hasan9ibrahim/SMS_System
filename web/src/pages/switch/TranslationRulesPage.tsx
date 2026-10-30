@@ -696,7 +696,8 @@ function RuleEditor({
     detail
       ? inputFromDetail(detail)
       : from
-        ? { ...inputFromDetail(from), name: `${from.name} (copy)`.slice(0, 100), status: "inactive" }
+        ? // A clone keeps the rule's status: an active rule's copy is active too (team trial round 12).
+          { ...inputFromDetail(from), name: `${from.name} (copy)`.slice(0, 100) }
         : blankRule(),
   );
   const save = useSaveTranslationRule();

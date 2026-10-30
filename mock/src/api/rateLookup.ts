@@ -27,12 +27,13 @@ import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { qbrDlrByCode } from "./qbr.js";
 import { sendProblem } from "../problem.js";
-import { rulesForDestination, type VendorOption } from "../routing/evaluate.js";
+import { ROUTABLE_VENDOR_SQL, rulesForDestination, type VendorOption } from "../routing/evaluate.js";
 import { loadRulesInOrder, routeThrough, vendorQuality, type RuleCore } from "./routeRules.js";
 import { windowEnd } from "./routeTraffic.js";
 import { currentUserId, getCurrentUser } from "./session.js";
 import { inputProblem, inTransaction, writeShares } from "./views.js";
 import { production } from "../mode.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 /** Converted figures and margins are in the platform currency (decided 2026-10-16: EUR by default). */
@@ -169,6 +170,11 @@ interface Filters {
   at: Date;
   senderId: string | null;
   includeInactive: boolean;
+  /**
+   * Show scheduled: a table whose line for the destination only starts later shows that line too (team trial round
+   * 12: a rate just set with a notice period was invisible until it started).
+   */
+  scheduled?: boolean;
   vendorTrunkIds?: number[] | undefined;
   vendorEnterpriseIds?: number[] | undefined;
   tiers?: string[] | undefined;
@@ -233,6 +239,10 @@ function pairs(dests: Dest[]) {
 const valid = (alias: string, at: string) =>
   `${alias}.valid_from <= ${at} AND (${alias}.valid_to IS NULL OR ${alias}.valid_to > ${at})`;
 
+/** The lines a lookup takes: valid at `at`; with Show scheduled also those that only start later. */
+const lineWhen = (f: Filters) =>
+  f.scheduled ? `(${valid("l", "$4")} OR l.valid_from > $4)` : valid("l", "$4");
+
 /** Next version of a line after the one valid at `at` (§13.12 scheduled change). */
 const NEXT = `LEFT JOIN LATERAL (
     SELECT n.rate, ${toPlatformSql("n.rate", "ncl.rate_per_eur")} AS conv, n.valid_from FROM rate_lines n
@@ -294,7 +304,7 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
               vt.id AS trunk_id, vt.name AS trunk_name, vt.status, e.id AS enterprise_id, e.name AS enterprise_name,
               e.tier, pc.name AS category
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
-         JOIN rate_lines l ON l.mccmnc = d.code AND ${valid("l", "$4")} AND NOT l.is_blocked
+         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)} AND NOT l.is_blocked
               AND (l.sender_id IS NULL OR l.sender_id = $5)
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
          JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL
@@ -302,7 +312,7 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
          JOIN product_categories pc ON pc.id = rt.product_category_id
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE true ${extra}
-        ORDER BY d.req, rt.id, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
+        ORDER BY d.req, rt.id, l.valid_from > $4, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
      ${NEXT}`,
     values,
   );
@@ -334,7 +344,7 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
               e.id AS enterprise_id, e.name AS enterprise_name, pc.name AS category,
               am.id AS am_id, am.first_name || ' ' || am.last_name AS am_name
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
-         JOIN rate_lines l ON l.mccmnc = d.code AND ${valid("l", "$4")} AND NOT l.is_blocked
+         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)} AND NOT l.is_blocked
               AND (l.sender_id IS NULL OR l.sender_id = $5)
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'customer' AND rt.deleted_at IS NULL
          JOIN customer_trunk_rate_tables ctr ON ctr.rate_table_id = rt.id
@@ -344,7 +354,7 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
          LEFT JOIN users am ON am.id = e.account_manager_id
          JOIN currency_latest cl ON cl.iso = l.currency
         WHERE true ${extra}
-        ORDER BY d.req, ct.id, ctr.position, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
+        ORDER BY d.req, ct.id, ctr.position, l.valid_from > $4, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
      ${NEXT}`,
     values,
   );
@@ -380,9 +390,10 @@ async function rulesNow(db: Db): Promise<RuleCore[]> {
 const COST_TTL_MS = 60_000;
 const costCache = new Map<string, { at: number; costs: { trunkId: number; conv: number }[] }>();
 
-/** Forgets cached routing costs (after a rate change, so routes follow it at once). */
+/** Forgets cached routing costs and rules (after a rate, rule or trunk change, so routes follow it at once). */
 export function clearRoutingCostCache() {
   costCache.clear();
+  rulesCache = null;
 }
 
 /**
@@ -433,7 +444,7 @@ async function routingOptions(
   const reqs = [...new Set(clients.map((c) => c.req))];
   const [quality, { rows: trunks }, lines] = await Promise.all([
     vendorQuality(),
-    db.query("SELECT id, name, product_category_id FROM vendor_trunks WHERE deleted_at IS NULL AND status = 'active'"),
+    db.query(`SELECT id, name, product_category_id FROM vendor_trunks vt WHERE deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL}`),
     vendorsNow ? vendorsNow.map((l) => ({ req: l.req, trunkId: l.trunkId, conv: l.conv })) : routingCosts(db, reqs),
   ]);
   const base = (): Map<number, VendorOption> =>
@@ -633,7 +644,11 @@ const rateFields = (l: Line, showScheduled: boolean) => ({
   matchedCode: l.code,
   senderId: l.senderId,
   scheduled:
-    showScheduled && l.next ? { rate: l.next.rate, rateConverted: l.next.conv, effectiveFrom: l.next.from } : null,
+    showScheduled && Date.parse(l.from) > Date.now()
+      ? { rate: l.rate, rateConverted: l.conv, effectiveFrom: l.from }
+      : showScheduled && l.next
+        ? { rate: l.next.rate, rateConverted: l.next.conv, effectiveFrom: l.next.from }
+        : null,
 });
 
 export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
@@ -650,6 +665,7 @@ export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
       at: input.asOf ? new Date(input.asOf) : new Date(),
       senderId: input.senderId?.trim() || null,
       includeInactive: !!input.includeInactive,
+      scheduled: !!input.showScheduled,
       ...(input.myClientsOnly ? { accountManagerIds: [me.id] } : {}),
     };
     const [vLines, cLines, vTraffic, cTraffic] = await Promise.all([
@@ -1032,7 +1048,7 @@ export function rateLookupMatrix(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csv = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  const s = csvText(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

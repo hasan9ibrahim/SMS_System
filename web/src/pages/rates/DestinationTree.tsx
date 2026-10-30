@@ -171,15 +171,7 @@ export function DestinationTree({
   const searching = !!q.trim();
   return (
     <div className="dtree">
-      <div className="checklist-search">
-        <Icon name="search" size={13} />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Country, network or MCCMNC (% _ wildcards)"
-          aria-label="Search destinations"
-        />
-      </div>
+      {/* Count and Check all / Uncheck all above the search, the search joined to the tree (team trial round 12). */}
       <div className="checklist-bar">
         <span className="muted">
           Selected {selected.length.toLocaleString("en-US")} of {total.toLocaleString("en-US")} networks
@@ -187,74 +179,90 @@ export function DestinationTree({
         </span>
         <span className="checklist-actions">
           <button type="button" className="link" onClick={() => onChange(applyToShown(selected, shown, true))}>
-            {searching ? "Select shown" : "Select all"}
+            {searching ? "Check shown" : "Check all"}
           </button>
           <button type="button" className="link" onClick={() => onChange(applyToShown(selected, shown, false))}>
-            {searching ? "Clear shown" : "Clear all"}
+            {searching ? "Uncheck shown" : "Uncheck all"}
           </button>
         </span>
       </div>
-      <div className="checklist-items" ref={scroll} style={{ height }} role="tree" aria-multiselectable>
-        {loading ? (
-          <div className="muted checklist-empty">Loading destinations…</div>
-        ) : error ? (
-          <div className="tone-error checklist-empty">Could not load the destinations</div>
-        ) : rows.length === 0 ? (
-          <div className="muted checklist-empty">Nothing matches</div>
-        ) : (
-          <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
-            {virtual.getVirtualItems().map((vi) => {
-              const r = rows[vi.index]!;
-              const style = { transform: `translateY(${vi.start}px)`, height: vi.size };
-              if (r.kind === "country") {
-                const n = r.shown.filter((c) => sel.has(c)).length;
-                return (
-                  <div key={`c${r.country.mcc}`} className="checklist-item dtree-country" style={style} role="treeitem">
-                    <button
-                      type="button"
-                      className="icon-btn dtree-toggle"
-                      aria-label={r.open ? `Close ${r.country.name}` : `Open ${r.country.name}`}
-                      aria-expanded={r.open}
-                      onClick={() => toggleOpen(r.country.mcc)}
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Country, network or MCCMNC (% _ wildcards)"
+            aria-label="Search destinations"
+          />
+        </div>
+        <div className="checklist-items" ref={scroll} style={{ height }} role="tree" aria-multiselectable>
+          {loading ? (
+            <div className="muted checklist-empty">Loading destinations…</div>
+          ) : error ? (
+            <div className="tone-error checklist-empty">Could not load the destinations</div>
+          ) : rows.length === 0 ? (
+            <div className="muted checklist-empty">Nothing matches</div>
+          ) : (
+            <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
+              {virtual.getVirtualItems().map((vi) => {
+                const r = rows[vi.index]!;
+                const style = { transform: `translateY(${vi.start}px)`, height: vi.size };
+                if (r.kind === "country") {
+                  const n = r.shown.filter((c) => sel.has(c)).length;
+                  return (
+                    <div
+                      key={`c${r.country.mcc}`}
+                      className="checklist-item dtree-country"
+                      style={style}
+                      role="treeitem"
                     >
-                      <Icon name={r.open ? "chevronDown" : "chevronRight"} size={12} />
-                    </button>
-                    <label className="dtree-label">
-                      <input
-                        type="checkbox"
-                        checked={n > 0 && n === r.shown.length}
-                        ref={(el) => {
-                          if (el) el.indeterminate = n > 0 && n < r.shown.length;
-                        }}
-                        onChange={() => onChange(applyToShown(selected, r.shown, n < r.shown.length))}
-                        aria-label={`${r.country.name}: all ${r.shown.length} networks`}
-                      />
-                      <span className="strong">{r.country.name}</span>
-                      <span className="muted">({r.country.iso})</span>
-                    </label>
-                    <span className="checklist-detail">
-                      {n ? `${n} of ` : ""}
-                      {r.shown.length} network{r.shown.length === 1 ? "" : "s"}
-                    </span>
-                  </div>
+                      <button
+                        type="button"
+                        className="icon-btn dtree-toggle"
+                        aria-label={r.open ? `Close ${r.country.name}` : `Open ${r.country.name}`}
+                        aria-expanded={r.open}
+                        onClick={() => toggleOpen(r.country.mcc)}
+                      >
+                        <Icon name={r.open ? "chevronDown" : "chevronRight"} size={12} />
+                      </button>
+                      <label className="dtree-label">
+                        <input
+                          type="checkbox"
+                          checked={n > 0 && n === r.shown.length}
+                          ref={(el) => {
+                            if (el) el.indeterminate = n > 0 && n < r.shown.length;
+                          }}
+                          onChange={() => onChange(applyToShown(selected, r.shown, n < r.shown.length))}
+                          aria-label={`${r.country.name}: all ${r.shown.length} networks`}
+                        />
+                        <span className="strong">{r.country.name}</span>
+                        <span className="muted">({r.country.iso})</span>
+                      </label>
+                      <span className="checklist-detail">
+                        {n ? `${n} of ` : ""}
+                        {r.shown.length} network{r.shown.length === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                  <label key={r.mccmnc} className="checklist-item dtree-code" style={style} role="treeitem">
+                    <input
+                      type="checkbox"
+                      checked={sel.has(r.mccmnc)}
+                      onChange={() =>
+                        onChange(sel.has(r.mccmnc) ? selected.filter((c) => c !== r.mccmnc) : [...selected, r.mccmnc])
+                      }
+                    />
+                    <span className={`checklist-label${r.allNetworks ? " muted" : ""}`}>{r.network}</span>
+                    <span className="checklist-detail">{r.mccmnc}</span>
+                  </label>
                 );
-              }
-              return (
-                <label key={r.mccmnc} className="checklist-item dtree-code" style={style} role="treeitem">
-                  <input
-                    type="checkbox"
-                    checked={sel.has(r.mccmnc)}
-                    onChange={() =>
-                      onChange(sel.has(r.mccmnc) ? selected.filter((c) => c !== r.mccmnc) : [...selected, r.mccmnc])
-                    }
-                  />
-                  <span className={`checklist-label${r.allNetworks ? " muted" : ""}`}>{r.network}</span>
-                  <span className="checklist-detail">{r.mccmnc}</span>
-                </label>
-              );
-            })}
-          </div>
-        )}
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

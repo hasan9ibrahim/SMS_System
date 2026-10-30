@@ -164,6 +164,22 @@ defmodule Sms.Switch.Rules.TranslationTest do
     assert {dlr.after.dlr_status, dlr.after.dlr_error} == {"UNDELIV", "001"}
   end
 
+  test "a Stop rule that only maps receipts does not stop a message; it stops a receipt (team trial round 12)" do
+    map = [%{from_status: "unknown", from_error: nil, to_status: "UNDELIV", to_error: "001"}]
+    words = [%{find: "code", replace: "PIN", whole_word: true, match_case: false}]
+    rules = [rule(1, dlr_map: map, continue_after: false), rule(2, content_words: words)]
+
+    sms = Translation.run(rules, @msg, ctx())
+    assert sms.after.text == "Your PIN is 1234"
+    assert Enum.map(sms.steps, & &1.rule_id) == [1, 2]
+
+    receipt =
+      Translation.run(rules, Map.merge(@msg, %{dlr_status: "UNKNOWN", dlr_error: "000"}), ctx())
+
+    assert Enum.map(receipt.steps, & &1.rule_id) == [1]
+    assert receipt.after.dlr_status == "UNDELIV"
+  end
+
   test "match lists of any type; a template entry's {n} matches one digit" do
     assert Translation.entry_matches?("4479001", "4479001")
     assert Translation.entry_matches?("SHOP{n}{n}", "SHOP42")

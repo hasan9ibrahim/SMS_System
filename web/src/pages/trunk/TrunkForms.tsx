@@ -1,12 +1,14 @@
 // Customer trunk form (§5.4, §13.1, §13.26) and vendor trunk form (§5.5, §13.26). Field
-// names follow the reference platform; passwords are write-only (never shown, §13.22).
+// names follow the reference platform. The password shows only on request, behind the eye button, for users who may
+// edit the trunk (team trial round 12); exports of credentials stay admin-only and encrypted (§13.22).
 import { useEffect, useState } from "react";
 import { useCan, useTabShown } from "../../api/access";
 import type { CustomerTrunkInput, RateTableRow, TrunkListRow, VendorTrunkInput } from "@sms/contract";
-import { useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
+import { fetchTrunkPassword, useReference, type TrunkDetail, type TrunkKind } from "../../api/records";
 import {
   CheckField,
   ChoiceField,
+  FieldsAndChecks,
   FormField,
   ListField,
   MultiCheck,
@@ -22,11 +24,12 @@ import {
 } from "../../form/form";
 import { useDragOrder, moveItem } from "../../records/dragOrder";
 import { ListLookup } from "../../records/parts";
-import { ask } from "../../ui/feedback";
+import { ask, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
-import { Button } from "../../ui/primitives";
+import { Button, IconButton } from "../../ui/primitives";
 import { tzOptions } from "../../ui/timezones";
 import { NewRateTableDialog } from "../rates/dialogs";
+import { codesText, RuleCodesDialog, useDestinationTree } from "../rates/DestinationTree";
 
 export type TrunkForm = (CustomerTrunkInput | VendorTrunkInput) & { password?: string };
 
@@ -44,6 +47,8 @@ const PROTOCOL = [
   { value: "smpp", label: "SMPP" },
   { value: "http", label: "HTTP" },
 ];
+// A vendor trunk can be a service trunk (team trial round 12): it sends nothing, the client gets the set receipt.
+const VENDOR_PROTOCOL = [...PROTOCOL, { value: "service", label: "Service" }];
 const SSL = [
   { value: "none", label: "None" },
   { value: "tls1.0", label: "TLS 1.0 (legacy)" },
@@ -111,7 +116,8 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     return {
       ...common,
       categoryId,
-      bindType: "TR",
+      // A customer may bind TX, RX or TR: AUTO accepts any (team trial round 12); vendors stay on TR.
+      bindType: "AUTO",
       hostIps: [],
       considerHlrRate: false,
       serviceTypeRouting: false,
@@ -179,6 +185,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     multipartFormat: "udh8",
     dlrTimeoutS: 172800,
     dlrTimeoutStat: "UNKNOWN",
+    dlrTimeoutMccmncs: [],
     bindAddrTon: 0,
     bindAddrNpi: 0,
     bindAddrRange: null,
@@ -188,6 +195,21 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
 }
 
 /** Required fields checked before the round trip. */
+/**
+ * A service trunk has no connection (team trial round 12): its connection fields, still in the contract, get fixed
+ * values so the form does not ask for them.
+ */
+export function fillService(kind: TrunkKind, v: TrunkForm, isNew: boolean): TrunkForm {
+  if (kind !== "vendor" || v.protocol !== "service") return v;
+  const x = v as VendorTrunkInput;
+  return {
+    ...v,
+    username: v.username.trim() || "service",
+    host: x.host.trim() || "service",
+    ...(isNew && !v.password ? { password: generatePassword() } : {}),
+  } as TrunkForm;
+}
+
 export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Record<string, string> {
   const e: Record<string, string> = {};
   if (!v.name.trim()) e.name = "Required";
@@ -208,27 +230,121 @@ export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Recor
   return e;
 }
 
+/** Who the trunk is, for the password buttons: none for a new trunk. */
+export interface TrunkRef {
+  kind: TrunkKind;
+  id: number | null;
+}
+
+const copyText = (text: string, what: string) =>
+  void navigator.clipboard
+    ?.writeText(text)
+    .then(() => toast({ tone: "good", message: `${what} copied` }))
+    .catch(() => toast({ tone: "error", message: `Could not copy the ${what.toLowerCase()}` }));
+
+/** 8 characters (SMPP allows up to 8 + NUL) from letters and digits that cannot be mistaken for each other. */
+export function generatePassword(length = 8): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+/**
+ * The password (team trial round 12): hidden as dots, the eye shows it (a saved one is fetched once, and the look is in
+ * the Audit Trail), it can be edited in place, copied, or generated.
+ */
 function PasswordField({
   form,
   isNew,
   passwordSet,
+  trunk,
 }: {
   form: FormApi<TrunkForm>;
   isNew: boolean;
   passwordSet: boolean;
+  trunk: TrunkRef;
 }) {
+  const [shown, setShown] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const typed = (form.get("password") as string | undefined) ?? "";
+  const canFetch = !isNew && passwordSet && trunk.id !== null;
+  const current = typed || saved || "";
+  const load = async (): Promise<string | null> => {
+    if (typed) return typed;
+    if (saved !== null || !canFetch) return saved;
+    try {
+      const p = await fetchTrunkPassword(trunk.kind, trunk.id!);
+      setSaved(p);
+      setProblem(null);
+      return p;
+    } catch (err) {
+      setProblem((err as Error).message);
+      return null;
+    }
+  };
+  const error = form.error("password");
+  return (
+    <FormField
+      label="Password"
+      required={isNew}
+      error={error ?? problem ?? undefined}
+      hint="Max 9 characters. The eye shows it; Generate makes a new one."
+    >
+      <span className="input-actions">
+        <input
+          type={shown ? "text" : "password"}
+          value={typed || (shown ? (saved ?? "") : "")}
+          maxLength={9}
+          autoComplete="new-password"
+          aria-invalid={!!error}
+          placeholder={canFetch && !shown ? "•••••••• (set)" : ""}
+          onChange={(e) => form.set("password", e.target.value)}
+        />
+        <span className="input-actions-buttons">
+          <IconButton
+            icon="eye"
+            label={shown ? "Hide the password" : "Show the password"}
+            className={shown ? "on" : undefined}
+            onClick={() => {
+              if (shown) return setShown(false);
+              void load().then(() => setShown(true));
+            }}
+          />
+          <IconButton
+            icon="copy"
+            label="Copy the password"
+            disabled={!current && !canFetch}
+            onClick={() => void load().then((p) => p && copyText(p, "Password"))}
+          />
+          <IconButton
+            icon="refresh"
+            label="Generate a new password"
+            onClick={() => {
+              form.set("password", generatePassword());
+              setShown(true);
+            }}
+          />
+        </span>
+      </span>
+    </FormField>
+  );
+}
+
+/** The username (system_id) with a copy button (team trial round 12). */
+function UsernameField({ form }: { form: FormApi<TrunkForm> }) {
+  const v = (form.get("username") as string | undefined) ?? "";
   return (
     <TextField
       form={form}
-      path="password"
-      label="Password"
-      type="password"
-      required={isNew}
-      maxLength={9}
+      path="username"
+      label="Username (system_id)"
+      required
+      maxLength={16}
       nullable={false}
-      autoComplete="new-password"
-      placeholder={!isNew && passwordSet ? "•••••••• (set; type to change)" : ""}
-      hint="Never shown again after saving. Max 9 characters."
+      trailing={
+        <IconButton icon="copy" label="Copy the username" disabled={!v} onClick={() => copyText(v, "Username")} />
+      }
     />
   );
 }
@@ -262,12 +378,19 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
         hint="Day and month totals are cut at midnight here (§13.31)"
       />
-      <ChoiceField form={form} path="protocol" label="Protocol" required options={PROTOCOL} />
+      <ChoiceField
+        form={form}
+        path="protocol"
+        label="Protocol"
+        required
+        options={kind === "vendor" ? VENDOR_PROTOCOL : PROTOCOL}
+      />
       <ChoiceField
         form={form}
         path="bindType"
         label="Bind type"
         required
+        disabled={form.values.protocol === "service"}
         options={["TR", "TX", "RX", ...(kind === "customer" ? ["AUTO"] : [])].map((v) => ({ value: v, label: v }))}
       />
       <StatusField form={form} path="status" required onText="Active" />
@@ -319,13 +442,16 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
               ⠿
             </span>
             <span className="pos">{i + 1}</span>
+            {/* Swap the table in place, keeping its position (team trial round 12). */}
             <ListLookup<RateTableRow>
               list="rate_tables"
               value={id}
-              disabled
               clearable={false}
-              onChange={() => {}}
+              fixed={[{ field: "kind", op: "eq", value: "customer" }]}
+              exclude={ids.filter((x) => x !== id)}
+              onChange={(r) => r && r.id !== id && setIds(ids.map((x, j) => (j === i ? r.id : x)))}
               labelOf={(r) => `${r.name} (${r.currency})`}
+              detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
             />
             <span className="move-btns">
               <Button small variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -412,11 +538,14 @@ export function CustomerTrunkFields({
   form,
   isNew,
   passwordSet,
+  trunkId = null,
 }: {
   form: FormApi<TrunkForm>;
   isNew: boolean;
   passwordSet: boolean;
+  trunkId?: number | null;
 }) {
+  const trunk: TrunkRef = { kind: "customer", id: trunkId };
   const v = form.values as CustomerTrunkInput;
   const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
   return (
@@ -441,112 +570,127 @@ export function CustomerTrunkFields({
             {customerPort(v.sslType)}
           </ReadOnly>
           <SubHead>Credentials</SubHead>
-          <TextField
-            form={form}
-            path="username"
-            label="Username (system_id)"
-            required
-            maxLength={16}
-            nullable={false}
-          />
-          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
+          <UsernameField form={form} />
+          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} trunk={trunk} />
           <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
           <TextField form={form} path="systemType" label="System type" maxLength={13} />
         </Section>
       )}
       {shown("customer-trunks.receipts") && (
-        <Section title="Delivery receipts">
-          <SelectField
-            form={form}
-            path="dlrSessionAffinity"
-            label="Receipt routing"
-            required
-            options={[
-              { value: "strict", label: "Same session only (hold)" },
-              { value: "same_ip", label: "Any session from the same IP" },
-              { value: "same_trunk", label: "Any session of the trunk" },
-            ]}
-            hint="Which session is tried first"
+        <Section title="Delivery receipts" columns={1}>
+          {/* The two boxes beside the fields, one under the other (team trial round 12). */}
+          <FieldsAndChecks
+            fields={
+              <>
+                <SelectField
+                  form={form}
+                  path="dlrSessionAffinity"
+                  label="Receipt routing"
+                  required
+                  options={[
+                    { value: "strict", label: "Same session only (hold)" },
+                    { value: "same_ip", label: "Any session from the same IP" },
+                    { value: "same_trunk", label: "Any session of the trunk" },
+                  ]}
+                  hint="Which session is tried first"
+                />
+                <NumberField
+                  form={form}
+                  path="dlrHoldHours"
+                  label="Hold receipts for"
+                  min={0}
+                  max={720}
+                  step={1}
+                  suffix="hours"
+                />
+                <TextField form={form} path="dlrPushUrl" label="DLR push URL" type="url" maxLength={500} />
+                <TextField form={form} path="moPushUrl" label="MO push URL" type="url" maxLength={500} />
+              </>
+            }
+            checks={
+              <>
+                <CheckField form={form} path="delayedSubmit" label="Delayed submit" />
+                <CheckField form={form} path="sendBind" label="Send bind" />
+              </>
+            }
           />
-          <NumberField
-            form={form}
-            path="dlrHoldHours"
-            label="Hold receipts for"
-            min={0}
-            max={720}
-            step={1}
-            suffix="hours"
-          />
-          <TextField form={form} path="dlrPushUrl" label="DLR push URL" type="url" maxLength={500} />
-          <TextField form={form} path="moPushUrl" label="MO push URL" type="url" maxLength={500} />
-          <CheckField form={form} path="delayedSubmit" label="Delayed submit" />
-          <CheckField form={form} path="sendBind" label="Send bind" />
         </Section>
       )}
       {shown("customer-trunks.routing") && (
-        <Section title="Routing">
-          <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
-          <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
-          <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
-          <CheckField form={form} path="loopDetection" label="Loop detection" />
-          <NumberField
-            form={form}
-            path="reassemblyTimeoutS"
-            label="Multipart wait"
-            min={10}
-            max={600}
-            step={10}
-            suffix="s"
-            hint="How long the parts of a long message wait for the rest"
+        <Section title="Routing" columns={1}>
+          {/* Fields on the left, the boxes stacked on the right (team trial round 12). */}
+          <FieldsAndChecks
+            checks={
+              <>
+                <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
+                <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
+                <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
+                <CheckField form={form} path="loopDetection" label="Loop detection" />
+                <CheckField form={form} path="allowEmptyMessages" label="Allow empty messages" />
+              </>
+            }
+            fields={
+              <>
+                <NumberField
+                  form={form}
+                  path="reassemblyTimeoutS"
+                  label="Multipart wait"
+                  min={10}
+                  max={600}
+                  step={10}
+                  suffix="s"
+                  hint="How long the parts of a long message wait for the rest"
+                />
+                <NumberField
+                  form={form}
+                  path="duplicateWindowS"
+                  label="Duplicate filter"
+                  min={0}
+                  max={3600}
+                  step={10}
+                  suffix="s"
+                  hint="The same message again within this time is not sent twice. 0 = off"
+                />
+                <SelectField
+                  form={form}
+                  path="defaultCoding"
+                  label="Default data coding"
+                  required
+                  options={[
+                    { value: 0, label: "0 – SMSC default (GSM 7-bit)" },
+                    { value: 3, label: "3 – Latin-1" },
+                  ]}
+                />
+                <FormField
+                  label="Express vendor trunk"
+                  hint="Bypasses routing for every message"
+                  error={form.error("expressVendorTrunkId")}
+                >
+                  <ListLookup<TrunkListRow>
+                    list="vendor_trunks"
+                    value={v.expressVendorTrunkId ?? null}
+                    placeholder="None – route normally"
+                    onChange={(r) => form.set("expressVendorTrunkId", r?.id ?? null)}
+                    labelOf={(r) => r.name}
+                    detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
+                  />
+                </FormField>
+                {v.expressVendorTrunkId != null && (
+                  // R5 (2026-10-24): a % per message on the express vendor's cost.
+                  <NumberField
+                    form={form}
+                    path="expressMargin"
+                    label="Express margin"
+                    min={0}
+                    max={1000}
+                    step={0.1}
+                    suffix="%"
+                    hint="Added on the express vendor's cost, per message"
+                  />
+                )}
+              </>
+            }
           />
-          <NumberField
-            form={form}
-            path="duplicateWindowS"
-            label="Duplicate filter"
-            min={0}
-            max={3600}
-            step={10}
-            suffix="s"
-            hint="The same message again within this time is not sent twice. 0 = off"
-          />
-          <CheckField form={form} path="allowEmptyMessages" label="Allow empty messages" />
-          <SelectField
-            form={form}
-            path="defaultCoding"
-            label="Default data coding"
-            required
-            options={[
-              { value: 0, label: "0 – SMSC default (GSM 7-bit)" },
-              { value: 3, label: "3 – Latin-1" },
-            ]}
-          />
-          <FormField
-            label="Express vendor trunk"
-            hint="Bypasses routing for every message"
-            error={form.error("expressVendorTrunkId")}
-          >
-            <ListLookup<TrunkListRow>
-              list="vendor_trunks"
-              value={v.expressVendorTrunkId ?? null}
-              placeholder="None – route normally"
-              onChange={(r) => form.set("expressVendorTrunkId", r?.id ?? null)}
-              labelOf={(r) => r.name}
-              detailOf={(r) => `${r.enterpriseName} · ${r.category ?? ""}`}
-            />
-          </FormField>
-          {v.expressVendorTrunkId != null && (
-            // R5 (2026-10-24): a % per message on the express vendor's cost.
-            <NumberField
-              form={form}
-              path="expressMargin"
-              label="Express margin"
-              min={0}
-              max={1000}
-              step={0.1}
-              suffix="%"
-              hint="Added on the express vendor's cost, per message"
-            />
-          )}
         </Section>
       )}
       {shown("customer-trunks.capacity") && (
@@ -588,21 +732,54 @@ export function VendorTrunkFields({
   isNew,
   passwordSet,
   connected,
+  trunkId = null,
 }: {
   form: FormApi<TrunkForm>;
   isNew: boolean;
   passwordSet: boolean;
   /** Whether the bind is up now (null: unknown, e.g. a new trunk). */
   connected?: boolean | null;
+  trunkId?: number | null;
 }) {
+  const trunk: TrunkRef = { kind: "vendor", id: trunkId };
   const v = form.values as VendorTrunkInput;
   const shown = useTabShown(); // sections an access group can hide (§11, trial round 2)
+  const service = v.protocol === "service";
+  // Made a service trunk: its receipt comes at once and reads delivered, until changed.
+  const [wasService, setWasService] = useState(service);
+  useEffect(() => {
+    if (service === wasService) return;
+    setWasService(service);
+    if (service) {
+      form.set("dlrTimeoutS", 0);
+      form.set("dlrTimeoutStat", "DELIVRD");
+    }
+  }, [service]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <Section title="Trunk" columns={4}>
         <CommonTrunkFields form={form} kind="vendor" />
       </Section>
-      {shown("vendor-trunks.connection") && (
+      {service && (
+        <Section
+          title="Service outcome"
+          columns={2}
+          note="Nothing is sent to a network: the switch ends the message and sends the client this receipt. One outcome per trunk; add a trunk for each other outcome."
+        >
+          <SelectField form={form} path="dlrTimeoutStat" label="Receipt status" required options={DLR_STATS} />
+          <NumberField
+            form={form}
+            path="dlrTimeoutS"
+            label="Receipt after"
+            required
+            min={0}
+            step={1}
+            suffix="s"
+            hint="0 = at once"
+          />
+        </Section>
+      )}
+      {!service && shown("vendor-trunks.connection") && (
         <Section title="Connection" columns={4}>
           <BindLine
             from={`Us · ${v.sourceHost || "any address"}`}
@@ -629,21 +806,16 @@ export function VendorTrunkFields({
             />
           )}
           <SubHead>Credentials</SubHead>
-          <TextField
-            form={form}
-            path="username"
-            label="Username (system_id)"
-            required
-            maxLength={16}
-            nullable={false}
-          />
-          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} />
+          <UsernameField form={form} />
+          <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} trunk={trunk} />
           <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
           <TextField form={form} path="systemType" label="System type" maxLength={13} />
           <TextField form={form} path="serviceType" label="Service type" maxLength={6} />
         </Section>
       )}
-      {v.protocol === "http"
+      {service
+        ? null
+        : v.protocol === "http"
         ? shown("vendor-trunks.http") && (
             <Section title="HTTP API">
               <TextField form={form} path="http.url" label="Submit URL" required wide type="url" maxLength={1000} />
@@ -747,7 +919,7 @@ export function VendorTrunkFields({
               <TextField form={form} path="bindAddrRange" label="Bind address range" maxLength={41} />
             </Section>
           )}
-      {shown("vendor-trunks.messages") && (
+      {!service && shown("vendor-trunks.messages") && (
         <Section title="Messages" columns={2}>
           <MultiCheck form={form} path="allowedDataCodings" any label="Allowed data codings" options={CODINGS} />
           <MultiCheck
@@ -792,6 +964,7 @@ export function VendorTrunkFields({
             required
             options={DLR_STATS}
           />
+          <TimeoutDestinations form={form} />
         </Section>
       )}
       {shown("vendor-trunks.capacity") && (
@@ -820,5 +993,43 @@ export function VendorTrunkFields({
         </Section>
       )}
     </>
+  );
+}
+
+/**
+ * The destinations the Receipt timeout applies to (team trial round 12): none = the whole trunk; a message to another
+ * destination waits the default 48 hours, then gets UNKNOWN.
+ */
+function TimeoutDestinations({ form }: { form: FormApi<TrunkForm> }) {
+  const { tree } = useDestinationTree();
+  const codes = ((form.values as VendorTrunkInput).dlrTimeoutMccmncs ?? []) as string[];
+  return (
+    <FormField
+      label="Receipt timeout applies to"
+      wide
+      error={form.error("dlrTimeoutMccmncs")}
+      hint={codes.length ? "Other destinations wait 48 hours, then get UNKNOWN" : undefined}
+    >
+      <span className="bulk-row">
+        <Button
+          small
+          icon="globe"
+          onClick={async () => {
+            const next = await ask<string[]>((done) => <RuleCodesDialog initial={codes} done={done} />);
+            if (next) form.set("dlrTimeoutMccmncs", next);
+          }}
+        >
+          {codes.length ? "Change…" : "Pick destinations…"}
+        </Button>
+        <span className={codes.length ? "small" : "muted small"} title={codes.join(", ")}>
+          {codes.length ? `${codes.length} · ${codesText(tree, codes, 2)}` : "Every destination"}
+        </span>
+        {codes.length > 0 && (
+          <button type="button" className="link small" onClick={() => form.set("dlrTimeoutMccmncs", [])}>
+            Every destination
+          </button>
+        )}
+      </span>
+    </FormField>
   );
 }

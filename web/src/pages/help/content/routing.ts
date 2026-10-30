@@ -881,7 +881,7 @@ export const topics: HelpTopic[] = [
               "Each of your own changes has an **Undo** button. Undo puts back only the fields that change touched, so other people's later edits stay.",
               "If someone changed the same field after you, you are asked: **Keep current** (undo only the untouched fields), **Restore mine** (put your values back everywhere) or **Cancel**.",
               "Right after a save an **Undo** toast shows for 10 seconds. **Ctrl+Z** on the page undoes your last change. An undo is itself a change, so it can be redone.",
-              'Undoing other people\'s changes needs the "undo others" permission.',
+              "Other people's changes are listed and undone only by administrators, directors and their department's manager.",
             ],
           },
           { kind: "text", text: "See [[undo-and-history]] for the full rules." },
@@ -1795,7 +1795,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page has two columns. On the left, numbered cards: **1 Who is sending**, **2 Send to** and **3 Message**, **4 Vendor** (optional), then **Advanced settings** folded up (its line shows the TON / NPI and coding in use; **Change** opens them). On the right, the **Summary** (From, Sender ID, To, Message, Vendor), **Also send a real test SMS** and the **Simulate route** button; the result appears under it, step by step.",
+            text: "The page is one column. Card **1 Route** holds the customer trunk, the numbers, the destinations and the vendor trunk in one row. Card **2 Message** holds the Sender ID and the content, with **Advanced** folded up at its foot (its line shows the TON / NPI and coding in use; **Change** opens them). Under the cards, one line sums up what will run, then **Also send a real test SMS** and the **Simulate route** button. The result appears below, across the full width, step by step.",
           },
           {
             kind: "fields",
@@ -1807,14 +1807,18 @@ export const topics: HelpTopic[] = [
               },
               { name: "Sender ID", what: "The sender.", values: "Default `INFO`, up to 20 characters." },
               {
-                name: "Send to",
-                what: "**Numbers**: type receiver numbers. **Destination**: tick networks; a test number is made from each one's dial code. Ticking a whole country picks only its **All networks** (default) entry, so it gives one result for the default network, not one per network.",
-                values:
-                  "Numbers comma-separated, up to 20 at once, e.g. `447700900123, 33612345678`. Destination: up to 5 networks.",
+                name: "Numbers",
+                what: "Receiver numbers. Empty when the page opens. Fill in numbers, destinations or both: each gives its own result.",
+                values: "Comma-separated, up to 20 at once, e.g. `447700900123, 33612345678`.",
               },
               {
-                name: "MCCMNC",
-                what: "Force the destination, as if HLR found it.",
+                name: "Destinations",
+                what: "Opens the country and network tree; a test number is made from each picked network's dial code. Ticking a whole country picks only its **All networks** (default) entry, so it gives one result for the default network, not one per network. The picks show as chips under the field; × removes one.",
+                values: "Up to 5 networks.",
+              },
+              {
+                name: "MCCMNC of the numbers",
+                what: "Under **Advanced**. Force the destination of the typed numbers, as if HLR found it.",
                 values: "Empty = from the number.",
               },
               {
@@ -1829,8 +1833,8 @@ export const topics: HelpTopic[] = [
                 values: "Automatic from the receiver.",
               },
               {
-                name: "Vendor trunk (test directly, skips routing)",
-                what: "Card **4 Vendor**, under the message. Send straight to this vendor at its own rate. The route rules are still shown for reference. Every vendor trunk is listed when it opens; type to narrow.",
+                name: "Vendor trunk",
+                what: "Optional, in card **1 Route**. Send straight to this vendor at its own rate (routing is skipped). The route rules are still shown for reference. Every vendor trunk is listed when it opens; type to narrow.",
                 values: "Empty = by the route rules.",
               },
               {
@@ -1840,7 +1844,7 @@ export const topics: HelpTopic[] = [
                   "0–8. Automatic from the text: 0 (GSM 7-bit) or 8 (UCS-2) when the text has characters outside GSM.",
               },
               {
-                name: "Message Text",
+                name: "Content",
                 what: "The text. Tags under it show how many SMS parts, the coding, characters out of the limit and bytes. A tag warns when the text needs UCS-2.",
                 values: "Up to 1600 characters.",
               },

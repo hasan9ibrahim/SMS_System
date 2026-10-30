@@ -114,10 +114,6 @@ export async function loadUser(pool: pg.Pool, id: number): Promise<CurrentUser |
   };
 }
 
-export function canUndoOthers(user: CurrentUser): boolean {
-  return user.permissions.includes("*") || user.permissions.includes("undo_others");
-}
-
 export async function getCurrentUser(): Promise<CurrentUser> {
   // Production (backend step 11): never the demo administrator. A user that is not (or no longer) in the database
   // may do nothing, and a database error fails the request.

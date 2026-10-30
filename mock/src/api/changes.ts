@@ -4,7 +4,7 @@ import { applyBusinessCompanyField } from "./businessCompanies.js";
 import { applyAlertRuleField } from "./alerts.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
-import type { Change, ListQuery, UndoRequest } from "@sms/contract";
+import type { Change, CurrentUser, ListQuery, UndoRequest } from "@sms/contract";
 import { withDb } from "../db.js";
 import { changeSelect, listDefs, mapChange } from "../lists/defs.js";
 import { listFields } from "../lists/fields.js";
@@ -13,7 +13,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { isBadRegex } from "./lists.js";
 import { withDescriptions } from "../history/describe.js";
 import { sendProblem } from "../problem.js";
-import { currentUserId, canUndoOthers, getCurrentUser } from "./session.js";
+import { currentUserId, getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { allows, ENTITY_PAGES, visibleEntityTypes } from "../auth/access.js";
 import { applyEnterpriseField } from "./enterprises.js";
@@ -364,8 +364,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     for (const e of entries as (DiffEntry & { table: string })[]) {
       if (!MIGRATION_TABLES.has(e.table)) continue;
       if (e.field === "*") {
+        // Number list entries have no updated_at (team trial round 12: values an import added to an existing list).
+        const touched = e.table === "number_list_entries" ? "" : ", updated_at = now()";
         await c.query(
-          `UPDATE ${e.table} SET deleted_at = ${e.before == null ? "now()" : "NULL"}, updated_at = now() WHERE id = $1`,
+          `UPDATE ${e.table} SET deleted_at = ${e.before == null ? "now()" : "NULL"}${touched} WHERE id = $1`,
           [e.entity_id],
         );
         continue;
@@ -469,6 +471,24 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
   }
 }
 
+/**
+ * Whose changes a user sees in History and may undo (team trial round 12): everyone's (null) for administrators and
+ * directors (the Management department); for a department's manager, theirs and their department's people; else
+ * only their own.
+ */
+export async function changeScope(db: pg.Pool | pg.PoolClient, me: CurrentUser): Promise<number[] | null> {
+  if (me.permissions.includes("*")) return null;
+  const { rows } = await db.query(
+    `SELECT EXISTS (SELECT 1 FROM users u JOIN departments d ON d.id = u.department_id
+                     WHERE u.id = $1 AND lower(d.name) = 'management' AND d.deleted_at IS NULL) AS director,
+            ARRAY(SELECT x.id FROM users x JOIN departments d ON d.id = x.department_id
+                   WHERE d.manager_id = $1 AND d.deleted_at IS NULL) AS team`,
+    [me.id],
+  );
+  if (rows[0]?.director) return null;
+  return [me.id, ...((rows[0]?.team as number[] | undefined) ?? []).map(Number)];
+}
+
 export function undoChange(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const body = (request.body ?? {}) as UndoRequest;
@@ -491,11 +511,12 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
         detail: `Undoing needs edit on ${page ?? "this page"}. Ask an administrator.`,
         code: "not_allowed",
       });
-    if (target.user_id !== me.id && !canUndoOthers(me)) {
+    const scope = await changeScope(pool, me);
+    if (target.user_id !== me.id && scope !== null && !scope.includes(Number(target.user_id))) {
       return sendProblem(
         reply,
         403,
-        "You can undo your own changes only; undoing others' needs the \"Undo others' changes\" permission",
+        "You can undo your own changes; someone else's is undone by an administrator, a director or their department's manager",
       );
     }
 
@@ -594,16 +615,25 @@ export function queryChanges(request: FastifyRequest, reply: FastifyReply) {
   const errors = checkListQuery(query, listFields.changes);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    // Only changes of records on pages the user may open (backend step 10); administrators see every change.
-    const types = visibleEntityTypes(await getCurrentUser());
+    // Only changes of records on pages the user may open (backend step 10); administrators see every change. Only
+    // the changes of the people the user covers (team trial round 12, `changeScope`).
+    const me = await getCurrentUser();
+    const types = visibleEntityTypes(me);
+    const people = await changeScope(pool, me);
+    const where = [
+      types === null ? null : `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])`,
+      people === null ? null : `c.user_id = ANY(ARRAY[${people.join(",")}]::bigint[])`,
+    ].filter((w): w is string => w !== null);
     const def = listDefs.changes as ListDef<Change>;
-    const scoped: ListDef<Change> =
-      types === null
-        ? def
-        : { ...def, baseWhere: `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])` };
+    const scoped: ListDef<Change> = where.length ? { ...def, baseWhere: where.join(" AND ") } : def;
     try {
       const page = await runList(pool, scoped, query);
-      return { ...page, rows: await withDescriptions(pool, page.rows) };
+      const canUndo = (c: Change) =>
+        c.undoneById === null &&
+        c.changeType !== "undo" &&
+        !NOT_UNDOABLE.has(c.entityType) &&
+        (c.userId === me.id || people === null || people.includes(c.userId));
+      return { ...page, rows: (await withDescriptions(pool, page.rows)).map((c) => ({ ...c, canUndo: canUndo(c) })) };
     } catch (err) {
       if (isBadRegex(err))
         return sendProblem(reply, 400, "Invalid list query", {

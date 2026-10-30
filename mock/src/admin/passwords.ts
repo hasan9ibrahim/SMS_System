@@ -74,6 +74,17 @@ export function verifyPassword(password: string, stored: string): boolean {
   return timingSafeEqual(want, got);
 }
 
+let decoy: string | null = null;
+/**
+ * Spends the same time as checking a real password, for a sign-in with an unknown username: answering those at once
+ * would tell which usernames exist (security audit, team trial round 12).
+ */
+export function verifyNoUser(password: string): false {
+  decoy ??= hashPassword(randomBytes(12).toString("base64"));
+  verifyPassword(password, decoy);
+  return false;
+}
+
 /**
  * Known-leaked passwords (§13.28; product owner 2026-10-26: checked on the server, nothing sent out): the entries of
  * 12 characters or more (shorter ones fail the length rule anyway) from public lists of the most used breached

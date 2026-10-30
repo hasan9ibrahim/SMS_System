@@ -1,12 +1,36 @@
 // Pure helpers for the Observation Deck pages (§9): EDR row keys, message ID lists, UTC date inputs,
 // sizes, statuses, and the message size counter of the Route Simulator.
-import type { EdrRow, FilterCondition } from "@sms/contract";
+import type { EdrRow, FilterCondition, MaskedCell } from "@sms/contract";
 
 /** EDRs are keyed by UUID; the grid needs a number, so the key is the first 52 bits of the UUID. */
 export const uuidKey = (uuid: string) => parseInt(uuid.replace(/-/g, "").slice(0, 13), 16);
 
 export type EdrGridRow = Omit<EdrRow, "id"> & { id: number; uuid: string };
 export const toGridRow = (r: EdrRow): EdrGridRow => ({ ...r, id: uuidKey(r.id), uuid: r.id });
+
+/** Fields of an EDR the viewer's visibility policy can withhold (§13.17): null in the row when withheld. */
+const WITHHELD = [
+  "customerRate",
+  "customerSysRate",
+  "revenue",
+  "revenueSys",
+  "vendorRate",
+  "vendorSysRate",
+  "cost",
+  "costSys",
+  "customerIp",
+  "vendorIp",
+] as const;
+
+/** The grid's "Hidden" cells for the withheld values of a page of EDR rows. */
+export const withheldCells = (rows: { id: number }[]): MaskedCell[] =>
+  rows.flatMap((r) =>
+    WITHHELD.filter((f) => f in r && (r as Record<string, unknown>)[f] === null).map((field) => ({
+      id: r.id,
+      field,
+      text: "Hidden",
+    })),
+  );
 
 /** Comma, space or line separated message IDs, without blanks and repeats. */
 /**
