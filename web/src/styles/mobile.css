@@ -113,6 +113,9 @@
   opacity: 0.6;
 }
 .gcard-title {
+  /* Keeps its own height: a badge in the title (Incidents, Alert rules) was squeezed to 8 px and clipped. */
+  flex: none;
+  line-height: 22px;
   font-weight: 600;
   font-size: 14.5px;
   white-space: nowrap;
@@ -120,6 +123,8 @@
   text-overflow: ellipsis;
 }
 .gcard-fields {
+  min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 12px;
@@ -144,6 +149,18 @@
 }
 .gcard-value.num {
   text-align: left;
+}
+/* A stacked grid cell (name over rule, value over note) runs on one line in a phone card: every card is one title
+   line and two rows of fields, and the detail panel shows the rest. */
+.gcard-title .two-line,
+.gcard-value .two-line,
+.gcard-title .two-line > *,
+.gcard-value .two-line > * {
+  display: inline;
+}
+.gcard-title .two-line > * + *,
+.gcard-value .two-line > * + * {
+  margin-left: 6px;
 }
 
 @media (max-width: 760px) {
@@ -496,5 +513,39 @@
     flex: none;
     white-space: nowrap;
     margin-bottom: 0;
+  }
+}
+
+/* Team trial round 12 sweep: a segmented control wider than the phone scrolls sideways by itself, and small tables
+   (NOC and Sales reports, Network status, Cleanup Center) scroll inside their card instead of widening the page. */
+@media (max-width: 760px) {
+  .seg {
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .seg > * {
+    flex: none;
+  }
+  .mini-table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  /* Flex items keep their content width unless told otherwise: the Incidents, Market moves and Incoming RNs filter
+     rows, and long date ranges on the narrowest phones. */
+  .incident-filters,
+  .seg {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .range-chip {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .range-chip > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
