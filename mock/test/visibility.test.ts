@@ -353,6 +353,25 @@ describe("visibility policies (§13.17)", { skip }, () => {
     assert.ok(au[0].n >= 3);
   });
 
+  test("an enterprise handed to the account manager shows under its name at once (team trial round 12)", async () => {
+    // The viewer is cached: a first look as the AM primes it.
+    const masked = await ok("getEnterprise", call("GET", `/enterprises/${other}`, undefined, AM));
+    assert.match(masked.name, /#\d+$/);
+    const { rows } = await db().query("SELECT name, account_manager_id FROM enterprises WHERE id = $1", [other]);
+    try {
+      await ok(
+        "handOverEnterprise",
+        call("POST", `/enterprises/${other}/handover`, { userId: AM, note: "visibility test", notify: false }),
+      );
+      // No waiting for the cache to expire.
+      const seen = await ok("getEnterprise", call("GET", `/enterprises/${other}`, undefined, AM));
+      assert.equal(seen.name, rows[0].name);
+    } finally {
+      await db().query("UPDATE enterprises SET account_manager_id = $2 WHERE id = $1", [other, rows[0].account_manager_id]);
+      clearVisibilityCache();
+    }
+  });
+
   test("removing the user's assignment falls back to the next one", async () => {
     await ok("removeVisibilityAssignment", call("DELETE", `/visibility-assignments/${assignmentId}`), 204);
     const eff = await ok("getUserVisibility", call("GET", `/users/${AM}/visibility`));

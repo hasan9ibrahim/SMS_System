@@ -22,7 +22,7 @@ import pg from "pg";
 import { EVALUATE_EVERY_MS, evaluateRound, incidentEvent, notifies, toEvent } from "../alerts/engine.js";
 import { currentUserId, loadUser } from "../api/session.js";
 import { allows } from "../auth/access.js";
-import { requestUser } from "../auth/user.js";
+import { cookieToken, requestUser } from "../auth/user.js";
 import { db, PG_CONFIG } from "../db.js";
 import { isLeader } from "../jobs/leader.js";
 import { production } from "../mode.js";
@@ -78,8 +78,19 @@ export function liveSimulator() {
 }
 
 function getSimulator() {
-  loading ??= (production ? createFeedSimulator() : createSimulator()).then((s) => (sim = s));
+  // A failed start is tried again on the next use instead of failing every join from then on (team trial round 12).
+  loading ??= (production ? createFeedSimulator() : createSimulator())
+    .then((s) => (sim = s))
+    .catch((err: Error) => {
+      loading = null;
+      throw err;
+    });
   return loading;
+}
+
+/** The simulator for a step that may wait for it; a failed start is logged, never left unhandled. */
+function whenSimulator(fn: (s: Simulator) => void) {
+  getSimulator().then(fn, (err: Error) => console.warn(`live screens: ${err.message}; trying again shortly`));
 }
 
 function send(c: Client, topic: string, event: string, payload: object) {
@@ -107,9 +118,18 @@ function moversFor(s: Simulator, c: Client, now: number) {
   );
 }
 
+let lastStart = 0;
+
 function tick() {
-  if (!sim) return;
   const now = Date.now();
+  if (!sim) {
+    // Not started (the stores did not answer): try again every 10 seconds.
+    if (!loading && now - lastStart >= 10_000) {
+      lastStart = now;
+      whenSimulator(() => undefined);
+    }
+    return;
+  }
   if (production) feedStep(sim, now);
   else step(sim, now);
   ticks++;
@@ -159,7 +179,7 @@ export function startLive() {
   lastEvaluation = Date.now() - EVALUATE_EVERY_MS + 20_000; // first round once the history is in
   timer = setInterval(tick, 1000);
   timer.unref();
-  void getSimulator();
+  whenSimulator(() => undefined);
 }
 
 /** Join params for live:dashboard (dashboard.join.json); defaults 15 minutes, 100 messages per card, every second. */
@@ -262,10 +282,18 @@ export async function registerSocket(app: FastifyInstance) {
   app.get("/socket/websocket", { websocket: true }, (socket, req) => {
     // Frames that arrive while the user is looked up wait for it, so the first joins are not lost.
     const ready: Promise<Client | null> = socketUser(req)
-      .catch(() => null)
+      .catch((err: Error) => {
+        req.log.warn(`live socket: the user could not be read (${err.message})`);
+        return null;
+      })
       .then((who) => {
         if (!who) {
-          // Not signed in: the GUI shows Sign in from its API calls; the socket tries again later.
+          // Not signed in: the GUI shows Sign in from its API calls; the socket tries again later. Logged, so a live
+          // feed that never connects can be told apart from a network problem (team trial round 12).
+          req.log.warn(
+            { cookie: !!cookieToken(req), forwarded: !!req.headers["x-sms-proxy-secret"] },
+            "live socket refused: no signed-in user (no session cookie, or the session ended)",
+          );
           socket.close(4401, "sign in required");
           return null;
         }
@@ -319,7 +347,7 @@ function onFrame(client: Client, data: unknown) {
     client.topics.set(topic, joinRef);
     reply("ok");
     // Panels fill at once instead of after the first 5-second push.
-    void getSimulator().then((s) => {
+    whenSimulator((s) => {
       const now = Date.now();
       if (topic === "live:tps") send(client, topic, "history", historyEvent(s, now));
       if (topic === "live:dashboard") {

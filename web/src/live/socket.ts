@@ -15,7 +15,8 @@ export class LiveSocket {
   private retry = 0;
   private closed = false;
   onFrame: ((frame: PhxFrame) => void) | null = null;
-  onStatus: ((connected: boolean) => void) | null = null;
+  /** `refused`: the server closed it as not signed in (4401), so retrying alone does not help. */
+  onStatus: ((connected: boolean, refused?: boolean) => void) | null = null;
 
   constructor(private readonly url: string) {}
 
@@ -39,9 +40,9 @@ export class LiveSocket {
       this.onFrame?.(frame);
       this.dispatch(frame);
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       if (this.heartbeat) clearInterval(this.heartbeat);
-      this.onStatus?.(false);
+      this.onStatus?.(false, e.code === 4401);
       if (this.closed) return;
       const delay = Math.min(30_000, 1000 * 2 ** this.retry++);
       setTimeout(() => !this.closed && this.connect(), delay);

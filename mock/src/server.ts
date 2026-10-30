@@ -7,7 +7,7 @@ import { registerSocket } from "./live/socket.js";
 import { auditCall } from "./api/audit.js";
 import { GATE_OPEN, isBlocked } from "./admin/gate.js";
 import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
-import { restricts } from "./visibility/policy.js";
+import { clearVisibilityCache, restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
 import { db } from "./db.js";
@@ -25,6 +25,10 @@ const PUBLIC_OPS = new Set([
   "checkPasswordSetup",
   "completePasswordSetup",
 ]);
+
+
+/** Writes that can change who sees which enterprise: enterprises, users, hand-overs, undo, imports (not reads). */
+const VISIBILITY_WRITES = /^(?!query|get|list|export|download|check|preview|simulate|test).*(Enterprise(?!Doc)|User|handOver|undo|redo|Migration|Import|Cleanup)/;
 
 export const API_PREFIX = "/api/v1";
 
@@ -156,6 +160,16 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   });
 
   // Audit Trail (§11): every call that changes something, after its answer is sent.
+  // Who sees which enterprise (§13.17) follows each enterprise's account manager and each user's manager: a write that
+  // can change them forgets the cached viewers before it answers, so an account manager's new enterprise shows under
+  // its name at once, not as "Enterprise #id" until the cache expires (team trial round 12).
+  app.addHook("onSend", async (request, reply, payload) => {
+    const op = (request.routeOptions.config as { op?: ContractOperation } | undefined)?.op;
+    if (op && request.method !== "GET" && reply.statusCode < 400 && VISIBILITY_WRITES.test(op.operationId))
+      clearVisibilityCache();
+    return payload;
+  });
+
   app.addHook("onResponse", async (request, reply) => {
     const op = (request.routeOptions.config as { op?: ContractOperation }).op;
     if (op && !isPortalOperation(op.operationId)) auditCall(op, request, reply);

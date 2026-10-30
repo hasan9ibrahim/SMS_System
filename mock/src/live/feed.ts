@@ -171,26 +171,59 @@ async function refreshFactors() {
   factors = await sysToPlatformFactors().catch(() => factors);
 }
 
-/** A simulator structure over the live trunks with no traffic yet, its history read from the EDR store. */
+/** A trunk or vendor as the feed keeps it: no traffic yet (the simulator's invented figures cleared). */
+function asFeedParty<T extends SimTrunk | SimVendor>(x: T): T {
+  x.tps = 0;
+  x.minutes = Array(MINUTES).fill(0);
+  x.minAsr = Array(MINUTES).fill(null);
+  x.minDlr = Array(MINUTES).fill(null);
+  x.minDelay = Array(MINUTES).fill(0);
+  x.asrNow = null;
+  x.dlrNow = null;
+  x.dip = null;
+  if ("segments" in x) x.segments = [];
+  return x;
+}
+
+/**
+ * A simulator structure over the live trunks with no traffic yet, its history read from the EDR store. Every live
+ * vendor is there from the start (team trial round 12: only those with traffic last week were, so a new server showed
+ * no vendors), and an EDR store that does not answer at start no longer stops the service: the figures come from the
+ * switch's events and today's are read again every minute.
+ */
 export async function createFeedSimulator(): Promise<Simulator> {
   await refreshFactors();
-  const loaded = await loadFromStores();
+  const loaded = await loadFromStores({ feed: true });
   const sim: Simulator = { ...loaded, slotIndex: 0, lastTick: Date.now(), moneyFromWriter: false };
-  for (const x of [...sim.trunks, ...sim.vendors]) {
-    x.tps = 0;
-    x.minutes = Array(MINUTES).fill(0);
-    x.minAsr = Array(MINUTES).fill(null);
-    x.minDlr = Array(MINUTES).fill(null);
-    x.minDelay = Array(MINUTES).fill(0);
-    x.asrNow = null;
-    x.dlrNow = null;
-    x.dip = null;
-  }
-  for (const t of sim.trunks) t.segments = [];
+  for (const x of [...sim.trunks, ...sim.vendors]) asFeedParty(x);
   await loadHistory(sim).catch((err: Error) => console.warn(`live history: ${err.message}`));
   await refreshBaselines(sim);
   setInterval(() => void refreshBaselines(sim), 15 * 60_000).unref();
+  setInterval(() => void refreshParties(sim).catch((err: Error) => console.warn(`live trunks: ${err.message}`)), 60_000).unref();
   return sim;
+}
+
+/**
+ * The live trunks and vendors again (every minute): trunks created, renamed, re-limited, switched off or deleted since
+ * the service started show on the live screens without a restart (team trial round 12). What a kept trunk counted so
+ * far stays.
+ */
+export async function refreshParties(sim: Simulator) {
+  const fresh = await loadFromStores({ feed: true, stats: false });
+  const merge = <T extends SimTrunk | SimVendor>(old: T[], now: T[]): T[] => {
+    const byId = new Map(old.map((x) => [x.id, x]));
+    return now.map((n) => {
+      const kept = byId.get(n.id);
+      if (!kept) return asFeedParty(n);
+      kept.name = n.name;
+      kept.enterpriseId = n.enterpriseId;
+      kept.enterpriseName = n.enterpriseName;
+      kept.limit = n.limit;
+      return kept;
+    });
+  };
+  sim.trunks = merge(sim.trunks, fresh.trunks);
+  sim.vendors = merge(sim.vendors, fresh.vendors);
 }
 
 /**

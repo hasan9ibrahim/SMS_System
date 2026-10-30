@@ -23,6 +23,7 @@ function ServerClock() {
 export function StatusBar({ tabId }: { tabId: string }) {
   const status = usePageStatusStore((s) => s.byTab[tabId]);
   const connected = useLive((s) => s.connected);
+  const refused = useLive((s) => s.refused);
   return (
     <footer className="statusbar">
       <span className="status-rows">{status?.rows ?? ""}</span>
@@ -30,7 +31,12 @@ export function StatusBar({ tabId }: { tabId: string }) {
         {status?.shortcuts ?? "Ctrl K jump to · middle-click a tab to close · drag a tab out for a new window"}
       </span>
       <span className="status-right">
-        <span className={connected ? "" : "status-warn"}>{connected ? "Live" : "Live offline"}</span>
+        <span
+          className={connected ? "" : "status-warn"}
+          title={refused ? "The live feed needs you signed in: sign out and in again" : undefined}
+        >
+          {connected ? "Live" : refused ? "Live offline: sign in again" : "Live offline"}
+        </span>
         <span>Autosave on</span>
         <ServerClock />
       </span>

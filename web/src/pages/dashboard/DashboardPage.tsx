@@ -86,6 +86,8 @@ const money = (v: number, currency: string) =>
 
 interface Feed {
   connected: boolean;
+  /** The server refused the socket as not signed in (4401). */
+  refused?: boolean;
   summary: DashboardSummaryEvent | null;
   movers: DashboardMoversEvent | null;
   tops: DashboardTopsEvent | null;
@@ -118,7 +120,7 @@ function useDashboardFeed(
   });
   useEffect(() => {
     const s = new LiveSocket(socketUrl());
-    s.onStatus = (connected) => setFeed((f) => ({ ...f, connected }));
+    s.onStatus = (connected, refused = false) => setFeed((f) => ({ ...f, connected, refused }));
     s.subscribe("live:tps", (event, payload) => {
       if (event === "history")
         setFeed((f) => ({ ...f, chart: bufferFromHistory(payload as unknown as TpsHistoryEvent) }));
@@ -238,7 +240,9 @@ export function DashboardPage() {
   usePageStatus({
     rows: feed.connected
       ? `Live · ${at ? new Date(at).toLocaleTimeString("en-GB") : "waiting for data"}`
-      : "Reconnecting to the live feed…",
+      : feed.refused
+        ? "The live feed needs you signed in: sign out and in again"
+        : "Reconnecting to the live feed…",
     shortcuts: "Click a row or chart point to open its Analytics view in a new tab",
   });
 

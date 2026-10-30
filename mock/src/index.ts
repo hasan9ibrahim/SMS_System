@@ -44,6 +44,9 @@ if (production) {
 }
 
 const app = await buildServer({ logger: true });
+// A background step that fails (a store that does not answer, a job) is logged; it never stops the service and every
+// screen with it (team trial round 12: the live feed's start did when the EDR store was slow).
+process.on("unhandledRejection", (err) => app.log.error({ err }, "unhandled background error"));
 // Schema changes of a new image are applied to a kept database before serving (team trial round 2). In production the
 // release deploy applies the migrations before the services start (deploy/ansible), so a server never changes the
 // schema under the other one.
