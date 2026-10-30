@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.115.0
+  version: 0.116.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16746,7 +16746,8 @@ components:
           type: integer
           minimum: 0
           maximum: 90
-          description: Notice period for rate increases (§13.14, §13.32).
+          default: 0
+          description: Notice period for rate increases (§13.14, §13.32). 0 by default (team trial round 12).
         rateNoticeDaysDecrease:
           type: integer
           minimum: 0
@@ -33669,6 +33670,11 @@ components:
       type: object
       required: [ruleId, matched, checks, outcome, vendor, candidates, mccmnc, destination, sellRate]
       properties:
+        ingress:
+          description: The customer trunk's ingress translation, run first (team trial round 12; rule Test only).
+          oneOf:
+            - $ref: "#/components/schemas/TranslationTestResult"
+            - type: "null"
         ruleId:
           $ref: "#/components/schemas/Id"
         matched:
@@ -33734,6 +33740,13 @@ components:
       type: object
       required: [tried, decision, egressSkipped]
       properties:
+        ingress:
+          description: >-
+            The customer trunk's ingress translation rules, run first as the switch does (team trial round 12): the
+            rules are tried on the translated message. Null without a customer trunk or rules.
+          oneOf:
+            - $ref: "#/components/schemas/TranslationTestResult"
+            - type: "null"
         egressSkipped:
           description: Vendors skipped because their own vendor translation rules block the message.
           type: array

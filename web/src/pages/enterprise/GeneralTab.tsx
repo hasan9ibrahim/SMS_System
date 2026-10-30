@@ -66,7 +66,7 @@ function blank(): Form {
     vatNumber: null,
     accountNumber: null,
     billingTimezone: "UTC",
-    rateNoticeDays: 7,
+    rateNoticeDays: 0,
     rateNoticeDaysDecrease: 0,
     rateNoticeDaysNew: 0,
     allNetworksCode: "mcc",

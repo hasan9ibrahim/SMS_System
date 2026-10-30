@@ -191,13 +191,36 @@ defmodule Sms.Switch.Rules.Translation do
         steps = [step | steps]
 
         cond do
-          step.blocked -> {:halt, {state, steps, true}}
-          step.matched and not step.continue_after -> {:halt, {state, steps, false}}
-          true -> {:cont, {state, steps, false}}
+          step.blocked ->
+            {:halt, {state, steps, true}}
+
+          # A rule that only maps receipts has nothing to do on a message that is not one, so it never stops the
+          # run there (team trial round 12).
+          step.matched and not step.continue_after and
+              not (before.dlr_status == nil and only_maps_receipts?(rule)) ->
+            {:halt, {state, steps, false}}
+
+          true ->
+            {:cont, {state, steps, false}}
         end
       end)
 
     %{before: before, after: state, blocked: blocked, steps: Enum.reverse(steps)}
+  end
+
+  @doc """
+  Whether a rule only maps receipts: a DLR map and no other action (team trial round 12: such a rule with no
+  conditions, set to Stop, matched every message and left every rule after it unreached).
+  """
+  @spec only_maps_receipts?(Rule.t()) :: boolean()
+  def only_maps_receipts?(%Rule{} = r) do
+    r.dlr_map != [] and r.action != :block and is_nil(r.sender_conversion) and
+      is_nil(r.receiver_conversion) and
+      is_nil(r.sender_ton) and is_nil(r.sender_npi) and is_nil(r.dest_ton) and is_nil(r.dest_npi) and
+      is_nil(r.billing_type) and is_nil(r.registered_delivery) and r.content_words == [] and
+      is_nil(r.content_number_format) and
+      not (r.content_regex != nil and r.content_replacement != nil) and
+      r.msg_template in [nil, ""]
   end
 
   defp entry({%Rule{} = rule, nil}), do: {rule, rule.continue_after}

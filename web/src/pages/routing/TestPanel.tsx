@@ -1,7 +1,14 @@
 // Rule Test (§15.4) and the Route Simulator dialog (§6.3): run a sample number through
 // one rule, or through all rules in priority order, and show the decision step by step.
 import { useState } from "react";
-import type { EgressSkip, RouteDecision, RouteSimulation, RouteTestRequest, TrunkListRow } from "@sms/contract";
+import type {
+  EgressSkip,
+  RouteDecision,
+  RouteSimulation,
+  RouteTestRequest,
+  TranslationTestResult,
+  TrunkListRow,
+} from "@sms/contract";
 import { ApiError } from "../../api/client";
 import { simulateRoute, testRouteRule } from "../../api/routing";
 import { ListLookup } from "../../records/parts";
@@ -243,6 +250,39 @@ const errText = (e: unknown) =>
       ].join(" · ")
     : String(e);
 
+/**
+ * What the customer trunk's ingress translation did before the rules were tried (team trial round 12): each rule
+ * that changed the message, field by field, or blocked it.
+ */
+function IngressView({ ingress }: { ingress: TranslationTestResult | null | undefined }) {
+  if (!ingress) return null;
+  const fired = ingress.steps.filter((s) => s.matched && (s.changes.length > 0 || s.blocked));
+  return (
+    <div className={`sim-ingress${ingress.blocked ? " blocked" : ""}`}>
+      <strong>Ingress translation</strong>{" "}
+      {ingress.blocked ? (
+        <span className="tone-error">blocked the message: the switch would reject it</span>
+      ) : fired.length ? (
+        <span className="muted">the rules were tried on the translated message</span>
+      ) : (
+        <span className="muted">no rule changed the message</span>
+      )}
+      {fired.length > 0 && (
+        <ul>
+          {fired.map((s) => (
+            <li key={s.ruleId}>
+              #{s.ruleId} {s.name}
+              {s.blocked
+                ? ": blocked"
+                : `: ${s.changes.map((c) => `${c.field} “${c.before ?? ""}” → “${c.after ?? ""}”`).join(", ")}`}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** The Test section of one rule. */
 export function TestSection({ ruleId, trunkId }: { ruleId: number; trunkId: number | null }) {
   const [req, setReq] = useState<RouteTestRequest>({ receiver: "", ...(trunkId ? { customerTrunkId: trunkId } : {}) });
@@ -264,6 +304,7 @@ export function TestSection({ ruleId, trunkId }: { ruleId: number; trunkId: numb
     <div className="test-section">
       <TestForm value={req} onChange={setReq} onRun={() => void run()} running={running} />
       {error && <p className="error-text">{error}</p>}
+      {result && <IngressView ingress={result.ingress} />}
       {result && <DecisionView d={result} skipped={result.egressSkipped} />}
     </div>
   );
@@ -293,6 +334,7 @@ export function SimulateDialog({ onClose, onOpenRule }: { onClose: () => void; o
       {error && <p className="error-text">{error}</p>}
       {result && (
         <div className="sim-result">
+          <IngressView ingress={result.ingress} />
           {result.tried.some((t) => !t.matched) && (
             <label className="toggle-inline">
               <input type="checkbox" checked={showSkipped} onChange={(e) => setShowSkipped(e.target.checked)} />

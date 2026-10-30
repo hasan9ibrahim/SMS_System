@@ -11057,8 +11057,11 @@ export type components = {
       accountNumber?: string | null;
       /** @description Day and month totals are cut at midnight in this zone (§13.31). */
       billingTimezone?: string;
-      /** @description Notice period for rate increases (§13.14, §13.32). */
-      rateNoticeDays?: number;
+      /**
+       * @description Notice period for rate increases (§13.14, §13.32). 0 by default (team trial round 12).
+       * @default 0
+       */
+      rateNoticeDays: number;
       /**
        * @description Notice period for rate decreases (team trial round 2). 0 = none.
        * @default 0
@@ -18729,6 +18732,8 @@ export type components = {
       note: string | null;
     };
     RouteDecision: {
+      /** @description The customer trunk's ingress translation, run first (team trial round 12; rule Test only). */
+      ingress?: components["schemas"]["TranslationTestResult"] | null;
       ruleId: components["schemas"]["Id"];
       matched: boolean;
       checks: components["schemas"]["RouteCheck"][];
@@ -18758,6 +18763,8 @@ export type components = {
       result: components["schemas"]["TrunkRulesTestResult"];
     };
     RouteSimulation: {
+      /** @description The customer trunk's ingress translation rules, run first as the switch does (team trial round 12): the rules are tried on the translated message. Null without a customer trunk or rules. */
+      ingress?: components["schemas"]["TranslationTestResult"] | null;
       /** @description Vendors skipped because their own vendor translation rules block the message. */
       egressSkipped: components["schemas"]["EgressSkip"][];
       /** @description Rules tried in priority order, up to the deciding one (at most 100 listed). */

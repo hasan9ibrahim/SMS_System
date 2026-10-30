@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
@@ -22,8 +22,16 @@ import "./styles/calm.css";
 import "./styles/brand.css";
 import "./styles/mobile.css";
 
-const queryClient = new QueryClient({
+// Figures derived from rates, rules and trunks are read again after any change (team trial round 12): an open Rate
+// lookup, Route rules cost column or LCR tab showed what was there before a rate or rule was saved.
+const DERIVED: string[][] = [["lookup", "rates"], ["route-vendor-costs"], ["lcr"]];
+const queryClient: QueryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, staleTime: 15_000 } },
+  mutationCache: new MutationCache({
+    onSuccess: () => {
+      for (const queryKey of DERIVED) void queryClient.invalidateQueries({ queryKey });
+    },
+  }),
 });
 
 createRoot(document.getElementById("root")!).render(

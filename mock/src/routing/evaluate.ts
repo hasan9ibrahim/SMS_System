@@ -194,7 +194,7 @@ export function keywordPattern(pattern: string): string | null {
   return null;
 }
 
-function regex(pattern: string, value: string, matchCase = false): boolean {
+function compiledRegex(pattern: string, matchCase: boolean): RegExp | null {
   const key = matchCase ? `c:${pattern}` : `i:${pattern}`;
   let re = compiled.get(key);
   if (re === undefined) {
@@ -206,6 +206,18 @@ function regex(pattern: string, value: string, matchCase = false): boolean {
     if (compiled.size > 5000) compiled.clear();
     compiled.set(key, re);
   }
+  return re;
+}
+
+/** The part of the value a pattern matched, or null (the Content check names the word or phrase, round 12). */
+export function matchedPart(pattern: string, value: string, matchCase = false): string | null {
+  const re = compiledRegex(pattern, matchCase);
+  const m = re ? re.exec(value) : null;
+  return m ? m[0] : null;
+}
+
+function regex(pattern: string, value: string, matchCase = false): boolean {
+  const re = compiledRegex(pattern, matchCase);
   return re ? re.test(value) : false;
 }
 
@@ -397,7 +409,20 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
   };
   rows("Sender", rule.senderValues, rule.senderPatternNegate, m.sender);
   rows("Receiver", rule.receiverValues, rule.receiverPatternNegate, m.receiver);
-  pattern("Content", rule.contentPattern, rule.contentPatternNegate, m.content);
+  // Content names the word or phrase that matched (team trial round 12: a rule over many words did not say which).
+  if (rule.contentPattern) {
+    const part = matchedPart(rule.contentPattern, m.content);
+    const hit = part !== null;
+    const negate = rule.contentPatternNegate;
+    add(
+      "Content",
+      true,
+      negate ? !hit : hit,
+      hit
+        ? `content has “${part}”${negate ? ", which the rule must not match" : ""} (${rule.contentPattern})`
+        : `content has none of ${rule.contentPattern}${negate ? ", as the rule wants" : ""}`,
+    );
+  }
   if (rule.senderListId) {
     const hit = m.listHas(rule.senderListId, m.sender, !senderCase(rule));
     const neg = !!rule.senderListNegate;

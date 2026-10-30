@@ -13,6 +13,9 @@ import { isPortalOperation } from "./api/portal.js";
 import { db } from "./db.js";
 import { DEFAULT_USER_ID, forwardedOperation, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
+import { clearRoutingCostCache } from "./api/rateLookup.js";
+import { clearRouteMaps } from "./api/routeMap.js";
+import { invalidateLiveRoutes } from "./live/routing.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
 const PUBLIC_OPS = new Set([
@@ -26,6 +29,19 @@ const PUBLIC_OPS = new Set([
   "completePasswordSetup",
 ]);
 
+
+/**
+ * Writes that can move routes, costs or rates (team trial round 12: Rate lookup, Route rules costs and Route map kept
+ * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes.
+ */
+const ROUTING_WRITES =
+  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr)/;
+
+const clearRouteCaches = () => {
+  clearRoutingCostCache();
+  clearRouteMaps();
+  invalidateLiveRoutes();
+};
 
 /** Writes that can change who sees which enterprise: enterprises, users, hand-overs, undo, imports (not reads). */
 const VISIBILITY_WRITES = /^(?!query|get|list|export|download|check|preview|simulate|test).*(Enterprise(?!Doc)|User|handOver|undo|redo|Migration|Import|Cleanup)/;
@@ -176,8 +192,10 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   // its name at once, not as "Enterprise #id" until the cache expires (team trial round 12).
   app.addHook("onSend", async (request, reply, payload) => {
     const op = (request.routeOptions.config as { op?: ContractOperation } | undefined)?.op;
-    if (op && request.method !== "GET" && reply.statusCode < 400 && VISIBILITY_WRITES.test(op.operationId))
-      clearVisibilityCache();
+    if (op && request.method !== "GET" && reply.statusCode < 400) {
+      if (VISIBILITY_WRITES.test(op.operationId)) clearVisibilityCache();
+      if (ROUTING_WRITES.test(op.operationId)) clearRouteCaches();
+    }
     return payload;
   });
 

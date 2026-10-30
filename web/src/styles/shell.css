@@ -2837,3 +2837,19 @@ body.resizing-split-h {
 .theme-picker-option.on {
   font-weight: 600;
 }
+
+/* Route simulator: what the trunk's ingress translation did first (team trial round 12). */
+.sim-ingress {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+}
+.sim-ingress.blocked {
+  border-color: var(--color-error);
+}
+.sim-ingress ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
