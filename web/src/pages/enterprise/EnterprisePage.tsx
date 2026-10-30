@@ -185,8 +185,8 @@ export function EnterprisePage() {
     onDirty: onDirty[key as keyof typeof onDirty] ?? (() => {}),
   });
   const openTrunk = (kind: "customer" | "vendor") => (row: TrunkListRow, ev: { ctrlKey: boolean; metaKey: boolean }) =>
+    // In this tab, Back returns to the enterprise's trunks (team trial round 12); Ctrl/Cmd-click: a new tab.
     navigate(`/enterprises/${kind}-trunks/${row.id}`, {
-      newTab: true,
       forceNew: ev.ctrlKey || ev.metaKey,
       title: `${kind === "customer" ? "Customer" : "Vendor"} trunk · ${row.name}`,
     });

@@ -160,10 +160,10 @@ export function EnterprisesPage() {
           render: (r) => <TrunkCount count={r.vendorTrunkCount} names={r.vendorTrunkNames} />,
         },
       }}
+      // The record opens in this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
       onOpen={(row, e) =>
         navigate(`/enterprises/${row.id}`, {
           forceNew: e.ctrlKey || e.metaKey,
-          newTab: true,
           title: `Enterprise · ${row.name}`,
         })
       }

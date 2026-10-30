@@ -99,19 +99,41 @@ test("the saved workspace leaves Home out and restores in order", () => {
   assert.equal(s().tabs.find((t) => t.id === s().activeId)!.path, "/dashboard");
 });
 
-test("Back: previous page in the tab (filters kept), then the tab it was opened from (trial round 1)", () => {
+test("Back: previous page and section in the tab (filters kept); never another tab (team trial round 12)", () => {
   const first = s().open("/enterprises", { newTab: true });
   s().setPath(first, "/enterprises?g=abc");
   s().setPath(first, "/enterprises?g=abd");
-  s().setPath(first, "/rates");
-  const second = s().open("/routing/rules", { newTab: true });
-  assert.equal(s().goBack(second), true, "back to the opener tab");
-  assert.equal(s().activeId, first);
+  s().setPath(first, "/enterprises/12");
+  s().setPath(first, "/enterprises/12?tab=billing");
+  assert.equal(s().goBack(first), true);
+  assert.equal(s().tabs.find((t) => t.id === first)!.path, "/enterprises/12", "a section is a step");
   assert.equal(s().goBack(first), true);
   assert.equal(s().tabs.find((t) => t.id === first)!.path, "/enterprises?g=abd", "filter changes are not steps");
-  assert.equal(canGoBack(s(), first), true, "Home opened it");
-  s().close(first);
-  assert.equal(canGoBack(s(), second), false, "opener closed");
+  assert.equal(canGoBack(s(), first), false, "nothing before the list: Back does not jump to another tab");
+  // A record opened in its own tab goes back to its list, in that tab.
+  const second = s().open("/enterprises/customer-trunks/7", { forceNew: true });
+  assert.equal(canGoBack(s(), second), true);
+  assert.equal(s().goBack(second), true);
+  assert.equal(s().activeId, second);
+  assert.equal(s().tabs.find((t) => t.id === second)!.path, "/enterprises/customer-trunks");
+});
+
+test("closing the tab in view goes back to the tab used before it (team trial round 12)", () => {
+  const a = s().open("/rates", { newTab: true });
+  s().open("/routing/rules", { newTab: true });
+  s().open("/finance", { newTab: true });
+  s().activate(a);
+  const d = s().open("/admin/users", { newTab: true });
+  void s().close(d);
+  assert.equal(s().activeId, a);
+});
+
+test("a closed tab is never made active (team trial round 12)", () => {
+  const a = s().open("/rates", { newTab: true });
+  const b = s().open("/routing/rules", { newTab: true });
+  void s().close(b);
+  s().activate(b);
+  assert.equal(s().activeId, a);
 });
 
 test("split view: each side picks its tab, the strip fills the focused side (team trial round 1)", async () => {

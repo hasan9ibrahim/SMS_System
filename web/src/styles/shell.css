@@ -251,10 +251,22 @@ a.btn {
   position: relative;
 }
 .pane {
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
+}
+/* A tab's own dialogs (team trial round 12): over its pane only, so the tab strip and other tabs stay usable. */
+.pane-dialogs {
+  display: contents;
+}
+.modal-backdrop.in-tab {
+  position: absolute;
+  z-index: 40;
+}
+.modal-backdrop.in-tab .modal {
+  max-height: calc(100% - 24px);
 }
 .panes.split .pane:not(.hidden) + .pane:not(.hidden),
 .panes.split .pane:not(.hidden) ~ .pane:not(.hidden) {
@@ -623,14 +635,18 @@ a.btn {
 }
 .tabs {
   display: flex;
+  flex: 1 1 auto;
   align-items: stretch;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: thin;
 }
+/* Tabs shrink (Chrome style) down to a small width, titles truncated, so all of them show (team trial round 12). */
 .tab {
   position: relative;
   display: flex;
+  flex: 0 1 auto;
+  min-width: 56px;
   align-items: center;
   gap: 7px;
   max-width: 240px;
@@ -658,8 +674,41 @@ a.btn {
   max-width: 90px;
 }
 .tab-title {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.tab > svg,
+.tab-close,
+.tab-live,
+.tab-alert,
+.tab-dirty {
+  flex: none;
+}
+.tab.active {
+  min-width: 110px;
+}
+.tabs.crowded .tab {
+  min-width: 28px;
+  padding: 0 6px;
+  gap: 4px;
+}
+.tabs.crowded .tab.active {
+  min-width: 110px;
+}
+.tabs.crowded .tab:not(.active):not(:hover) .tab-close {
+  display: none;
+}
+.tab-new,
+.tab-group,
+.tab.home,
+.tabs.crowded .tab.home {
+  flex: none;
+  min-width: 0;
+}
+.tab-menu-host {
+  display: contents;
 }
 .tab-close {
   display: grid;
@@ -2760,4 +2809,21 @@ body.resizing-split-h {
   margin: 0 -10px;
   border: 0;
   box-shadow: none;
+}
+
+/* Theme row in the user menu (team trial round 12): one row, the themes under it when opened. */
+.theme-picker {
+  padding-bottom: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+.theme-picker-current {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+.theme-picker-option {
+  padding-left: 22px;
+}
+.theme-picker-option.on {
+  font-weight: 600;
 }

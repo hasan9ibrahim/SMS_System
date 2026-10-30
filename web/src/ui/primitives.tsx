@@ -179,6 +179,9 @@ export function Menu({ items, onClose }: { items: (MenuItem | "separator")[]; on
   );
 }
 
+/** Where a Modal renders: its tab's pane (TabDialogs), else the whole window. */
+export const ModalHost = createContext<HTMLElement | null>(null);
+
 export function Modal({
   title,
   onClose,
@@ -195,14 +198,22 @@ export function Modal({
   /** Only × closes it: a click outside or Escape does nothing (New rule, team trial round 3). */
   onlyCloseButton?: boolean;
 }) {
+  const host = useContext(ModalHost);
+  const backdrop = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (onlyCloseButton) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Only the dialog of the tab in view closes (a hidden tab's dialog has no layout box).
+    const onKey = (e: KeyboardEvent) =>
+      e.key === "Escape" && backdrop.current?.getClientRects().length && onClose();
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, onlyCloseButton]);
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => !onlyCloseButton && e.target === e.currentTarget && onClose()}>
+    <div
+      ref={backdrop}
+      className={`modal-backdrop${host ? " in-tab" : ""}`}
+      onMouseDown={(e) => !onlyCloseButton && e.target === e.currentTarget && onClose()}
+    >
       <div className="modal" style={{ width }} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h2>{title}</h2>
@@ -212,7 +223,7 @@ export function Modal({
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
     </div>,
-    document.body,
+    host ?? document.body,
   );
 }
 

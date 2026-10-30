@@ -4,6 +4,7 @@ import { useCanView } from "../api/access";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { create } from "zustand";
 import { useMe, useUpdatePreferences } from "../api/hooks";
+import type { Theme } from "@sms/contract";
 import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
@@ -66,7 +67,12 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         type="button"
         className={`menu-top${current ? " current" : ""}`}
         onClick={(e) => open(only.path, e)}
-        onAuxClick={(e) => e.button === 1 && open(only.path, e)}
+        onMouseDown={(e) => {
+          if (e.button === 1) {
+            e.preventDefault();
+            open(only.path, e);
+          }
+        }}
         // Hovering a one-page section closes another section's dropdown.
         onPointerEnter={(e) => {
           if (isMouse(e)) useOpenSection.getState().set(null);
@@ -108,8 +114,11 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
                 setShown(false);
                 open(pg.path, e);
               }}
-              onAuxClick={(e) => {
+              // Middle button on press (team trial round 12): closes the dropdown and opens the page in a new tab
+              // behind; on press, so Windows' autoscroll cannot swallow it and leave the dropdown open.
+              onMouseDown={(e) => {
                 if (e.button === 1) {
+                  e.preventDefault();
                   setShown(false);
                   open(pg.path, e);
                 }
@@ -212,15 +221,10 @@ function Avatar() {
             {me?.role} – {me?.businessCompany}
           </span>
         </div>
+        <ThemePicker theme={theme} onPick={setTheme} />
         <Menu
           onClose={() => setShown(false)}
           items={[
-            // The two themes not in use (blue-grey added in team trial round 6).
-            ...THEMES.filter((t) => t.value !== theme).map((t) => ({
-              label: `${t.label} theme`,
-              icon: t.value === "light" ? ("sun" as const) : ("moon" as const),
-              onSelect: () => setTheme(t.value),
-            })),
             {
               label:
                 me?.preferences.openInNewTab === false ? "Open pages in a new tab" : "Open pages in the current tab",
@@ -254,6 +258,39 @@ function Avatar() {
         />
       </Popover>
     </>
+  );
+}
+
+/**
+ * The themes as one row with a small arrow (team trial round 12): it opens the list of themes, the current one
+ * ticked; picking one switches at once and keeps the menu open.
+ */
+function ThemePicker({ theme, onPick }: { theme: Theme; onPick: (t: Theme) => void }) {
+  const [open, setOpen] = useState(false);
+  const current = THEMES.find((t) => t.value === theme) ?? THEMES[0]!;
+  return (
+    <div className="menu theme-picker" role="group" aria-label="Theme">
+      <button type="button" className="menu-item" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <Icon name={theme === "light" ? "sun" : "moon"} size={14} />
+        <span>Theme</span>
+        <span className="theme-picker-current">{current.label}</span>
+        <Icon name={open ? "chevronDown" : "chevronRight"} size={13} />
+      </button>
+      {open &&
+        THEMES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            role="menuitemradio"
+            aria-checked={t.value === theme}
+            className={`menu-item theme-picker-option${t.value === theme ? " on" : ""}`}
+            onClick={() => onPick(t.value)}
+          >
+            {t.value === theme ? <Icon name="check" size={14} /> : <span className="menu-icon-space" />}
+            <span>{t.label}</span>
+          </button>
+        ))}
+    </div>
   );
 }
 
