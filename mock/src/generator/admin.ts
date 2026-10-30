@@ -43,7 +43,6 @@ export const ACCESS_GROUPS: {
         "approve",
         "start_stop",
         "change_password",
-        "undo_others",
         "export_credentials",
       ],
     },
@@ -51,7 +50,7 @@ export const ACCESS_GROUPS: {
   {
     name: "Department Manager",
     description: "Every page except credential exports; can undo the team's changes",
-    permissions: { "*": ["view", "add", "edit", "export", "send", "approve", "undo_others"] },
+    permissions: { "*": ["view", "add", "edit", "export", "send", "approve"] },
   },
   {
     name: "Account Manager",

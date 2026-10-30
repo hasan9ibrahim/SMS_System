@@ -936,7 +936,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "You can undo your own changes. Users whose access group has **Undo others' changes** (and administrators) can undo anyone's.",
+              "You see and undo your own changes. Administrators and directors (the Management department) see and undo anyone's; a department's manager sees and undoes the changes of the people in that department.",
               "An undo is itself a change with its own number, so it can be undone again and the trail stays complete.",
               "Undoing a delete brings the record back with its original ID and settings.",
               "An undo takes effect straight away, like a normal save; routing uses the restored rule at once.",

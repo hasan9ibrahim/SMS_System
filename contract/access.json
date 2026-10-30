@@ -381,8 +381,7 @@
       "send"
     ],
     "change-history": [
-      "view",
-      "undo_others"
+      "view"
     ],
     "users": [
       "view",

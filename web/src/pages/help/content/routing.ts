@@ -881,7 +881,7 @@ export const topics: HelpTopic[] = [
               "Each of your own changes has an **Undo** button. Undo puts back only the fields that change touched, so other people's later edits stay.",
               "If someone changed the same field after you, you are asked: **Keep current** (undo only the untouched fields), **Restore mine** (put your values back everywhere) or **Cancel**.",
               "Right after a save an **Undo** toast shows for 10 seconds. **Ctrl+Z** on the page undoes your last change. An undo is itself a change, so it can be redone.",
-              'Undoing other people\'s changes needs the "undo others" permission.',
+              "Other people's changes are listed and undone only by administrators, directors and their department's manager.",
             ],
           },
           { kind: "text", text: "See [[undo-and-history]] for the full rules." },

@@ -307,7 +307,9 @@ export type paths = {
     /**
      * Change history (server-side filter, sort and paging)
      * @description One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
-     *     History tab, on `userId` for "My changes".
+     *     History tab, on `userId` for "My changes". Whose changes (team trial round 12): everyone's for
+     *     administrators and directors (the Management department), the people of their department for a
+     *     department's manager, and else the user's own. Each row says whether the viewer may undo it (`canUndo`).
      */
     post: operations["queryChanges"];
     delete?: never;
@@ -331,8 +333,9 @@ export type paths = {
      *     other fields are kept. If someone else has since changed one of those fields,
      *     the server answers 409 with both values; the GUI then asks the user to keep the
      *     current value, restore theirs, or cancel, and calls again with `resolution`.
-     *     The undo is itself a change and is returned. Users may undo their own changes;
-     *     undoing someone else's needs the "undo others' changes" permission (403 otherwise).
+     *     The undo is itself a change and is returned. Users may undo their own changes; someone else's
+     *     only an administrator, a director (the Management department) or the manager of that user's
+     *     department (team trial round 12; 403 otherwise).
      */
     post: operations["undoChange"];
     delete?: never;
@@ -10949,6 +10952,8 @@ export type components = {
       undoOfId: components["schemas"]["Id"] | null;
       /** @description Set when a later undo reverted this change. */
       undoneById: components["schemas"]["Id"] | null;
+      /** @description On History lists: whether the viewer may undo it (team trial round 12). Own changes; others' only for administrators, directors (the Management department) and the manager of the user's department. False once undone, for an undo itself and for re-rating requests. Undo still needs Edit on the record's page. */
+      canUndo?: boolean;
     };
     ChangePage: components["schemas"]["ListPageMeta"] & {
       rows: components["schemas"]["Change"][];

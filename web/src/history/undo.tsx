@@ -210,19 +210,10 @@ export function useUndoShortcut(scope: HistoryScope | null, active: boolean) {
   }, [active, scope, undoLast]);
 }
 
-export function ChangeEntry({
-  change,
-  onUndo,
-  meId,
-  canUndoOthers,
-}: {
-  change: Change;
-  onUndo: (c: Change) => void;
-  meId?: number;
-  canUndoOthers: boolean;
-}) {
-  const mine = change.userId === meId;
-  const undoable = change.undoneById === null && (mine || canUndoOthers);
+export function ChangeEntry({ change, onUndo }: { change: Change; onUndo: (c: Change) => void }) {
+  // The server decides: own changes, or someone else's for an administrator, a director or their department's
+  // manager (team trial round 12, §13.10).
+  const undoable = change.canUndo ?? change.undoneById === null;
   return (
     <li className={`change${change.undoneById ? " undone" : ""}`}>
       <div className="change-head">
@@ -249,9 +240,7 @@ export function ChangeEntry({
 
 /** The History list of a record or page scope, newest first, with Undo per change. */
 export function HistoryList({ scope }: { scope: HistoryScope }) {
-  const { data: me } = useMe();
   const undo = useUndo();
-  const canUndoOthers = !!me && (me.permissions.includes("*") || me.permissions.includes("undo_others"));
   const filter = scopeFilter(scope);
   const history = useInfiniteQuery({
     queryKey: ["history", "list", scope],
@@ -267,13 +256,7 @@ export function HistoryList({ scope }: { scope: HistoryScope }) {
       {history.isError && <p className="error-text pad">{String((history.error as Error).message)}</p>}
       <ul className="change-list">
         {rows.map((c) => (
-          <ChangeEntry
-            key={c.id}
-            change={c}
-            meId={me?.id}
-            canUndoOthers={canUndoOthers}
-            onUndo={(ch) => void undo(ch.id, false, ch)}
-          />
+          <ChangeEntry key={c.id} change={c} onUndo={(ch) => void undo(ch.id, false, ch)} />
         ))}
       </ul>
       {history.hasNextPage && (

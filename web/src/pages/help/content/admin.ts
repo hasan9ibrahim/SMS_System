@@ -9,7 +9,7 @@ export const topics: HelpTopic[] = [
     title: "Change history",
     group: "Admin",
     summary:
-      "Every save anyone makes, with who, when and exactly which fields changed, and an Undo button per change. **My changes** is the same page showing only your own saves.",
+      "Every save, with who, when and exactly which fields changed, and an Undo button per change. You see your own saves; administrators and directors see everyone's, and a department's manager sees that department's. **My changes** shows only your own saves.",
     keywords: ["undo", "history", "my changes", "audit", "revert", "rollback", "who changed", "before after", "diff"],
     sections: [
       {
@@ -18,11 +18,11 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'Every time someone saves a record (a route rule, a rate, a trunk, a user, a template and so on) the system writes one **change**. This page lists all of them, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
+            text: 'Every time someone saves a record (a route rule, a rate, a trunk, a user, a template and so on) the system writes one **change**. This page lists the ones you may see, newest first. Use it to answer "who changed this, and when?", to see the exact before and after values, and to undo a mistake.',
           },
           {
             kind: "text",
-            text: "Open **My changes** from your avatar menu (top right) to see the same page filtered to your own saves. Everyone can use it for their own work; supervisors and admins use the full list to follow the team.",
+            text: "Open **My changes** from your avatar menu (top right) to see the same page filtered to your own saves. Everyone can use it for their own work. Administrators and directors (the Management department) see the full list; a department's manager sees the changes of the people in that department, to follow the team.",
           },
         ],
       },
@@ -125,7 +125,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "warning",
-            text: "You can always undo your own changes. Undoing someone else's change needs the **Undo others** permission in your [[access-groups|GUI access group]]. Without it, the Undo button is not shown on their rows.",
+            text: "You see and can undo your own changes. Administrators and directors (the **Management** department) see and undo everyone's; a department's manager ([[departments]]) sees and undoes the changes of the people in that department. Other people's changes are not listed for anyone else.",
           },
           {
             kind: "tip",
@@ -478,7 +478,6 @@ export const topics: HelpTopic[] = [
       "menu",
       "buttons",
       "RBAC",
-      "undo others",
       "export credentials",
     ],
     sections: [
@@ -584,7 +583,6 @@ export const topics: HelpTopic[] = [
               { name: "Approve", what: "Approve or reject requests (one person makes, another checks)." },
               { name: "Start / stop", what: "Start or stop binds and jobs." },
               { name: "Change passwords", what: "Set other users' temporary passwords (Users, Customer portal)." },
-              { name: "Undo others", what: "Undo changes made by other users ([[change-history]])." },
               {
                 name: "Export credentials",
                 what: "Sensitive exports with trunk connection details. Also needs 2FA, and only admins can actually include credentials ([[migration]]).",
@@ -648,7 +646,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "Keep **Undo others** and **Change passwords** for supervisors and admins only.",
+            text: "Keep **Change passwords** for supervisors and admins only. Seeing and undoing other people's changes follows the person (administrator, director or department manager), not a permission ([[change-history]]).",
           },
         ],
       },
