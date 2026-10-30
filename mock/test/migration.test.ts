@@ -93,13 +93,18 @@ describe("migration center", { skip }, () => {
     assert.deepEqual(
       entities.map((e: { entity: string }) => e.entity),
       [
+        "departments",
+        "product_categories",
         "users",
         "enterprises",
         "customer_trunks",
         "vendor_trunks",
         "rate_tables",
         "rate_lines",
+        "number_lists",
         "route_rules",
+        "translation_rules",
+        "hlr_rules",
         "opening_balances",
       ],
     );
@@ -109,7 +114,7 @@ describe("migration center", { skip }, () => {
     const csv = await ok("getMigrationTemplate", call("GET", "/migration/templates/route_rules"));
     assert.match(csv, /^externalId,name,priority,status,customerTrunks,destinations,vendors\n/);
     const maps = await ok("getMigrationMappings", call("GET", "/migration/mappings"));
-    assert.equal(maps.filter((m: { builtIn: boolean }) => m.builtIn).length, 8);
+    assert.equal(maps.filter((m: { builtIn: boolean }) => m.builtIn).length, 13);
     const ref = maps.find((m: { builtIn: boolean; entity: string }) => m.builtIn && m.entity === "users");
     await fails(
       "saveMigrationMapping",
@@ -377,7 +382,11 @@ describe("migration center", { skip }, () => {
 
     const fixed = await ok(
       "revalidateMigrationImport",
-      call("PUT", `/migration/imports/${dry.id}`, files("424", await myTotp(), "192.0.2.10-192.0.2.13;198.51.100.0/24")),
+      call(
+        "PUT",
+        `/migration/imports/${dry.id}`,
+        files("424", await myTotp(), "192.0.2.10-192.0.2.13;198.51.100.0/24"),
+      ),
     );
     assert.equal(fixed.report.canApply, true, JSON.stringify(fixed.report.issues));
     const by = (e: string) => fixed.report.entities.find((x: { entity: string }) => x.entity === e);
@@ -474,7 +483,9 @@ describe("migration center", { skip }, () => {
     // Delete (R9): off the list, files gone.
     await ok("deleteMigrationImport", call("DELETE", `/migration/imports/${dry.id}`), 204);
     await fails("getMigrationImport", call("GET", `/migration/imports/${dry.id}`), 404);
-    const { rows: del } = await db().query("SELECT deleted_at, files_enc FROM migration_imports WHERE id = $1", [dry.id]);
+    const { rows: del } = await db().query("SELECT deleted_at, files_enc FROM migration_imports WHERE id = $1", [
+      dry.id,
+    ]);
     assert.ok(del[0].deleted_at);
     assert.equal(del[0].files_enc, null);
   });
@@ -539,7 +550,9 @@ describe("migration center", { skip }, () => {
     assert.equal(dry.report.canApply, true, JSON.stringify(dry.report.issues));
     await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
     await runningApplies.get(dry.id);
-    const { rows } = await db().query("SELECT id, status, is_account_manager FROM users WHERE username = $1", [username]);
+    const { rows } = await db().query("SELECT id, status, is_account_manager FROM users WHERE username = $1", [
+      username,
+    ]);
     assert.equal(rows[0]?.status, "active");
     assert.equal(rows[0]?.is_account_manager, true);
     cleanup.push(async () => {
@@ -567,7 +580,167 @@ describe("migration center", { skip }, () => {
     );
     madeImports.push(bad.id);
     assert.equal(bad.report.canApply, false);
-    assert.ok(bad.report.issues.some((i: { field: string }) => i.field === "status"), JSON.stringify(bad.report.issues));
+    assert.ok(
+      bad.report.issues.some((i: { field: string }) => i.field === "status"),
+      JSON.stringify(bad.report.issues),
+    );
+  });
+
+  test("departments, categories, number lists, translation and HLR rules import and roll back (team trial round 12)", async () => {
+    const { rows: tr } = await db().query(
+      "SELECT name FROM customer_trunks WHERE deleted_at IS NULL ORDER BY id LIMIT 1",
+    );
+    const { rows: hp } = await db().query(
+      "SELECT name FROM hlr_providers WHERE deleted_at IS NULL ORDER BY id LIMIT 1",
+    );
+    const trunk = String(tr[0].name);
+    const tag = `Imp tags ${run}`;
+    const pool = `Imp pool ${run}`;
+    const file = (entity: string, rows: string[][]) => ({ entity, fileName: `${entity}.csv`, content: toCsv(rows) });
+    const files = [
+      file("departments", [
+        ["Department", "Description"],
+        [`Imp dept ${run}`, "Imported"],
+      ]),
+      file("product_categories", [["Category"], [`Imp cat ${run}`]]),
+      // One row per value, and several values in one row; the type written loosely.
+      file("number_lists", [
+        ["List name", "Type", "Value"],
+        [tag, "Tag", "BANKX"],
+        [tag, "tag", "BANKY;BANKZ"],
+        [pool, "Random numbers", "447700900001,447700900002"],
+      ]),
+      file("translation_rules", [
+        [
+          "Rule",
+          "Customer trunk",
+          "Sender ID list",
+          "Sender ID conversion",
+          "Sender ID conversion number list",
+          "Destination TON",
+        ],
+        [`Imp rule ${run}`, trunk, tag, "random_number", pool, "1"],
+      ]),
+      file("hlr_rules", [
+        ["Rule name", "HLR provider", "DNID", "Customer trunk"],
+        [`Imp hlr ${run}`, String(hp[0].name), "^234", trunk],
+      ]),
+    ];
+    const dry = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", { sourceSystem: `Lists ${run}`, trunksInactive: true, files }),
+      201,
+    );
+    madeImports.push(dry.id);
+    assert.equal(dry.report.canApply, true, JSON.stringify(dry.report.issues));
+    const counts = Object.fromEntries(
+      dry.report.entities.map((e: { entity: string; create: number }) => [e.entity, e.create]),
+    );
+    assert.deepEqual(counts, {
+      departments: 1,
+      product_categories: 1,
+      number_lists: 3,
+      translation_rules: 1,
+      hlr_rules: 1,
+    });
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+    await runningApplies.get(dry.id);
+    const applied = await ok("getMigrationImport", call("GET", `/migration/imports/${dry.id}`));
+    assert.equal(applied.status, "applied", applied.applyError);
+    cleanup.push(async () => {
+      await db().query(
+        "DELETE FROM translation_rule_targets WHERE translation_rule_id IN (SELECT id FROM translation_rules WHERE name = $1)",
+        [`Imp rule ${run}`],
+      );
+      await db().query("DELETE FROM translation_rules WHERE name = $1", [`Imp rule ${run}`]);
+      await db().query("DELETE FROM hlr_rule_targets WHERE hlr_rule_id IN (SELECT id FROM hlr_rules WHERE name = $1)", [
+        `Imp hlr ${run}`,
+      ]);
+      await db().query("DELETE FROM hlr_rules WHERE name = $1", [`Imp hlr ${run}`]);
+      await db().query(
+        "DELETE FROM number_list_entries WHERE number_list_id IN (SELECT id FROM number_lists WHERE name = ANY($1))",
+        [[tag, pool]],
+      );
+      await db().query("DELETE FROM number_lists WHERE name = ANY($1)", [[tag, pool]]);
+      await db().query("DELETE FROM departments WHERE name = $1", [`Imp dept ${run}`]);
+      await db().query("DELETE FROM product_categories WHERE name = $1", [`Imp cat ${run}`]);
+    });
+    const { rows: lists } = await db().query(
+      `SELECT l.name, l.list_type, array_agg(e.value ORDER BY e.value) AS values FROM number_lists l
+         JOIN number_list_entries e ON e.number_list_id = l.id WHERE l.name = ANY($1) GROUP BY l.id ORDER BY l.name`,
+      [[tag, pool]],
+    );
+    assert.deepEqual(
+      lists.map((l) => [l.name, l.list_type, l.values]),
+      [
+        [pool, "random", ["447700900001", "447700900002"]],
+        [tag, "tag", ["BANKX", "BANKY", "BANKZ"]],
+      ],
+    );
+    const { rows: rule } = await db().query(
+      `SELECT r.sender_conversion, r.dest_ton, sl.name AS sender_list, cl.name AS conversion_list,
+              (SELECT count(*) FROM translation_rule_targets t WHERE t.translation_rule_id = r.id AND t.target_type = 'trunk'
+                  AND t.trunk_kind = 'customer') AS targets
+         FROM translation_rules r LEFT JOIN number_lists sl ON sl.id = r.sender_list_id
+         LEFT JOIN number_lists cl ON cl.id = r.sender_conversion_list_id WHERE r.name = $1`,
+      [`Imp rule ${run}`],
+    );
+    assert.deepEqual(
+      { ...rule[0], targets: Number(rule[0].targets) },
+      { sender_conversion: "random_number", dest_ton: 1, sender_list: tag, conversion_list: pool, targets: 1 },
+    );
+    const { rows: hlr } = await db().query(
+      "SELECT dnid_pattern, (SELECT count(*) FROM hlr_rule_targets t WHERE t.hlr_rule_id = h.id) AS n FROM hlr_rules h WHERE name = $1",
+      [`Imp hlr ${run}`],
+    );
+    assert.deepEqual([hlr[0].dnid_pattern, Number(hlr[0].n)], ["^234", 1]);
+
+    // The same lists again with one new value: only that value is added.
+    const again = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Lists ${run}`,
+        trunksInactive: true,
+        files: [
+          file("number_lists", [
+            ["List name", "Type", "Value"],
+            [tag, "tag", "BANKX,BANKW"],
+          ]),
+        ],
+      }),
+      201,
+    );
+    madeImports.push(again.id);
+    assert.equal(again.report.entities[0].create, 1);
+    // A list type that does not fit the existing list is an error.
+    const wrong = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Lists ${run}`,
+        trunksInactive: true,
+        files: [
+          file("number_lists", [
+            ["List name", "Type", "Value"],
+            [tag, "random", "447700900003"],
+          ]),
+        ],
+      }),
+      201,
+    );
+    madeImports.push(wrong.id);
+    assert.equal(wrong.report.canApply, false);
+
+    // Undo rolls the whole import back: every record it made is archived.
+    await ok("undoChange", call("POST", `/changes/${applied.changeId}/undo`, {}));
+    const { rows: gone } = await db().query(
+      `SELECT (SELECT count(*) FROM translation_rules WHERE name = $1 AND deleted_at IS NULL)
+            + (SELECT count(*) FROM hlr_rules WHERE name = $2 AND deleted_at IS NULL)
+            + (SELECT count(*) FROM number_lists WHERE name = ANY($3) AND deleted_at IS NULL)
+            + (SELECT count(*) FROM departments WHERE name = $4 AND deleted_at IS NULL)
+            + (SELECT count(*) FROM product_categories WHERE name = $5 AND deleted_at IS NULL) AS live`,
+      [`Imp rule ${run}`, `Imp hlr ${run}`, [tag, pool], `Imp dept ${run}`, `Imp cat ${run}`],
+    );
+    assert.equal(Number(gone[0].live), 0);
   });
 
   test("a deleted user in the file is restored, not skipped (team trial round 10)", async () => {
@@ -586,7 +759,11 @@ describe("migration center", { skip }, () => {
         },
       ],
     });
-    const first = await ok("createMigrationImport", call("POST", "/migration/imports", users(`Back ${run}`, "Back")), 201);
+    const first = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", users(`Back ${run}`, "Back")),
+      201,
+    );
     madeImports.push(first.id);
     await ok("applyMigrationImport", call("POST", `/migration/imports/${first.id}/apply`), 202);
     await runningApplies.get(first.id);
@@ -607,7 +784,9 @@ describe("migration center", { skip }, () => {
     const counts = again.report.entities.find((e: { entity: string }) => e.entity === "users");
     assert.equal(counts.update, 1, JSON.stringify(counts));
     assert.equal(again.report.canApply, true, JSON.stringify(again.report.issues));
-    assert.ok(again.report.issues.some((i: { message: string }) => /was deleted: the import restores it/.test(i.message)));
+    assert.ok(
+      again.report.issues.some((i: { message: string }) => /was deleted: the import restores it/.test(i.message)),
+    );
     await ok("applyMigrationImport", call("POST", `/migration/imports/${again.id}/apply`), 202);
     await runningApplies.get(again.id);
     const back = await db().query("SELECT deleted_at, first_name FROM users WHERE id = $1", [id]);

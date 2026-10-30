@@ -18106,17 +18106,24 @@ export type components = {
      */
     MigrationSensitivity: "general" | "business" | "financial" | "credentials";
     /**
-     * @description Imported in this order, so every reference exists when it is needed.
+     * @description Imported in this order, so every reference exists when it is needed. Departments, product categories,
+     *     number lists (one row per value, rows of one list merged), translation rules and HLR rules were added in
+     *     team trial round 12 ("migrate whatever the client has: translation rules, HLR rules, number lists").
      * @enum {string}
      */
     MigrationImportEntity:
+      | "departments"
+      | "product_categories"
       | "users"
       | "enterprises"
       | "customer_trunks"
       | "vendor_trunks"
       | "rate_tables"
       | "rate_lines"
+      | "number_lists"
       | "route_rules"
+      | "translation_rules"
+      | "hlr_rules"
       | "opening_balances";
     MigrationField: {
       field: string;

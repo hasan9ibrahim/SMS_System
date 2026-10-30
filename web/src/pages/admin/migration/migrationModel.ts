@@ -172,12 +172,17 @@ export function nextStep(i: MigrationImport): string {
 }
 
 export const ENTITY_ORDER: MigrationImportEntity[] = [
+  "departments",
+  "product_categories",
   "users",
   "enterprises",
   "customer_trunks",
   "vendor_trunks",
   "rate_tables",
   "rate_lines",
+  "number_lists",
   "route_rules",
+  "translation_rules",
+  "hlr_rules",
   "opening_balances",
 ];

@@ -1938,7 +1938,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Use it to move a whole platform's data in or out in one go: users, enterprises, trunks, rate tables and rates, route rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
+            text: "Use it to move a whole platform's data in or out in one go: departments, product categories, users, enterprises, trunks, rate tables and rates, number lists, route rules, translation rules, HLR rules and opening balances. Imports always start with a **dry run** that writes nothing. Exports make one encrypted package. This is an admin page.",
           },
           {
             kind: "text",
@@ -2002,7 +2002,7 @@ export const topics: HelpTopic[] = [
               { name: "From", what: "Where the data comes from.", values: "CSV files (default), Export package" },
               {
                 name: "Entity / File",
-                what: 'One row per entity, in the order they are loaded: Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rates; Route rules; Opening balances. Choose a CSV file for each you need. **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
+                what: 'One row per entity, in the order they are loaded: Departments; Product categories; Users; Enterprises and contacts; Customer trunks; Vendor trunks; Rate tables; Rates; Number lists; Route rules; Translation rules; HLR rules; Opening balances. Choose a CSV file for each you need. Later files may name records of earlier ones in the same import (the department of a new user, the number list of a new translation rule). **Template** downloads an empty file with our column names. Each row says how records are matched (e.g. "external ID, else name") and whether it holds credentials.',
               },
               {
                 name: "Columns",
@@ -2010,7 +2010,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "If it exists",
-                what: "What to do when a record already exists. Rates and opening balances are always added. A user in the file whose username belongs to a deleted user is restored with the file's details (a deleted user keeps its username), whatever this says; the dry run lists it as a warning.",
+                what: "What to do when a record already exists. Rates, number list values and opening balances are always added (a value already in its list is skipped). Translation rules that exist are skipped: edit them on their page. A user in the file whose username belongs to a deleted user is restored with the file's details (a deleted user keeps its username), whatever this says; the dry run lists it as a warning.",
                 values: "Skip (default), Update, Add new",
               },
               {
@@ -2025,6 +2025,21 @@ export const topics: HelpTopic[] = [
                 name: "2FA code",
                 what: "Your 6-digit code from the authenticator app. Needed when the files hold trunk credentials (System ID, username, password, host, port). Admins only.",
               },
+            ],
+          },
+        ],
+      },
+      {
+        id: "lists-and-rules",
+        title: "Number lists, translation rules and HLR rules",
+        blocks: [
+          {
+            kind: "list",
+            items: [
+              "**Number lists**: one row per value (or several values in one cell, separated by , or ;) with the list's **name** and **type** (tag, random, sender_id_template). Rows with the same name go into one list. A list that already exists keeps its type and gets only the values it lacks.",
+              "**Translation rules**: the rule's conditions (Sender ID, receiver and content patterns, destinations, Sender ID and receiver lists by name), its conversions (type and value, or a number list for random_number and sender_id_template), TON / NPI and the customer or vendor trunks it applies to (by name, or **all**). The dry run runs the same checks as the rule form.",
+              "**HLR rules**: name, the **HLR provider** by name, the receiver pattern (DNID) and the customer trunks (empty = every trunk). Add HLR providers by hand first: they hold the provider's URL and credentials.",
+              "Undoing the import's change archives the lists and rules it made and removes the values it added to lists that were already there.",
             ],
           },
         ],

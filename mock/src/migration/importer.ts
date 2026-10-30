@@ -14,10 +14,13 @@ import type {
   MigrationImportEntity,
   MigrationIssue,
   MigrationReport,
+  TranslationRuleInput,
 } from "@sms/contract";
 import { hashPassword } from "../admin/passwords.js";
 import { csvTable } from "./csv.js";
 import { BUILT_IN_MAPPINGS, CHOICE_SYNONYMS, ENTITY, HEADER_ALIASES, IMPORT_ENTITIES } from "./entities.js";
+import { entryProblem } from "../api/numberLists.js";
+import { checkRule, insertRule, normalise } from "../api/translationRules.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Ent = MigrationImportEntity;
@@ -95,6 +98,12 @@ interface Lookups {
   vendorTables: Map<number, number>;
   rateTables: Map<string, number>;
   routeRules: Map<string, number>;
+  /** Team trial round 12: number lists, HLR providers and rules, translation rules, archived department names. */
+  numberLists: Map<string, { id: number; type: string }>;
+  hlrProviders: Map<string, number>;
+  hlrRules: Map<string, number>;
+  translationRules: Map<string, number>;
+  archivedDepartments: Set<string>;
   refs: Map<string, number>;
   counts: Record<Ent, number | null>;
 }
@@ -119,6 +128,10 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
         WHEN 'vendor_trunks' THEN EXISTS (SELECT 1 FROM vendor_trunks x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
         WHEN 'rate_tables' THEN EXISTS (SELECT 1 FROM rate_tables x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
         WHEN 'route_rules' THEN EXISTS (SELECT 1 FROM route_rules x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
+        WHEN 'departments' THEN EXISTS (SELECT 1 FROM departments x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
+        WHEN 'product_categories' THEN EXISTS (SELECT 1 FROM product_categories x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
+        WHEN 'translation_rules' THEN EXISTS (SELECT 1 FROM translation_rules x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
+        WHEN 'hlr_rules' THEN EXISTS (SELECT 1 FROM hlr_rules x WHERE x.id = r.record_id AND x.deleted_at IS NULL)
         ELSE false END`,
     [source],
   );
@@ -157,8 +170,30 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     routeRules: await map(
       "SELECT lower(name) AS k, min(id) AS id FROM route_rules WHERE deleted_at IS NULL GROUP BY 1",
     ),
+    numberLists: new Map(
+      (
+        await c.query(
+          "SELECT lower(name) AS k, min(id) AS id, min(list_type) AS t FROM number_lists WHERE deleted_at IS NULL GROUP BY 1",
+        )
+      ).rows.map((r) => [String(r.k), { id: Number(r.id), type: String(r.t) }]),
+    ),
+    hlrProviders: await map(
+      "SELECT lower(name) AS k, min(id) AS id FROM hlr_providers WHERE deleted_at IS NULL GROUP BY 1",
+    ),
+    hlrRules: await map("SELECT lower(name) AS k, min(id) AS id FROM hlr_rules WHERE deleted_at IS NULL GROUP BY 1"),
+    translationRules: await map(
+      "SELECT lower(name) AS k, min(id) AS id FROM translation_rules WHERE deleted_at IS NULL GROUP BY 1",
+    ),
+    archivedDepartments: new Set(
+      (await c.query("SELECT lower(name) AS k FROM departments WHERE deleted_at IS NOT NULL")).rows.map((r) => r.k),
+    ),
     refs: new Map(refRows.map((r) => [`${r.entity}:${r.external_id}`, Number(r.record_id)])),
     counts: {
+      departments: await count("SELECT count(*) AS n FROM departments WHERE deleted_at IS NULL"),
+      product_categories: await count("SELECT count(*) AS n FROM product_categories WHERE deleted_at IS NULL"),
+      number_lists: await count("SELECT count(*) AS n FROM number_lists WHERE deleted_at IS NULL"),
+      translation_rules: await count("SELECT count(*) AS n FROM translation_rules WHERE deleted_at IS NULL"),
+      hlr_rules: await count("SELECT count(*) AS n FROM hlr_rules WHERE deleted_at IS NULL"),
       users: await count("SELECT count(*) AS n FROM users WHERE deleted_at IS NULL"),
       enterprises: await count("SELECT count(*) AS n FROM enterprises WHERE deleted_at IS NULL"),
       customer_trunks: await count("SELECT count(*) AS n FROM customer_trunks WHERE deleted_at IS NULL"),
@@ -267,6 +302,8 @@ class Planner {
     if (n < MAX_ISSUES / 8 && this.issues.length < MAX_ISSUES)
       this.issues.push({ entity, row: line, field, message, severity });
   }
+  /** Number lists this import creates, by lower-case name → type (team trial round 12). */
+  readonly newLists = new Map<string, string>();
   /** Rows that failed validation, by external ID and key: rows pointing at them are skipped quietly. */
   readonly failed = new Set<string>();
   fail(entity: Ent, ext: string | null, key: string) {
@@ -306,6 +343,9 @@ class Planner {
 }
 
 const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
+  departments: { table: "departments", columns: ["description", "status"] },
+  product_categories: { table: "product_categories", columns: ["name"] },
+  hlr_rules: { table: "hlr_rules", columns: ["hlr_provider_id", "dnid_pattern", "status"] },
   users: {
     table: "users",
     // deleted_at: only a restored user's row carries it (null), see planUsers.
@@ -434,7 +474,7 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       p.issue("users", line, "username", `Username "${r.username}" is taken: choose skip or update for users`);
       return void (pr.action = "error");
     }
-    const dept = r.department?.trim() ? (p.lk.departments.get(lower(r.department)) ?? null) : null;
+    const dept = r.department?.trim() ? p.resolve("departments", r.department, p.lk.departments) : null;
     if (r.department?.trim() && dept == null)
       p.issue("users", line, "department", `Department "${r.department}" does not exist; left empty`, "warning");
     const group = r.accessGroup?.trim() ? (p.lk.accessGroups.get(lower(r.accessGroup)) ?? null) : null;
@@ -548,9 +588,9 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       p.issue(entity, line, "port", `Port "${r.port}" is not a valid port`);
       return void (pr.action = "error");
     }
-    let category: number | null = null;
+    let category: Ref | number | null = null;
     if (r.category?.trim()) {
-      category = p.lk.categories.get(lower(r.category)) ?? null;
+      category = p.resolve("product_categories", r.category, p.lk.categories);
       if (category == null) {
         if (kind === "vendor") {
           p.issue(entity, line, "category", `Product category "${r.category}" does not exist`);
@@ -604,8 +644,7 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       // Addresses, networks and ranges, checked here (R9): a bad one used to pass the dry run and fail Apply.
       if (r.hostIps?.trim()) {
         const hosts = hostNetworks(list(r.hostIps));
-        for (const e of hosts.errors)
-          p.issue(entity, line, "hostIps", `"${list(r.hostIps)[e.index]}": ${e.message}`);
+        for (const e of hosts.errors) p.issue(entity, line, "hostIps", `"${list(r.hostIps)[e.index]}": ${e.message}`);
         if (hosts.errors.length) return void (pr.action = "error");
         v.host_ips = hosts.networks;
       } else v.host_ips = m.action === "create" ? [] : undefined;
@@ -652,7 +691,7 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
       p.issue("rate_tables", line, "currency", `Currency "${r.currency}" does not exist`);
       return void (pr.action = "error");
     }
-    const category = p.lk.categories.get(lower(r.category!));
+    const category = p.resolve("product_categories", r.category!, p.lk.categories);
     if (category == null) {
       p.issue("rate_tables", line, "category", `Product category "${r.category}" does not exist`);
       return void (pr.action = "error");
@@ -914,6 +953,333 @@ function planBalances(p: Planner, raws: Raw[]): PlanRow[] {
 // ---------------------------------------------------------------- dry run
 
 /** Validates every file and returns the plan; writes nothing. */
+// ---------------------------------------------------------------- team trial round 12: lists, rules, departments
+
+/** A record kept by name only (departments, product categories): one row each, matched by external ID or name. */
+function planNamed(
+  p: Planner,
+  entity: "departments" | "product_categories",
+  raws: Raw[],
+  system: Map<string, number>,
+  values: (r: Raw, name: string) => Record<string, Value>,
+): PlanRow[] {
+  const seen = new Set<string>();
+  const out = raws.map((r, i) => {
+    const line = i + 2;
+    const ext = r.externalId?.trim() || null;
+    const pr = row(line, ext);
+    if (!required(p, entity, line, r)) return { ...pr, action: "error" as const };
+    const name = r.name!.trim();
+    if (seen.has(lower(name))) {
+      p.issue(entity, line, "name", `"${name}" appears twice in the file`);
+      return { ...pr, action: "error" as const };
+    }
+    seen.add(lower(name));
+    const m = p.match(entity, line, ext, system.get(lower(name)) ?? null);
+    if (m.action === "create" && entity === "departments" && p.lk.archivedDepartments.has(lower(name))) {
+      p.issue(entity, line, "name", `Department "${name}" was deleted: restore it on the Departments page first`);
+      return { ...pr, action: "error" as const };
+    }
+    return { ...pr, action: m.action, existingId: m.id, values: values(r, name) };
+  });
+  out.forEach((r, i) => r.action !== "error" && p.index(entity, i, r.externalId, lower(String(r.values.name))));
+  return out;
+}
+
+/**
+ * Number lists: one row per value (or several values separated by , or ;); rows with the same list name go into one
+ * list. A list that exists keeps its type and gets the values it lacks; `existing` holds its current values.
+ */
+function planNumberLists(p: Planner, raws: Raw[], existing: Map<string, Set<string>>): PlanRow[] {
+  const typeOf = new Map<string, string>();
+  const added = new Map<string, Set<string>>();
+  return raws.map((r, i) => {
+    const line = i + 2;
+    const pr = row(line, null);
+    if (!required(p, "number_lists", line, r)) return { ...pr, action: "error" as const };
+    const name = r.name!.trim();
+    const key = lower(name);
+    const type = r.type!.trim().toLowerCase();
+    const system = p.lk.numberLists.get(key);
+    const listType = system?.type ?? typeOf.get(key) ?? type;
+    if (listType !== type) {
+      p.issue("number_lists", line, "type", `List "${name}" is a ${listType} list, not ${type}`);
+      return { ...pr, action: "error" as const };
+    }
+    typeOf.set(key, type);
+    if (!system) p.newLists.set(key, type);
+    const content = r.content?.trim() || null;
+    if (content && type !== "sender_id_template") {
+      p.issue("number_lists", line, "content", "Content goes only in a sender_id_template list");
+      return { ...pr, action: "error" as const };
+    }
+    const values = list(r.value);
+    for (const v of values) {
+      const problem = entryProblem(type as "random" | "tag" | "sender_id_template", v);
+      if (problem) {
+        p.issue("number_lists", line, "value", `"${v}": ${problem}`);
+        return { ...pr, action: "error" as const };
+      }
+    }
+    const have = existing.get(key) ?? new Set<string>();
+    const mine = added.get(key) ?? new Set<string>();
+    added.set(key, mine);
+    const fresh = values.filter(
+      (v) => !have.has(`${v}\u0000${content ?? ""}`) && !mine.has(`${v}\u0000${content ?? ""}`),
+    );
+    fresh.forEach((v) => mine.add(`${v}\u0000${content ?? ""}`));
+    return {
+      ...pr,
+      action: fresh.length ? ("create" as const) : ("skip" as const),
+      existingId: system?.id ?? null,
+      values: { name, list_type: type },
+      extra: { entries: fresh.map((v) => ({ value: v, content })) },
+    };
+  });
+}
+
+/** Trunk names to rule targets; "all" (any case) targets every trunk of that side. */
+function trunkTargets(
+  p: Planner,
+  entity: Ent,
+  line: number,
+  field: string,
+  names: string[],
+  kind: "customer" | "vendor",
+): { type: "trunk" | "all"; trunkKind: "customer" | "vendor"; id: Value }[] | null {
+  const out: { type: "trunk" | "all"; trunkKind: "customer" | "vendor"; id: Value }[] = [];
+  for (const n of names) {
+    if (lower(n) === "all") {
+      out.push({ type: "all", trunkKind: kind, id: null });
+      continue;
+    }
+    const id = p.resolve(`${kind}_trunks`, n, kind === "customer" ? p.lk.customerTrunks : p.lk.vendorTrunks);
+    if (id == null) {
+      p.issue(entity, line, field, `${kind === "customer" ? "Customer" : "Vendor"} trunk "${n}" not found`);
+      return null;
+    }
+    out.push({ type: "trunk", trunkKind: kind, id });
+  }
+  return out;
+}
+
+/** A number list by name: in the system or created by this import; its type for the checks. */
+function listType(p: Planner, name: string): string | null {
+  return p.lk.numberLists.get(lower(name))?.type ?? p.newLists.get(lower(name)) ?? null;
+}
+
+const smallInt = (s: string | undefined, max: number): number | null | "bad" => {
+  const n = num(s);
+  if (n == null) return null;
+  return Number.isInteger(n) && n >= 0 && n <= max ? n : "bad";
+};
+
+/**
+ * Translation rules (§13.2): the form's own checks run after planning (checkTranslationRows); lists and trunks are
+ * checked here because they may come from this same import.
+ */
+function planTranslationRules(p: Planner, raws: Raw[]): PlanRow[] {
+  const seen = new Set<string>();
+  const out = raws.map((r, i) => {
+    const line = i + 2;
+    const ext = r.externalId?.trim() || null;
+    const pr = row(line, ext);
+    const bad = (field: string, message: string) => {
+      p.issue("translation_rules", line, field, message);
+      return { ...pr, action: "error" as const };
+    };
+    if (!required(p, "translation_rules", line, r)) return { ...pr, action: "error" as const };
+    const name = r.name!.trim();
+    if (seen.has(lower(name)) && !ext)
+      return bad("name", `"${name}" appears twice in the file: give each row its external ID`);
+    seen.add(lower(name));
+    const customer = trunkTargets(p, "translation_rules", line, "customerTrunks", list(r.customerTrunks), "customer");
+    if (!customer) return { ...pr, action: "error" as const };
+    const vendor = trunkTargets(p, "translation_rules", line, "vendorTrunks", list(r.vendorTrunks), "vendor");
+    if (!vendor) return { ...pr, action: "error" as const };
+    const dest = list(r.mccmncs);
+    const unknown = dest.filter((d) => !p.lk.mccmnc.has(d));
+    if (unknown.length) return bad("mccmncs", `Not in the MCCMNC master: ${unknown.slice(0, 5).join(", ")}`);
+    // Each list by name, with its ID when it is already in the system (a list of this import gets its ID on apply).
+    const lists: Record<string, { name: string; id: number | null } | null> = {};
+    for (const f of ["senderList", "receiverList", "senderConversionList"]) {
+      const n = r[f]?.trim() || null;
+      if (n && !listType(p, n)) return bad(f, `Number list "${n}" not found`);
+      lists[f] = n ? { name: n, id: p.lk.numberLists.get(lower(n))?.id ?? null } : null;
+    }
+    const sc = r.senderConversion?.trim().toLowerCase() || null;
+    if (lists.senderConversionList) {
+      const want = sc === "random_number" ? "random" : sc === "sender_id_template" ? "sender_id_template" : null;
+      if (!want) return bad("senderConversionList", "Only random_number and sender_id_template use a list");
+      if (listType(p, lists.senderConversionList.name) !== want)
+        return bad("senderConversionList", `Pick a ${want} list`);
+    } else if (sc === "random_number" || sc === "sender_id_template")
+      return bad("senderConversionList", `${sc} needs a number list`);
+    const ton: Record<string, number | null> = {};
+    for (const [f, max] of [
+      ["senderTon", 6],
+      ["senderNpi", 18],
+      ["destTon", 6],
+      ["destNpi", 18],
+    ] as const) {
+      const v = smallInt(r[f], max);
+      if (v === "bad") return bad(f, `"${r[f]}" must be 0 to ${max}`);
+      ton[f] = v;
+    }
+    const m = p.match("translation_rules", line, ext, p.lk.translationRules.get(lower(name)) ?? null);
+    if (m.action === "update") {
+      p.issue(
+        "translation_rules",
+        line,
+        "name",
+        `Rule "${name}" exists; updating rules by import is not offered, skipped`,
+        "warning",
+      );
+      return { ...pr, action: "skip" as const, existingId: m.id, values: { name } };
+    }
+    const direction = r.direction?.trim().toLowerCase() || null;
+    const input = {
+      name,
+      direction: direction as "ingress" | "egress" | null,
+      action: (r.action?.trim().toLowerCase() || "allow") as "allow" | "block",
+      status: (r.status?.trim().toLowerCase() || "active") as "active" | "inactive",
+      continueAfter: lower(r.continueAfter ?? "") === "yes",
+      senderPattern: r.senderPattern?.trim() || null,
+      receiverPattern: r.receiverPattern?.trim() || null,
+      contentPattern: r.contentPattern?.trim() || null,
+      mccmncs: dest,
+      senderConversion: sc,
+      senderConversionValue: r.senderConversionValue?.trim() || null,
+      receiverConversion: r.receiverConversion?.trim().toLowerCase() || null,
+      receiverConversionValue: r.receiverConversionValue?.trim() || null,
+      senderTon: ton.senderTon,
+      senderNpi: ton.senderNpi,
+      destTon: ton.destTon,
+      destNpi: ton.destNpi,
+    };
+    return {
+      ...pr,
+      action: m.action,
+      existingId: m.id,
+      values: { name },
+      extra: { input, lists, targets: [...customer, ...vendor] },
+    };
+  });
+  out.forEach(
+    (r, i) => r.action !== "error" && p.index("translation_rules", i, r.externalId, lower(String(r.values.name))),
+  );
+  return out;
+}
+
+/** The rule form's input for an imported translation rule (blank form + the file's columns). */
+function translationInput(
+  extra: Record<string, Value>,
+  resolveList: (l: { name: string; id: number | null } | null) => number | null,
+) {
+  const x = extra.input as Record<string, unknown>;
+  const lists = extra.lists as Record<string, { name: string; id: number | null } | null>;
+  return {
+    direction: null,
+    action: "allow",
+    status: "active",
+    continueAfter: false,
+    senderPatternNegate: false,
+    senderMatchCase: true,
+    receiverPatternNegate: false,
+    senderValues: [],
+    receiverValues: [],
+    mccmncNegate: false,
+    mccmncPattern: null,
+    contentPatternNegate: false,
+    senderListNegate: false,
+    receiverListNegate: false,
+    senderConversionReplacement: null,
+    receiverConversionReplacement: null,
+    billingType: null,
+    registeredDelivery: null,
+    dlrMap: [],
+    contentRegex: null,
+    contentRegexIndex: null,
+    contentReplacement: null,
+    msgTemplate: null,
+    contentWords: [],
+    contentNumberFormat: null,
+    contentNumberMinDigits: null,
+    senderMinLength: 0,
+    senderMaxLength: 20,
+    receiverMinLength: 0,
+    receiverMaxLength: 20,
+    startsAt: null,
+    stopsAt: null,
+    insertAt: "bottom",
+    ...x,
+    senderListId: resolveList(lists.senderList ?? null),
+    receiverListId: resolveList(lists.receiverList ?? null),
+    senderConversionListId: resolveList(lists.senderConversionList ?? null),
+    targets: [],
+  } as unknown as TranslationRuleInput;
+}
+
+/** The rule form's own checks on each planned rule; lists, trunks and codes were checked while planning. */
+async function checkTranslationRows(c: Db, p: Planner, rows: PlanRow[]) {
+  const SKIP = /^\/(senderListId|receiverListId|senderConversionListId|targets|mccmncs)/;
+  for (const r of rows) {
+    if (r.action !== "create") continue;
+    const errors = await checkRule(c, normalise(translationInput(r.extra, () => null)));
+    const real = errors.filter((e) => !SKIP.test(e.path));
+    for (const e of real) p.issue("translation_rules", r.line, e.path.slice(1), `${e.path.slice(1)}: ${e.message}`);
+    if (real.length) r.action = "error";
+  }
+}
+
+/** HLR rules (§13.24): an existing provider, a receiver pattern and the trunks (empty = every trunk). */
+function planHlrRules(p: Planner, raws: Raw[]): PlanRow[] {
+  const seen = new Set<string>();
+  const out = raws.map((r, i) => {
+    const line = i + 2;
+    const ext = r.externalId?.trim() || null;
+    const pr = row(line, ext);
+    const bad = (field: string, message: string) => {
+      p.issue("hlr_rules", line, field, message);
+      return { ...pr, action: "error" as const };
+    };
+    if (!required(p, "hlr_rules", line, r)) return { ...pr, action: "error" as const };
+    const name = r.name!.trim();
+    if (seen.has(lower(name)) && !ext)
+      return bad("name", `"${name}" appears twice in the file: give each row its external ID`);
+    seen.add(lower(name));
+    const provider = p.lk.hlrProviders.get(lower(r.provider!));
+    if (provider == null)
+      return bad("provider", `HLR provider "${r.provider}" not found: add it on the HLR page first`);
+    const pattern = r.dnidPattern!.trim();
+    try {
+      new RegExp(pattern);
+    } catch {
+      return bad("dnidPattern", `"${pattern}" is not a valid regular expression`);
+    }
+    const names = list(r.customerTrunks);
+    const targets = names.length
+      ? trunkTargets(p, "hlr_rules", line, "customerTrunks", names, "customer")
+      : [{ type: "all" as const, trunkKind: "customer" as const, id: null }];
+    if (!targets) return { ...pr, action: "error" as const };
+    const m = p.match("hlr_rules", line, ext, p.lk.hlrRules.get(lower(name)) ?? null);
+    return {
+      ...pr,
+      action: m.action,
+      existingId: m.id,
+      values: {
+        name,
+        hlr_provider_id: provider,
+        dnid_pattern: pattern,
+        status: r.status?.trim().toLowerCase() || "active",
+      },
+      extra: { targets: targets.map((t) => ({ type: t.type, id: t.id })) },
+    };
+  });
+  out.forEach((r, i) => r.action !== "error" && p.index("hlr_rules", i, r.externalId, lower(String(r.values.name))));
+  return out;
+}
+
 export async function planImport(
   c: Db,
   settings: ImportSettings,
@@ -941,12 +1307,47 @@ export async function planImport(
     }
     raws.set(f.entity, rows);
   }
+  // Number lists: the values the file's lists already hold, so only new ones are added (team trial round 12).
+  const listValues = new Map<string, Set<string>>();
+  const listNames = [...new Set((raws.get("number_lists") ?? []).map((r) => lower(r.name ?? "")).filter(Boolean))];
+  if (listNames.length) {
+    const { rows } = await c.query(
+      `SELECT lower(l.name) AS k, e.value, coalesce(e.content, '') AS content
+         FROM number_lists l JOIN number_list_entries e ON e.number_list_id = l.id AND e.deleted_at IS NULL
+        WHERE l.deleted_at IS NULL AND lower(l.name) = ANY($1)`,
+      [listNames],
+    );
+    for (const r of rows) {
+      if (!listValues.has(r.k)) listValues.set(r.k, new Set());
+      listValues.get(r.k)!.add(`${r.value}\u0000${r.content}`);
+    }
+  }
   for (const info of IMPORT_ENTITIES) {
     const e = info.entity as Ent;
     const rs = raws.get(e);
     if (!rs) continue;
     let planned: PlanRow[];
     switch (e) {
+      case "departments":
+        planned = planNamed(p, e, rs, p.lk.departments, (r, name) => ({
+          name,
+          description: r.description?.trim() || null,
+          status: r.status?.trim().toLowerCase() || "active",
+        }));
+        break;
+      case "product_categories":
+        planned = planNamed(p, e, rs, p.lk.categories, (_r, name) => ({ name }));
+        break;
+      case "number_lists":
+        planned = planNumberLists(p, rs, listValues);
+        break;
+      case "translation_rules":
+        planned = planTranslationRules(p, rs);
+        await checkTranslationRows(c, p, planned);
+        break;
+      case "hlr_rules":
+        planned = planHlrRules(p, rs);
+        break;
       case "users":
         planned = planUsers(p, rs);
         break;
@@ -1045,6 +1446,11 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
   };
   const refs: { entity: Ent; ext: string; id: number }[] = [];
   const TABLE: Record<Ent, string> = {
+    departments: "departments",
+    product_categories: "product_categories",
+    number_lists: "number_lists",
+    translation_rules: "translation_rules",
+    hlr_rules: "hlr_rules",
     users: "users",
     enterprises: "enterprises",
     customer_trunks: "customer_trunks",
@@ -1055,6 +1461,8 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
     opening_balances: "transactions",
   };
   const label = (v: Record<string, Value>) => (v.name ?? v.username ?? null) as string | null;
+  // Number lists this import created or added to, by lower-case name (translation rules point at them by name).
+  const listIds = new Map<string, number>();
 
   for (const info of IMPORT_ENTITIES) {
     const e = info.entity as Ent;
@@ -1063,6 +1471,40 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
     const out: (number | null)[] = rows.map((r) => r.existingId);
     ids.set(e, out);
     const table = TABLE[e];
+
+    if (e === "number_lists") {
+      // Team trial round 12: rows of one list go into one list; a list the import creates is one History entry (undo
+      // archives it), values added to an existing list are one entry each (undo removes them).
+      const created = new Set<number>();
+      for (const r of rows) {
+        if (r.action !== "create") continue;
+        const name = String(r.values.name);
+        let id = listIds.get(lower(name)) ?? r.existingId;
+        if (id == null) {
+          id = await insert("number_lists", { name, list_type: r.values.list_type, updated_by_id: userId });
+          created.add(id);
+          entries.push({ table, entity_id: id, field: "*", before: null, after: `Number lists: ${name}` });
+        }
+        listIds.set(lower(name), id);
+        const vals = r.extra.entries as { value: string; content: string | null }[];
+        const { rows: added } = await c.query(
+          `INSERT INTO number_list_entries (number_list_id, value, content, created_by_id)
+           SELECT $1, v, nullif(ct, ''), $4 FROM unnest($2::text[], $3::text[]) AS x(v, ct)
+           ON CONFLICT DO NOTHING RETURNING id`,
+          [id, vals.map((x) => x.value), vals.map((x) => x.content ?? ""), userId],
+        );
+        if (!created.has(id))
+          for (const a of added)
+            entries.push({
+              table: "number_list_entries",
+              entity_id: Number(a.id),
+              field: "*",
+              before: null,
+              after: `Number list ${name}: entry`,
+            });
+      }
+      continue;
+    }
 
     if (e === "rate_lines") {
       // Bulk: one statement per 5,000 lines. Undoing the import archives their tables.
@@ -1196,6 +1638,31 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
             );
           break;
         }
+        case "departments":
+        case "product_categories":
+          id = await insert(table, { ...v, updated_by_id: userId });
+          break;
+        case "translation_rules": {
+          // The rule form's own write (targets included), with lists of this import by name.
+          const input = translationInput(r.extra, (l) => (l ? (listIds.get(lower(l.name)) ?? l.id) : null));
+          input.targets = (r.extra.targets as { type: string; trunkKind: string; id: Value }[]).map((t) => ({
+            type: t.type,
+            trunkKind: t.trunkKind,
+            id: t.id === null ? null : (resolve(t.id) as number),
+          })) as TranslationRuleInput["targets"];
+          id = await insertRule(c, normalise(input), userId);
+          break;
+        }
+        case "hlr_rules": {
+          id = await insert("hlr_rules", { ...v, insert_at: "bottom", updated_by_id: userId });
+          for (const t of r.extra.targets as { type: string; id: Value }[])
+            await c.query(
+              `INSERT INTO hlr_rule_targets (hlr_rule_id, target_type, target_id, insert_at, created_by_id)
+               VALUES ($1, $2, $3, 'bottom', $4) ON CONFLICT DO NOTHING`,
+              [id, t.type, t.id === null ? null : resolve(t.id), userId],
+            );
+          break;
+        }
         case "opening_balances": {
           const ent = resolve(v.enterprise_id) as number;
           const amount = Number(v.amount);
@@ -1250,6 +1717,12 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
 
 /** Tables a migration change may write (undo checks against it). */
 export const MIGRATION_TABLES = new Set([
+  "departments",
+  "product_categories",
+  "number_lists",
+  "number_list_entries",
+  "translation_rules",
+  "hlr_rules",
   "users",
   "enterprises",
   "customer_trunks",

@@ -70,7 +70,9 @@ async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: st
 
 /** Tells the other admins that credentials left or entered the system. */
 async function notifyAdmins(c: Db, me: CurrentUser, subject: string, body: string) {
-  const { rows } = await c.query(`SELECT email FROM users u WHERE ${adminSql()} AND deleted_at IS NULL AND id <> $1`, [me.id]);
+  const { rows } = await c.query(`SELECT email FROM users u WHERE ${adminSql()} AND deleted_at IS NULL AND id <> $1`, [
+    me.id,
+  ]);
   await logEmail(c, {
     type: "credential_transfer",
     to: rows.map((r) => r.email as string),
@@ -87,6 +89,42 @@ export function getMigrationEntities() {
 }
 
 const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
+  departments: { externalId: "D-10", name: "Sales", description: "Account managers", status: "active" },
+  product_categories: { externalId: "PC-5", name: "OTP" },
+  number_lists: { name: "Bank Sender IDs", type: "tag", value: "BANKX", content: "" },
+  translation_rules: {
+    externalId: "TR-700",
+    name: "Strip 00 from receivers",
+    direction: "",
+    action: "allow",
+    status: "active",
+    continueAfter: "no",
+    customerTrunks: "EXAMPLE_OTP",
+    vendorTrunks: "",
+    mccmncs: "",
+    senderPattern: "",
+    receiverPattern: "^00",
+    contentPattern: "",
+    senderList: "",
+    receiverList: "",
+    senderConversion: "",
+    senderConversionValue: "",
+    senderConversionList: "",
+    receiverConversion: "left_strip",
+    receiverConversionValue: "2",
+    senderTon: "",
+    senderNpi: "",
+    destTon: "1",
+    destNpi: "1",
+  },
+  hlr_rules: {
+    externalId: "HR-30",
+    name: "Nigeria lookups",
+    provider: "Example HLR",
+    dnidPattern: "^234",
+    status: "active",
+    customerTrunks: "EXAMPLE_OTP",
+  },
   users: {
     externalId: "U-1001",
     username: "first.last",
@@ -414,7 +452,8 @@ async function loadFiles(r: Record<string, unknown>): Promise<MigrationFileInput
   const blob = (r.input as StoredInput).blob;
   if (!sealed && blob) sealed = await readFile(blob, "utf8").catch(() => null);
   const plain = sealed ? decryptSecret(sealed) : null;
-  if (!plain) throw new FilesGone("The uploaded files are no longer on the server: use Fix and re-run to upload them again");
+  if (!plain)
+    throw new FilesGone("The uploaded files are no longer on the server: use Fix and re-run to upload them again");
   return JSON.parse(gunzipSync(Buffer.from(plain, "base64")).toString("utf8"));
 }
 

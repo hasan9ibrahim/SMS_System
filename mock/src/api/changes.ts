@@ -364,8 +364,10 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     for (const e of entries as (DiffEntry & { table: string })[]) {
       if (!MIGRATION_TABLES.has(e.table)) continue;
       if (e.field === "*") {
+        // Number list entries have no updated_at (team trial round 12: values an import added to an existing list).
+        const touched = e.table === "number_list_entries" ? "" : ", updated_at = now()";
         await c.query(
-          `UPDATE ${e.table} SET deleted_at = ${e.before == null ? "now()" : "NULL"}, updated_at = now() WHERE id = $1`,
+          `UPDATE ${e.table} SET deleted_at = ${e.before == null ? "now()" : "NULL"}${touched} WHERE id = $1`,
           [e.entity_id],
         );
         continue;

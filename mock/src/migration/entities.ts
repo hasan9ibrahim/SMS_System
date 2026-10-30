@@ -22,14 +22,41 @@ const EXT = f(
 );
 
 export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
+  // Team trial round 12: departments and product categories first, so users and trunks of the same import find them.
+  {
+    entity: "departments",
+    label: "Departments",
+    sensitivity: "business",
+    importable: true,
+    order: 1,
+    dependsOn: [],
+    matchBy: "external ID, else name",
+    fields: [
+      EXT,
+      f("name", "Name", "Unique.", { required: true }),
+      f("description", "Description", ""),
+      f("status", "Status", "", { allowed: ["active", "inactive"] }),
+    ],
+  },
+  {
+    entity: "product_categories",
+    label: "Product categories",
+    sensitivity: "general",
+    importable: true,
+    order: 2,
+    dependsOn: [],
+    matchBy: "external ID, else name",
+    fields: [EXT, f("name", "Name", "Unique, e.g. OTP, Direct, Promo.", { required: true })],
+  },
   {
     entity: "users",
     label: "Users",
     sensitivity: "business",
     importable: true,
-    order: 1,
+    order: 3,
     dependsOn: [],
     matchBy: "external ID, else username",
+    // Departments of the same import count too (team trial round 12).
     fields: [
       EXT,
       f("username", "Username", "Login name; unique.", { required: true }),
@@ -47,7 +74,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     label: "Enterprises and contacts",
     sensitivity: "business",
     importable: true,
-    order: 2,
+    order: 4,
     dependsOn: ["users"],
     matchBy: "external ID, else name",
     fields: [
@@ -73,7 +100,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     label: "Customer trunks",
     sensitivity: "credentials",
     importable: true,
-    order: 3,
+    order: 5,
     dependsOn: ["enterprises"],
     matchBy: "external ID, else name",
     fields: [
@@ -98,7 +125,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     label: "Vendor trunks",
     sensitivity: "credentials",
     importable: true,
-    order: 4,
+    order: 6,
     dependsOn: ["enterprises"],
     matchBy: "external ID, else name",
     fields: [
@@ -120,7 +147,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     label: "Rate tables",
     sensitivity: "business",
     importable: true,
-    order: 5,
+    order: 7,
     dependsOn: ["customer_trunks", "vendor_trunks"],
     matchBy: "external ID, else name and kind",
     fields: [
@@ -138,7 +165,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     label: "Rates",
     sensitivity: "business",
     importable: true,
-    order: 6,
+    order: 8,
     dependsOn: ["rate_tables"],
     matchBy: "lines go into rate tables created by the same import",
     fields: [
@@ -151,11 +178,36 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     ],
   },
   {
+    entity: "number_lists",
+    label: "Number lists",
+    sensitivity: "business",
+    importable: true,
+    order: 9,
+    dependsOn: [],
+    matchBy: "name; values already in the list are skipped",
+    fields: [
+      f("name", "List name", "Rows with the same name go into one list.", { required: true }),
+      f(
+        "type",
+        "Type",
+        "random: numbers to pick from; tag: values rules match; sender_id_template: Sender IDs to translate to.",
+        {
+          required: true,
+          allowed: ["random", "tag", "sender_id_template"],
+        },
+      ),
+      f("value", "Value", "One number or Sender ID per row; several separated by , or ; also work.", {
+        required: true,
+      }),
+      f("content", "Content", "Sender ID template lists only: the content sent with that Sender ID."),
+    ],
+  },
+  {
     entity: "route_rules",
     label: "Route rules",
     sensitivity: "business",
     importable: true,
-    order: 7,
+    order: 10,
     dependsOn: ["customer_trunks", "vendor_trunks"],
     matchBy: "external ID, else name",
     fields: [
@@ -169,11 +221,90 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     ],
   },
   {
+    entity: "translation_rules",
+    label: "Translation rules",
+    sensitivity: "business",
+    importable: true,
+    order: 11,
+    dependsOn: ["customer_trunks", "vendor_trunks", "number_lists"],
+    matchBy: "external ID, else name",
+    fields: [
+      EXT,
+      f("name", "Name", "", { required: true }),
+      f("direction", "Direction", "Empty = from the trunk (customer = ingress, vendor = egress).", {
+        allowed: ["ingress", "egress"],
+      }),
+      f("action", "Action", "allow (default) or block.", { allowed: ["allow", "block"] }),
+      f("status", "Status", "", { allowed: ["active", "inactive"] }),
+      f("continueAfter", "Is Continue", "yes = apply further rules after this one.", { allowed: ["yes", "no"] }),
+      f("customerTrunks", "Customer trunks", "Names separated by , or ; (ingress)."),
+      f("vendorTrunks", "Vendor trunks", "Names separated by , or ; (egress)."),
+      f("mccmncs", "Destinations", "MCCMNC codes separated by , or ; — empty = all."),
+      f("senderPattern", "Sender ID pattern", "Regular expression on the Sender ID."),
+      f("receiverPattern", "Receiver pattern", "Regular expression on the receiver."),
+      f("contentPattern", "Content pattern", "Regular expression on the content."),
+      f("senderList", "Sender ID list", "Name of a number list the Sender ID must be in."),
+      f("receiverList", "Receiver list", "Name of a number list the receiver must be in."),
+      f("senderConversion", "Sender ID conversion", "", {
+        allowed: [
+          "left_strip",
+          "right_strip",
+          "prepend",
+          "append",
+          "translation",
+          "regex_replace",
+          "random_number",
+          "sender_id_template",
+        ],
+      }),
+      f(
+        "senderConversionValue",
+        "Sender ID conversion value",
+        "Characters to strip, text to add, the new Sender ID or the pattern.",
+      ),
+      f("senderConversionList", "Sender ID conversion list", "Number list for random_number and sender_id_template."),
+      f("receiverConversion", "Receiver conversion", "", {
+        allowed: ["left_strip", "right_strip", "prepend", "append", "translation", "regex_replace"],
+      }),
+      f("receiverConversionValue", "Receiver conversion value", ""),
+      f("senderTon", "Sender TON", "0-6"),
+      f("senderNpi", "Sender NPI", "0-18"),
+      f("destTon", "Receiver TON", "0-6"),
+      f("destNpi", "Receiver NPI", "0-18"),
+    ],
+  },
+  {
+    entity: "hlr_rules",
+    label: "HLR rules",
+    sensitivity: "business",
+    importable: true,
+    order: 12,
+    dependsOn: ["customer_trunks"],
+    matchBy: "external ID, else name",
+    fields: [
+      EXT,
+      f("name", "Name", "", { required: true }),
+      f(
+        "provider",
+        "HLR provider",
+        "Name of an existing HLR provider (set up providers by hand: they hold credentials).",
+        {
+          required: true,
+        },
+      ),
+      f("dnidPattern", "Receiver pattern", "Regular expression on the receiver, e.g. ^234 for Nigeria.", {
+        required: true,
+      }),
+      f("status", "Status", "", { allowed: ["active", "inactive"] }),
+      f("customerTrunks", "Customer trunks", "Names separated by , or ; — empty = every trunk."),
+    ],
+  },
+  {
     entity: "opening_balances",
     label: "Opening balances",
     sensitivity: "financial",
     importable: true,
-    order: 8,
+    order: 13,
     dependsOn: ["enterprises"],
     matchBy: "always added",
     fields: [
@@ -190,6 +321,33 @@ export const ENTITY = new Map(IMPORT_ENTITIES.map((e) => [e.entity as MigrationI
 /** Ready column mappings for the reference platform described in the spec (its grid column names). */
 export const REFERENCE_PLATFORM = "Reference platform";
 export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record<string, string> }[] = [
+  // Team trial round 12: the reference platform's own grid names where the spec gives them (§6.4, §6.5).
+  {
+    entity: "departments",
+    columns: { externalId: "Department ID", name: "Department Name", description: "Description", status: "Status" },
+  },
+  { entity: "product_categories", columns: { externalId: "Category ID", name: "Product Category" } },
+  { entity: "number_lists", columns: { name: "Name", type: "Type", value: "Number", content: "Content" } },
+  {
+    entity: "translation_rules",
+    columns: {
+      externalId: "ID",
+      name: "Name",
+      direction: "Type",
+      action: "Action",
+      continueAfter: "Continues",
+      senderPattern: "Sender ID",
+      receiverPattern: "DNID",
+      mccmncs: "MCCMNC",
+      contentPattern: "Message Text",
+      senderConversion: "Sender ID Conversion Type",
+      senderConversionValue: "Sender ID Conversion Value",
+    },
+  },
+  {
+    entity: "hlr_rules",
+    columns: { externalId: "ID", name: "Rule Name", provider: "Provider Name", dnidPattern: "DNID Pattern" },
+  },
   {
     entity: "users",
     columns: {
@@ -308,6 +466,55 @@ export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record
  * chosen mapping, the field key and its label, and the reference platform's names.
  */
 export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string[]>> = {
+  departments: {
+    externalId: ["ID", "Department ID", "Old ID"],
+    name: ["Department", "Department name", "Dept"],
+    description: ["Notes", "Details"],
+    status: ["State"],
+  },
+  product_categories: {
+    externalId: ["ID", "Category ID", "Old ID"],
+    name: ["Category", "Product category", "Product", "Category name"],
+  },
+  number_lists: {
+    name: ["List", "List name", "Number list", "Number list name", "Group"],
+    type: ["List type", "Kind"],
+    value: ["Number", "Numbers", "Values", "MSISDN", "Sender ID", "SID", "Entry"],
+    content: ["Message", "Text", "Template content"],
+  },
+  translation_rules: {
+    externalId: ["ID", "Rule ID", "Translation rule ID"],
+    name: ["Rule", "Rule name", "Translation rule"],
+    direction: ["Way", "Side"],
+    action: ["Allow/Block", "Rule action"],
+    status: ["State"],
+    continueAfter: ["Continue", "Is continue", "Continue after"],
+    customerTrunks: ["Customer trunk", "Customers", "Customer trunk name"],
+    vendorTrunks: ["Vendor trunk", "Vendors", "Vendor trunk name"],
+    mccmncs: ["MCCMNC", "Destination", "Destinations"],
+    senderPattern: ["Sender ID", "Sender ID regex", "Source", "Source address", "SID regex"],
+    receiverPattern: ["Receiver", "Receiver regex", "Destination address", "DNID", "MSISDN regex"],
+    contentPattern: ["Content", "Content regex", "Message regex", "Keyword"],
+    senderList: ["Sender ID number list", "SID list"],
+    receiverList: ["Receiver number list", "DNID list"],
+    senderConversion: ["Sender ID conversion type", "SID conversion", "Source conversion"],
+    senderConversionValue: ["Sender ID conversion value", "SID conversion value", "New Sender ID", "Translate to"],
+    senderConversionList: ["Sender ID conversion number list", "Random list", "Template list"],
+    receiverConversion: ["Receiver conversion type", "DNID conversion"],
+    receiverConversionValue: ["Receiver conversion value", "DNID conversion value"],
+    senderTon: ["Source TON", "SID TON"],
+    senderNpi: ["Source NPI", "SID NPI"],
+    destTon: ["Destination TON", "Receiver TON", "DNID TON"],
+    destNpi: ["Destination NPI", "Receiver NPI", "DNID NPI"],
+  },
+  hlr_rules: {
+    externalId: ["ID", "Rule ID", "HLR rule ID"],
+    name: ["Rule", "Rule name", "HLR rule"],
+    provider: ["HLR provider", "Provider name", "HLR"],
+    dnidPattern: ["DNID", "DNID pattern", "Receiver", "Receiver regex", "Prefix", "Pattern"],
+    status: ["State"],
+    customerTrunks: ["Customer trunk", "Customers", "Trunks"],
+  },
   users: {
     externalId: ["ID", "User ID", "Old ID", "Source ID"],
     username: ["User name", "Login", "Login name", "User"],
@@ -417,6 +624,21 @@ export const CHOICE_SYNONYMS: Record<string, string[]> = {
   submit: ["Submitted", "Submit SM"],
   reported: ["Report", "Reports"],
   delivery: ["Delivered", "DLR"],
+  // Translation rules and number lists (team trial round 12).
+  ingress: ["In", "Incoming", "Customer side", "Customer"],
+  egress: ["Out", "Outgoing", "Vendor side", "Vendor"],
+  allow: ["Allowed", "Pass", "Accept", "Translate"],
+  block: ["Blocked", "Reject", "Deny", "Drop"],
+  tag: ["Tags", "Match", "Matching", "List"],
+  random: ["Random number", "Random numbers", "Pool"],
+  sender_id_template: ["Template", "Sender template", "SID template", "Sender ID templates"],
+  translation: ["Replace", "Translate", "Set", "Change to"],
+  left_strip: ["Strip left", "Remove left", "Strip prefix"],
+  right_strip: ["Strip right", "Remove right", "Strip suffix"],
+  prepend: ["Add prefix", "Prefix"],
+  append: ["Add suffix", "Suffix"],
+  regex_replace: ["Regex", "Regex replace", "Regular expression"],
+  random_number: ["Random", "Random sender"],
 };
 
 /** Tables of a full export package, with sensitivity. Columns matching CREDENTIAL go only with credentials. */
