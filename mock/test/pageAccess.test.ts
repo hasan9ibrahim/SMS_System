@@ -17,13 +17,15 @@ const skip = ready ? false : "seeded database not available";
 const made: { groups: number[]; users: number[] } = { groups: [], users: [] };
 
 after(async () => {
+  // Close first: closing waits for the audit rows still being written after the last replies, so none lands after
+  // the clean-up (a late row kept a test user from being deleted, CI 2026-10-30).
+  await app.close();
   if (ready) {
     // The undo refused above is still audited.
     await db().query("DELETE FROM audit_log WHERE user_id = ANY($1)", [made.users]);
     await db().query("DELETE FROM users WHERE id = ANY($1)", [made.users]);
     await db().query("DELETE FROM access_groups WHERE id = ANY($1)", [made.groups]);
   }
-  await app.close();
   await closeDb();
 });
 

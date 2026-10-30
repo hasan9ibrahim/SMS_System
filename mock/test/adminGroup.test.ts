@@ -20,6 +20,9 @@ const run = Date.now().toString(36).slice(-5);
 const made: { groups: number[]; users: number[] } = { groups: [], users: [] };
 
 after(async () => {
+  // Close first: closing waits for the audit rows still being written after the last replies, so none lands after
+  // the clean-up (a late row kept a test user from being deleted, CI 2026-10-30).
+  await app.close();
   if (ready) {
     // Only this file's users and groups (their names end in the run tag): other test files run alongside and
     // add users of their own after `started`.
@@ -40,7 +43,6 @@ after(async () => {
     ]);
     await db().query("DELETE FROM users WHERE id = ANY($1)", [users]);
   }
-  await app.close();
   await closeDb();
 });
 

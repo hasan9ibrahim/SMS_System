@@ -38,6 +38,9 @@ const lastSession = ready
   ? Number((await db().query("SELECT coalesce(max(id), 0) AS id FROM user_sessions")).rows[0].id)
   : 0;
 after(async () => {
+  // Close first: closing waits for the audit rows still being written after the last replies, so none lands after
+  // the clean-up (a late row kept a test user from being deleted, CI 2026-10-30).
+  await app.close();
   if (ready) {
     const q = (sql: string, p: unknown[] = [started]) => db().query(sql, p);
     if (myHash)
@@ -61,7 +64,6 @@ after(async () => {
     await q("DELETE FROM business_companies WHERE inserted_at >= $1");
     await q("DELETE FROM audit_log WHERE at >= $1");
   }
-  await app.close();
   await closeDb();
 });
 
