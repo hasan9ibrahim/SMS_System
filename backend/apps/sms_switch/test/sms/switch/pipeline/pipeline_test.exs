@@ -194,6 +194,33 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert sid != ""
     end
 
+    test "a sender with its own rate lines is billed at them; another sender at the generic rates (§6.2)" do
+      rates = [
+        PipelineConfig.rate(100, 1, "26201", "0.05"),
+        PipelineConfig.rate(200, 2, "26201", "0.02"),
+        PipelineConfig.rate(100, 11, "26201", "0.07", "EUR", "FakeBank"),
+        PipelineConfig.rate(200, 12, "26201", "0.03", "EUR", "FakeBank")
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: [rates: rates])
+
+      {client, resp} = submit(client, %{short_message: "Your code is 1234"})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      {_client, resp} = submit(client, %{source_addr: "OtherShop", short_message: "Sale"}, 3)
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      by_sender = Map.new(edr("edr.attempt"), &{&1["src_addr"], &1})
+
+      assert %{"c_rate" => "0.07", "v_rate" => "0.03", "revenue" => "0.07"} =
+               by_sender["FakeBank"]
+
+      assert %{"c_rate" => "0.05", "v_rate" => "0.02", "revenue" => "0.05"} =
+               by_sender["OtherShop"]
+    end
+
     test "a finished message is forgotten; a receipt repeated after is answered OK and not forwarded (S-5.8)" do
       %{client: client, conns: [conn]} = start_all()
       {client, resp} = submit(client, %{short_message: "hello", registered_delivery: 1})

@@ -61,7 +61,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   @rate_fingerprints """
   SELECT rate_table_id, count(*) || ':' || sum(id) || ':' || max(updated_at)::text
     FROM rate_lines
-   WHERE (valid_to IS NULL OR valid_to > now()) AND sender_id IS NULL
+   WHERE valid_to IS NULL OR valid_to > now()
    GROUP BY rate_table_id
   """
 
@@ -75,14 +75,15 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   # ---------------------------------------------------------------- rate lines
 
   @rate_lines """
-  SELECT rate_table_id, id, mccmnc, rate, trim(currency), valid_from, valid_to, is_blocked
+  SELECT rate_table_id, id, mccmnc, rate, trim(currency), valid_from, valid_to, is_blocked, sender_id
     FROM rate_lines
-   WHERE rate_table_id = ANY($1) AND (valid_to IS NULL OR valid_to > now()) AND sender_id IS NULL
+   WHERE rate_table_id = ANY($1) AND (valid_to IS NULL OR valid_to > now())
   """
 
   @doc """
-  The current and scheduled generic lines (no Sender ID) of these rate tables: `%{table => %{mccmnc => [line]}}`, each
-  list newest first. Tables without such lines map to `%{}`.
+  The current and scheduled lines of these rate tables: `%{table => %{key => [line]}}`, each list newest first. The key
+  is the MCCMNC code for a generic line and `{sender_id, mccmnc}` for a Sender ID line (§6.2: a rate for one sender).
+  Tables without lines map to `%{}`.
   """
   @spec load_rates([integer()]) ::
           {:ok, %{integer() => %{String.t() => [map()]}}} | {:error, term()}
@@ -99,11 +100,13 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     empty = Map.new(table_ids, &{&1, %{}})
 
     rows
-    |> Enum.reduce(empty, fn [table, id, mccmnc, rate, currency, from, to, blocked], acc ->
+    |> Enum.reduce(empty, fn [table, id, mccmnc, rate, currency, from, to, blocked, sender],
+                             acc ->
       line = {ms(from), to && ms(to), id, micro(rate), :binary.copy(currency), blocked}
+      key = if sender in [nil, ""], do: mccmnc, else: {:binary.copy(sender), mccmnc}
 
-      Map.update(acc, table, %{mccmnc => [line]}, fn by_code ->
-        Map.update(by_code, mccmnc, [line], &[line | &1])
+      Map.update(acc, table, %{key => [line]}, fn by_code ->
+        Map.update(by_code, key, [line], &[line | &1])
       end)
     end)
     |> Map.new(fn {table, by_code} ->

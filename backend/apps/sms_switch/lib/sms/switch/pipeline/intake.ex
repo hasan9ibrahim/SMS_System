@@ -448,7 +448,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   defp table_rule(_msg, nil), do: nil
 
   defp table_rule(msg, table) do
-    case Config.sell_rate(msg.trunk.id, table.mccmnc, msg.received_at) do
+    case Config.sell_rate(msg.trunk.id, table.mccmnc, msg.received_at, rate_sender(msg)) do
       nil ->
         nil
 
@@ -469,7 +469,7 @@ defmodule Sms.Switch.Pipeline.Intake do
       dest ->
         msg = %{msg | destination: dest}
 
-        case Config.sell_rate(msg.trunk.id, dest.mccmnc, msg.received_at) do
+        case Config.sell_rate(msg.trunk.id, dest.mccmnc, msg.received_at, rate_sender(msg)) do
           nil -> {:reject, :esme_rinvdstadr, :no_customer_rate, msg}
           sell -> {:ok, %{msg | sell: sell}}
         end
@@ -514,9 +514,13 @@ defmodule Sms.Switch.Pipeline.Intake do
       destination: msg.destination,
       sell: msg.sell,
       hlr_ported: msg[:hlr][:ported],
+      rate_sender: rate_sender(msg),
       now_ms: System.os_time(:millisecond)
     }
   end
+
+  # Sender ID rates (§6.2) match the sender as the customer sent it, the EDR's src_addr that Re-rating matches too.
+  defp rate_sender(msg), do: Map.get(msg.fields, :source_addr)
 
   @doc false
   # The parts of a routing result a message carries to the sender and its EDRs.

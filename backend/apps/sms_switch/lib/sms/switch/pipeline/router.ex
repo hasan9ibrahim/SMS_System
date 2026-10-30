@@ -23,6 +23,7 @@ defmodule Sms.Switch.Pipeline.Router do
           optional(:hlr_ported) => boolean() | nil,
           optional(:count_rule_tps) => boolean(),
           optional(:parts) => pos_integer(),
+          optional(:rate_sender) => String.t() | nil,
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -141,7 +142,7 @@ defmodule Sms.Switch.Pipeline.Router do
 
         cond do
           not egress.blocked and bound?(vt) ->
-            cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms)
+            cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms, input[:rate_sender])
             _ = count_warmup(rules, decision, input)
             {:ok, %{decision: decision, vendor_trunk_id: vt, cost: cost, egress: egress}}
 
@@ -191,7 +192,13 @@ defmodule Sms.Switch.Pipeline.Router do
                vendor: %{vendor_trunk_id: vendor_trunk_id, level: 0, decided_by: :manual}
              },
              vendor_trunk_id: vendor_trunk_id,
-             cost: Config.vendor_rate(vendor_trunk_id, input.destination.mccmnc, input.now_ms),
+             cost:
+               Config.vendor_rate(
+                 vendor_trunk_id,
+                 input.destination.mccmnc,
+                 input.now_ms,
+                 input[:rate_sender]
+               ),
              egress: egress
            }}
         end
