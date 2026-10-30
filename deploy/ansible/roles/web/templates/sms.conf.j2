@@ -18,6 +18,9 @@ server {
   ssl_session_cache shared:sms:10m;
   ssl_session_timeout 1d;
 
+  server_tokens off;
+
+  # A location with its own add_header drops these (nginx inheritance), so each such location repeats them.
   add_header Strict-Transport-Security "max-age=31536000" always;
   add_header X-Content-Type-Options nosniff always;
   add_header X-Frame-Options SAMEORIGIN always;
@@ -52,6 +55,7 @@ server {
     expires 7d;
     add_header Cache-Control "public, immutable";
     add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options nosniff always;
   }
 
   # Client-side routes (every page path, the customer portal, tabs dragged out into their own window).

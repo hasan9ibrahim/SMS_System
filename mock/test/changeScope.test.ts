@@ -23,7 +23,7 @@ const made: { users: number[]; departments: number[]; group: number | null } = {
 };
 
 after(async () => {
-  // Close first: the audit hook writes its row after the reply, so a last request's row can still be on its way.
+  // Close first: closing waits for the audit rows still being written after the last replies.
   await app.close();
   if (ready) {
     await db().query("DELETE FROM audit_log WHERE user_id = ANY($1)", [made.users]);

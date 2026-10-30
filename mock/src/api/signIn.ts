@@ -9,7 +9,7 @@ import type pg from "pg";
 import type { SignInChallengeRef, SignInCodeInput, SignInInput, SignInResult } from "@sms/contract";
 import { withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
-import { totpSecretOf, verifyPassword, verifyTotp } from "../admin/passwords.js";
+import { totpSecretOf, verifyNoUser, verifyPassword, verifyTotp } from "../admin/passwords.js";
 import { cookieToken, MAX_HOURS, SESSION_COOKIE, sha } from "../auth/user.js";
 import { device } from "./portal.js";
 import { maskEmail } from "./admin.js";
@@ -94,7 +94,7 @@ export function signIn(request: FastifyRequest, reply: FastifyReply) {
     const u = rows[0];
     // One message for an unknown user and a wrong password, so usernames cannot be guessed.
     const wrong = () => sendProblem(reply, 401, "Wrong username or password");
-    if (!u) return wrong();
+    if (!u) return verifyNoUser(b.password) || wrong();
     auditAs(request, Number(u.id));
     if (u.locked_until && (u.locked_until as Date).getTime() > Date.now())
       return sendProblem(reply, 429, "Too many wrong passwords", {

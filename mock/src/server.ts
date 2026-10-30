@@ -4,7 +4,7 @@ import { operations, type ContractOperation } from "./contract.js";
 import { handlers as defaultHandlers, type Handler } from "./handlers.js";
 import { ajvErrors, sendProblem } from "./problem.js";
 import { registerSocket } from "./live/socket.js";
-import { auditCall } from "./api/audit.js";
+import { auditCall, auditSettled } from "./api/audit.js";
 import { GATE_OPEN, isBlocked } from "./admin/gate.js";
 import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } from "./visibility/context.js";
 import { clearVisibilityCache, restricts } from "./visibility/policy.js";
@@ -203,6 +203,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
     const op = (request.routeOptions.config as { op?: ContractOperation }).op;
     if (op && !isPortalOperation(op.operationId)) auditCall(op, request, reply);
   });
+  app.addHook("onClose", () => auditSettled());
 
   app.setNotFoundHandler((request, reply) =>
     sendProblem(reply, 404, `No contract operation for ${request.method} ${request.url}`),

@@ -27,7 +27,7 @@ import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { qbrDlrByCode } from "./qbr.js";
 import { sendProblem } from "../problem.js";
-import { rulesForDestination, type VendorOption } from "../routing/evaluate.js";
+import { ROUTABLE_VENDOR_SQL, rulesForDestination, type VendorOption } from "../routing/evaluate.js";
 import { loadRulesInOrder, routeThrough, vendorQuality, type RuleCore } from "./routeRules.js";
 import { windowEnd } from "./routeTraffic.js";
 import { currentUserId, getCurrentUser } from "./session.js";
@@ -444,7 +444,7 @@ async function routingOptions(
   const reqs = [...new Set(clients.map((c) => c.req))];
   const [quality, { rows: trunks }, lines] = await Promise.all([
     vendorQuality(),
-    db.query("SELECT id, name, product_category_id FROM vendor_trunks WHERE deleted_at IS NULL AND status = 'active'"),
+    db.query(`SELECT id, name, product_category_id FROM vendor_trunks vt WHERE deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL}`),
     vendorsNow ? vendorsNow.map((l) => ({ req: l.req, trunkId: l.trunkId, conv: l.conv })) : routingCosts(db, reqs),
   ]);
   const base = (): Map<number, VendorOption> =>

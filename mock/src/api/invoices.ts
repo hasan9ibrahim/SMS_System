@@ -802,12 +802,16 @@ export async function runInvoiceRequest(requestId: number): Promise<void> {
     const to = ymd(r.usage_end);
     const invoiceDate = ymd(r.invoice_date);
     const regenerate = r.regenerate as boolean;
+    // A run stopped by a restart after it made its invoice row: carry on with that row, which would otherwise count
+    // as an overlapping invoice and stay Inprogress with no amounts (round 12 audit).
+    const resumed = !regenerate && r.invoice_id !== null;
     if (regenerate) {
       invoiceId = Number(r.invoice_id);
       const { rows: cur } = await pool.query("SELECT status FROM invoices WHERE id = $1", [invoiceId]);
       previousStatus = cur[0]?.status === "inprogress" ? "completed" : (cur[0]?.status ?? null);
-    } else if (r.kind === "traffic") {
-      const other = await overlapping(pool, enterpriseId, from, to, 0);
+    } else {
+      if (resumed) invoiceId = Number(r.invoice_id);
+      const other = r.kind === "traffic" ? await overlapping(pool, enterpriseId, from, to, invoiceId ?? 0) : null;
       if (other) throw new JobError(`Already invoiced in ${other}; use Regenerate on that invoice`);
     }
     const currency =
@@ -836,7 +840,7 @@ export async function runInvoiceRequest(requestId: number): Promise<void> {
     const due =
       r.due_date_type === "manual" && r.due_date ? ymd(r.due_date) : addDays(invoiceDate, Number(r.due_days ?? 0));
     await inTransaction(pool, async (c) => {
-      if (!regenerate) {
+      if (!regenerate && !resumed) {
         const invNo =
           number ?? (await nextInvoiceNumber(c, Number(r.business_company_id), Number(r.invoice_number_start)));
         const { rows: taken } = await c.query("SELECT 1 FROM invoices WHERE invoice_number = $1", [invNo]);

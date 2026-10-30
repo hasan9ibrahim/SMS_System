@@ -13,6 +13,7 @@ import { evaluateRecon, flaggedDestinations, withinTolerance } from "../src/bill
 import { coverageOf, edrCoverage, zonedMidnight } from "../src/billing/edrFigures.js";
 import { simplePdf, spreadsheetXml } from "../src/billing/files.js";
 import { dayWindow } from "../src/billing/zone.js";
+import { resumeInvoiceRequests } from "../src/api/invoices.js";
 
 process.env.INVOICE_JOB_STEP_MS = "0";
 const app = await buildServer({ socket: false });
@@ -105,6 +106,10 @@ describe("billing days in the partner's time zone (§13.31)", () => {
   test("midnight in a zone and coverage of a period", () => {
     assert.equal(zonedMidnight("2026-10-01", "Asia/Kolkata").toISOString(), "2026-09-30T18:30:00.000Z");
     assert.equal(zonedMidnight("2026-10-01", "America/New_York").toISOString(), "2026-10-01T04:00:00.000Z");
+    // Daylight-saving change days: the offset of local midnight, not of UTC midnight (round 12 audit).
+    assert.equal(zonedMidnight("2026-09-27", "Pacific/Auckland").toISOString(), "2026-09-26T12:00:00.000Z");
+    assert.equal(zonedMidnight("2026-04-05", "Pacific/Auckland").toISOString(), "2026-04-04T11:00:00.000Z");
+    assert.equal(zonedMidnight("2026-03-29", "Europe/Berlin").toISOString(), "2026-03-28T23:00:00.000Z");
     const w = dayWindow("2026-09-21", "2026-09-27", "Asia/Dubai");
     assert.deepEqual(
       [w.from.toISOString(), w.to.toISOString()],
@@ -336,6 +341,42 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     check("archiveInvoice", blocked);
     const noRegen = await call("POST", `/invoices/${paid}/regenerate`);
     assert.equal(noRegen.statusCode, 409);
+  });
+
+  test("a run stopped by a restart carries on with the invoice it made (round 12 audit)", async () => {
+    const enterpriseId = await customer();
+    const made = await ok(
+      "createInvoiceRequest",
+      call(
+        "POST",
+        "/invoice-requests",
+        request({ enterpriseIds: [enterpriseId], kind: "proforma", amount: 120, volume: 4000 }),
+      ),
+      202,
+    );
+    const requestId = made.requests[0].id as number;
+    const first = await waitRequest(requestId);
+    assert.equal(first.status, "completed", first.error);
+    // The state a restart leaves: the invoice row made, its amounts not yet written, the request still running.
+    await db().query(
+      "UPDATE invoices SET status = 'inprogress', usage_charges = 0, due_amount = 0 WHERE id = $1",
+      [first.invoiceId],
+    );
+    await db().query("UPDATE invoice_requests SET status = 'inprogress', finished_at = NULL WHERE id = $1", [
+      requestId,
+    ]);
+    await resumeInvoiceRequests();
+    const again = await waitRequest(requestId);
+    assert.equal(again.status, "completed", again.error);
+    assert.equal(again.invoiceId, first.invoiceId);
+    const inv = await ok("getInvoice", call("GET", `/invoices/${first.invoiceId}`));
+    assert.equal(inv.status, "completed");
+    assert.equal(inv.dueAmount, 120);
+    const { rows } = await db().query("SELECT count(*)::int AS n FROM invoices WHERE enterprise_id = $1 AND remarks = $2", [
+      enterpriseId,
+      tag,
+    ]);
+    assert.equal(rows[0].n, 1, "no second invoice");
   });
 });
 

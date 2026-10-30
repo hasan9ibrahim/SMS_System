@@ -29,7 +29,7 @@ import { routeRuleList } from "../lists/defs.js";
 import { exportRows, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
-import { decide, quickMatch, type MessageContext, type VendorOption } from "../routing/evaluate.js";
+import { decide, quickMatch, ROUTABLE_VENDOR_SQL, type MessageContext, type VendorOption } from "../routing/evaluate.js";
 import { archiveGate } from "./enterprises.js";
 import {
   archivedInfo,
@@ -1091,7 +1091,7 @@ export async function vendorOptions(
           WHERE rt.vendor_trunk_id = vt.id AND l.mccmnc = ANY($1) AND l.sender_id IS NULL AND NOT l.is_blocked
             AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
           ORDER BY length(l.mccmnc) DESC LIMIT 1) c ON true
-      WHERE vt.deleted_at IS NULL AND vt.status = 'active' AND ($2::bigint[] IS NULL OR vt.id = ANY($2))`,
+      WHERE vt.deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL} AND ($2::bigint[] IS NULL OR vt.id = ANY($2))`,
     [mccmnc ? [mccmnc, mccmnc.slice(0, 3)] : [], onlyIds],
   );
   return new Map(
