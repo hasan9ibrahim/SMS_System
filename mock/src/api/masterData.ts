@@ -663,13 +663,17 @@ export function restoreDestination(request: FastifyRequest, reply: FastifyReply)
   });
 }
 
-/** Codes in use anywhere (rate lines, rules, dial codes, MO numbers), for import "replace". */
+/**
+ * Codes in use anywhere (rate lines, rules, dial codes, MO numbers), for import "replace". One pass over each table:
+ * the ORed EXISTS form re-scanned rate_lines (over a million rows at full volume) once per code and ran into the
+ * statement timeout.
+ */
 async function codesInUse(db: Db): Promise<Set<string>> {
   const { rows } = await db.query(
-    `SELECT m.mccmnc FROM mccmnc m WHERE m.deleted_at IS NULL AND (
-        EXISTS (SELECT 1 FROM rate_lines l WHERE l.mccmnc_id = m.id AND (l.valid_to IS NULL OR l.valid_to > now()))
-     OR EXISTS (SELECT 1 FROM dial_codes d WHERE d.mccmnc_id = m.id AND d.deleted_at IS NULL)
-     OR EXISTS (SELECT 1 FROM mo_numbers o WHERE o.mccmnc_id = m.id AND o.deleted_at IS NULL))
+    `SELECT m.mccmnc FROM mccmnc m WHERE m.deleted_at IS NULL AND m.id IN (
+        SELECT l.mccmnc_id FROM rate_lines l WHERE l.valid_to IS NULL OR l.valid_to > now()
+        UNION SELECT d.mccmnc_id FROM dial_codes d WHERE d.deleted_at IS NULL
+        UNION SELECT o.mccmnc_id FROM mo_numbers o WHERE o.deleted_at IS NULL)
      UNION SELECT unnest(mccmncs) FROM route_rules WHERE deleted_at IS NULL
      UNION SELECT unnest(mccmncs) FROM translation_rules WHERE deleted_at IS NULL`,
   );
