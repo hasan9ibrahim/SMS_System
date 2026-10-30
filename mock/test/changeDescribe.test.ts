@@ -97,6 +97,33 @@ test("record types read as labels in the summary (team trial round 1)", () => {
   assert.equal(r!.summary, "Deleted 2 reconciliation rules");
 });
 
+test("times, nested fields and edited list items read plainly (team trial round 12)", () => {
+  assert.equal(fieldLabel("billing.customer.creditLimit"), "Billing › Customer › Credit limit");
+  const withUsers: Names = new Map([...names, ["user", new Map([[16, "Jana Okafor"]])]]);
+  const handover = { note: "Handover", userId: 16, startsAt: "2026-10-08T00:00:00.000Z" };
+  const f = describeField(
+    "accountManagers",
+    [{ ...handover, endsAt: null }],
+    [
+      { ...handover, endsAt: "2026-10-30T16:49:56.332Z" },
+      { note: null, userId: 9, startsAt: "2026-10-30T16:49:56.332Z", endsAt: null },
+    ],
+    withUsers,
+  );
+  assert.deepEqual(f.changed, ["Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC"]);
+  assert.deepEqual(f.added, ["#9 from 2026-10-30 16:49 UTC"]);
+  assert.deepEqual(f.removed, []);
+  // A vendor kept on the rule with a new share is changed, not removed and added.
+  const v = describeField(
+    "vendors",
+    [{ vendorTrunkId: 3, level: 1, sharePct: 50 }],
+    [{ vendorTrunkId: 3, level: 1, sharePct: 60 }],
+    names,
+  );
+  assert.deepEqual(v.changed, ["Kite_DIR: share % 50 → 60"]);
+  assert.deepEqual([v.added, v.removed], [[], []]);
+});
+
 const ready = await dbReady();
 after(() => closeDb());
 

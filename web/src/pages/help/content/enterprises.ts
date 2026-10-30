@@ -739,7 +739,15 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Shows every saved change to this enterprise: who, when, and what changed (old and new values). You can undo a change from here. See [[undo-and-history]].",
+            text: "Shows every saved change to this enterprise, newest first and grouped by day (Today, Yesterday, then the date). Each change has one line with the time (UTC), who saved it, what kind of change it was and its number, then one row per field: the old value in grey → the new value. See [[undo-and-history]].",
+          },
+          {
+            kind: "list",
+            items: [
+              "List fields such as **Account managers** or e-mail lists show **+** for what was added, **−** for what was removed and **~** for an item that stayed but changed (for example an account manager period that now has an end date).",
+              "A save that touched many fields shows the first six; click **Show all N fields** for the rest.",
+              "**Undo** is on the changes you may undo: your own, and for administrators, directors and department managers those of the people they cover. See [[change-history]].",
+            ],
           },
         ],
       },

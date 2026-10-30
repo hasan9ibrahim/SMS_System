@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.121.0
+  version: 0.122.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -16395,6 +16395,14 @@ components:
           items:
             type: string
           description: List fields only, what the save removed (as text).
+        changed:
+          type: array
+          items:
+            type: string
+          description: |
+            List fields only, items kept by the save but with other details (team trial round 12), e.g.
+            "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC". An item is the same when its id
+            (or, for account managers, the user and start) matches.
 
     Change:
       type: object

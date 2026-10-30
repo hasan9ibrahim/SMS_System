@@ -1280,13 +1280,84 @@ a.btn {
 .change.undone {
   opacity: 0.6;
 }
+/* History grouped by day; each change is a head line and one row per field (team trial round 12). */
+.change-day {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 14px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-head-tint);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
 .change-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.change-time {
+  min-width: 40px;
+  color: var(--color-text-secondary);
+}
+.change-who {
+  font-weight: 600;
 }
 .change-diff {
-  margin: 4px 0 2px;
+  margin: 4px 0 2px 48px;
+}
+.change-fields {
+  display: grid;
+  grid-template-columns: minmax(110px, max-content) minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 6px 0 2px 48px;
+}
+.change-fields dt {
+  color: var(--color-text-secondary);
+}
+.change-fields dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.change-fields .change-more {
+  grid-column: 2;
+}
+.change-before {
+  color: var(--color-text-secondary);
+}
+.change-arrow {
+  margin: 0 6px;
+  color: var(--color-text-secondary);
+}
+.change-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.change-note {
+  margin: 4px 0 0 48px;
+}
+@media (max-width: 760px) {
+  .change-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 0;
+    margin-left: 0;
+  }
+  .change-fields dd {
+    margin-bottom: 6px;
+  }
+  .change-fields .change-more {
+    grid-column: 1;
+  }
+  .change-diff,
+  .change-note {
+    margin-left: 0;
+  }
 }
 .conflicts li {
   margin-bottom: 6px;

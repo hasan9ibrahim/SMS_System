@@ -478,3 +478,23 @@
     background: var(--color-panel);
   }
 }
+
+/* Record tabs (team trial round 12): on a phone the strip scrolls sideways by itself instead of widening the page,
+   which shifted the whole record when a tab was picked; labels stay on one line. */
+@media (max-width: 760px) {
+  .record-tabs {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    border-bottom: 0;
+    box-shadow: inset 0 -1px 0 var(--color-border);
+  }
+  .record-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .record-tabs button {
+    flex: none;
+    white-space: nowrap;
+    margin-bottom: 0;
+  }
+}

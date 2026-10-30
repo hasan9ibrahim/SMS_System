@@ -4,7 +4,7 @@
 //   useUndoShortcut(scope) Ctrl+Z on the page undoes the user's last change
 //   notifySaved(change)    the 10-second "Undo" toast right after a save
 //   <HistoryDrawer>        a record's or page's History list with Undo per change
-import { useCallback, useEffect } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Change, ChangeField, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
@@ -210,18 +210,96 @@ export function useUndoShortcut(scope: HistoryScope | null, active: boolean) {
   }, [active, scope, undoLast]);
 }
 
+const VERB: Record<string, string> = {
+  create: "Created",
+  edit: "Edited",
+  clone: "Cloned",
+  delete: "Deleted",
+  reorder: "Reordered",
+  enable: "Turned on",
+  disable: "Turned off",
+  bulk: "Bulk edit",
+  undo: "Undo",
+  import: "Imported",
+  cleanup: "Cleanup",
+};
+
+/** "Today", "Yesterday" or "Wed 28 Oct 2026" (UTC, like the times). */
+export function dayLabel(at: string, now = new Date()): string {
+  const day = at.slice(0, 10);
+  const today = now.toISOString().slice(0, 10);
+  const yesterday = new Date(now.getTime() - 86_400_000).toISOString().slice(0, 10);
+  if (day === today) return "Today";
+  if (day === yesterday) return "Yesterday";
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** One field of a change: a list field's +added / −removed / ~changed lines, or before → after. */
+function FieldValue({ d }: { d: ChangeField }) {
+  if (d.added?.length || d.removed?.length || d.changed?.length)
+    return (
+      <ul className="change-items">
+        {d.added?.map((x, i) => (
+          <li key={`a${i}`}>
+            <span className="tone-good">+</span> {x}
+          </li>
+        ))}
+        {d.changed?.map((x, i) => (
+          <li key={`c${i}`}>
+            <span className="muted">~</span> {x}
+          </li>
+        ))}
+        {d.removed?.map((x, i) => (
+          <li key={`r${i}`}>
+            <span className="tone-error">−</span> {x}
+          </li>
+        ))}
+      </ul>
+    );
+  const before = d.beforeText ?? show(d.before);
+  const after = d.afterText ?? show(d.after);
+  // A whole record created or deleted: just what it holds.
+  if (d.field === "*") return <>{after !== "—" ? after : before}</>;
+  return (
+    <>
+      <span className="change-before">{before}</span>
+      <span className="change-arrow" aria-label="changed to">
+        →
+      </span>
+      <span>{after}</span>
+    </>
+  );
+}
+
+/** Fields shown before "Show all": enough for a normal save. */
+const FIELDS_SHOWN = 6;
+
 export function ChangeEntry({ change, onUndo }: { change: Change; onUndo: (c: Change) => void }) {
   // The server decides: own changes, or someone else's for an administrator, a director or their department's
   // manager (team trial round 12, §13.10).
   const undoable = change.canUndo ?? change.undoneById === null;
+  const [all, setAll] = useState(false);
+  const fields = all ? change.diff : change.diff.slice(0, FIELDS_SHOWN);
+  const many = change.entityIds.length > 1;
   return (
     <li className={`change${change.undoneById ? " undone" : ""}`}>
       <div className="change-head">
-        <strong>#{change.id}</strong>
-        <span className="tag">{change.changeType}</span>
-        <span>{change.userName}</span>
-        <span className="muted small num">{change.at.slice(0, 16).replace("T", " ")} UTC</span>
+        <span className="change-time num" title={`${change.at.slice(0, 19).replace("T", " ")} UTC`}>
+          {change.at.slice(11, 16)}
+        </span>
+        <strong className="change-who">{change.userName}</strong>
+        <span className={`tag${change.changeType === "undo" ? " tag-accent" : ""}`}>
+          {VERB[change.changeType] ?? change.changeType}
+        </span>
+        {many && <span className="muted small">{change.entityIds.length.toLocaleString("en-US")} records</span>}
         <span className="fb-spacer" />
+        <span className="muted small num">#{change.id}</span>
         {change.undoneById ? (
           <span className="muted small">undone by #{change.undoneById}</span>
         ) : (
@@ -232,8 +310,28 @@ export function ChangeEntry({ change, onUndo }: { change: Change; onUndo: (c: Ch
           )
         )}
       </div>
-      <div className="change-diff">{change.summary ?? describeDiff(change.diff, 4)}</div>
-      {change.note && <div className="muted small">“{change.note}”</div>}
+      {change.diff.length && change.diff.some((d) => d.label) ? (
+        <dl className="change-fields">
+          {fields.map((d, i) => (
+            <Fragment key={i}>
+              <dt>{d.label ?? (d.field === "*" ? "Whole record" : d.field)}</dt>
+              <dd>
+                <FieldValue d={d} />
+              </dd>
+            </Fragment>
+          ))}
+          {change.diff.length > FIELDS_SHOWN && (
+            <dd className="change-more">
+              <button type="button" className="link-btn small" onClick={() => setAll((v) => !v)}>
+                {all ? "Show fewer" : `Show all ${change.diff.length} fields`}
+              </button>
+            </dd>
+          )}
+        </dl>
+      ) : (
+        <div className="change-diff">{change.summary ?? describeDiff(change.diff, 4)}</div>
+      )}
+      {change.note && <div className="change-note muted small">“{change.note}”</div>}
     </li>
   );
 }
@@ -255,9 +353,16 @@ export function HistoryList({ scope }: { scope: HistoryScope }) {
     <>
       {history.isError && <p className="error-text pad">{String((history.error as Error).message)}</p>}
       <ul className="change-list">
-        {rows.map((c) => (
-          <ChangeEntry key={c.id} change={c} onUndo={(ch) => void undo(ch.id, false, ch)} />
-        ))}
+        {rows.map((c, i) => {
+          // Changes grouped by day, newest first (team trial round 12).
+          const day = dayLabel(c.at);
+          return (
+            <Fragment key={c.id}>
+              {(i === 0 || dayLabel(rows[i - 1]!.at) !== day) && <li className="change-day">{day}</li>}
+              <ChangeEntry change={c} onUndo={(ch) => void undo(ch.id, false, ch)} />
+            </Fragment>
+          );
+        })}
       </ul>
       {history.hasNextPage && (
         <div className="pad">

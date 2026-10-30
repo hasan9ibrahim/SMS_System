@@ -10931,6 +10931,12 @@ export type components = {
       added?: string[];
       /** @description List fields only, what the save removed (as text). */
       removed?: string[];
+      /**
+       * @description List fields only, items kept by the save but with other details (team trial round 12), e.g.
+       *     "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC". An item is the same when its id
+       *     (or, for account managers, the user and start) matches.
+       */
+      changed?: string[];
     };
     Change: {
       id: components["schemas"]["Id"];

@@ -127,12 +127,15 @@ export function ChangeHistoryPage() {
                       <td>{d.beforeText ?? show(d.before)}</td>
                       <td>
                         {d.afterText ?? show(d.after)}
-                        {d.added?.length || d.removed?.length ? (
+                        {d.added?.length || d.removed?.length || d.changed?.length ? (
                           <div className="ch-delta small">
                             {d.added?.map((x, j) => (
-                              <div key={`a${j}`} className="tone-success">
+                              <div key={`a${j}`} className="tone-good">
                                 + {x}
                               </div>
+                            ))}
+                            {d.changed?.map((x, j) => (
+                              <div key={`c${j}`}>~ {x}</div>
                             ))}
                             {d.removed?.map((x, j) => (
                               <div key={`r${j}`} className="tone-error">

@@ -702,12 +702,16 @@ export function handOverEnterprise(request: FastifyRequest, reply: FastifyReply)
       const after = await amRows(c, id);
       if (input.notify !== false)
         emailed = await sendHandoverEmail(c, id, ent.accountManagerId ?? null, input, effective);
+      // The note names the new account manager (team trial round 12: "user 9" told the reader nothing).
+      const { rows: to } = await c.query("SELECT first_name || ' ' || last_name AS name FROM users WHERE id = $1", [
+        input.userId,
+      ]);
       return recordChange(c, {
         entityType: "enterprise",
         entityIds: [id],
         changeType: "edit",
         diff: [{ entity_id: id, field: "accountManagers", before, after }],
-        note: `Handover to user ${input.userId} effective ${effective.slice(0, 16).replace("T", " ")} UTC`,
+        note: `Handover to ${to[0]?.name ?? `user ${input.userId}`} effective ${effective.slice(0, 16).replace("T", " ")} UTC`,
         userId: me.id,
         ip: request.ip,
       });
