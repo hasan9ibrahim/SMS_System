@@ -68,6 +68,10 @@ function ChoiceFilter({
         <Icon name="chevronDown" size={11} />
       </button>
       <Popover anchor={ref} open={open} onClose={close} className="choice-pop">
+        {/* The count on top, above the list (team trial round 12). */}
+        <div className="muted small pad-x choice-count">
+          {ticked.size ? `Selected ${ticked.size} of ${options.length}` : "None ticked: showing all"}
+        </div>
         <label className="choice-row strong">
           <input
             type="checkbox"
@@ -95,9 +99,6 @@ function ChoiceFilter({
             {o.label}
           </label>
         ))}
-        <div className="muted small pad-x">
-          {ticked.size ? `Selected ${ticked.size} of ${options.length}` : "None ticked: showing all"}
-        </div>
       </Popover>
     </>
   );

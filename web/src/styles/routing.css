@@ -1287,24 +1287,6 @@ textarea.mono {
   flex: 1;
   min-width: 0;
 }
-/* Simulator destinations: the search box sits where the receivers box is; the chosen ones list below. */
-.rs-receivers .multi-pick {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.rs-receivers .multi-pick > input {
-  order: 1;
-}
-.rs-receivers .multi-pick > .pick-list {
-  order: 2;
-}
-.rs-receivers .multi-pick > .chips {
-  order: 3;
-}
-.rs-receivers .multi-pick > .chips > .muted {
-  display: none;
-}
 .qbr-weights {
   display: flex;
   flex-wrap: wrap;
@@ -1369,7 +1351,9 @@ textarea.mono {
   display: block;
   min-width: 0;
 }
-.align-right .hover-list-target {
+/* Values read from the left in every table (team trial round 7, round 12: hover lists in count columns too);
+   Live analytics keeps its own alignment. */
+:is(.la-grid, .la-table) .align-right .hover-list-target {
   justify-content: flex-end;
   margin-left: auto;
 }
@@ -1580,27 +1564,15 @@ textarea.mono {
   font-size: 12.5px;
   font-weight: 600;
 }
-/* Route simulator in two columns (team trial round 5): numbered input cards on the left; the summary, the run
-   button and the route on the right. */
-.sim-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-.sim-main,
-.sim-side {
+/* Route simulator in one column (team trial round 12): Route (trunk, numbers, destinations, vendor) and Message
+   (Sender ID, content) as two compact cards, the run bar, then the route across the full width. */
+.sim-flow {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-.sim-side {
-  position: sticky;
-  top: 0;
+  gap: 12px;
 }
 .sim-card {
-  padding: 14px 18px 16px;
+  padding: 12px 16px 14px;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-panel);
@@ -1611,7 +1583,7 @@ textarea.mono {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   font-size: 14px;
   font-weight: 650;
 }
@@ -1626,28 +1598,37 @@ textarea.mono {
   font-size: 12px;
   font-weight: 600;
 }
-.sim-seg {
-  margin-left: auto;
+.sim-hint {
+  font-weight: 400;
 }
-.sim-grid {
+.sim-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 10px 14px;
   align-items: start;
 }
-.sim-grid.four {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-top: 12px;
+.sim-row.route {
+  grid-template-columns: minmax(0, 1.2fr) repeat(3, minmax(0, 1fr));
 }
-.sim-span3 {
-  grid-column: span 3;
+.sim-row.message {
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
 }
-.sim-span4 {
-  grid-column: 1 / -1;
-  justify-self: start;
+.sim-row .field,
+.sim-grid .field {
+  margin: 0;
 }
+.sim-row .field > span:first-child,
 .sim-grid .field > span:first-child {
   font-weight: 500;
+}
+.sim-card .field > span.muted {
+  font-weight: 400;
+}
+.sim-dests .chips {
+  margin-top: 6px;
+}
+.sim-dest-pop {
+  width: min(460px, calc(100vw - 32px));
+  padding: 10px;
 }
 .req {
   color: var(--color-error);
@@ -1657,16 +1638,16 @@ textarea.mono {
   resize: vertical;
 }
 .sim-counter {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .sim-adv-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-}
-.sim-adv-head .sim-step {
-  margin-bottom: 2px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: var(--border-width) solid var(--color-border);
 }
 .sim-adv-head p {
   margin: 0;
@@ -1681,43 +1662,36 @@ textarea.mono {
 svg.flip {
   transform: rotate(180deg);
 }
-.sim-summary {
+.sim-grid {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px 12px;
-  margin: 0 0 14px;
+  gap: 10px 14px;
+  align-items: start;
 }
-.sim-summary dt {
-  color: var(--color-text-secondary);
+.sim-grid.six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 10px;
 }
-.sim-summary dd {
-  margin: 0;
-  text-align: right;
-  font-weight: 600;
+.sim-span-all {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.sim-run {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 0 4px;
+}
+.sim-run-sum {
+  flex: 1 1 260px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sim-test {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-}
-.sim-test > span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.btn.sim-go {
-  width: 100%;
-  justify-content: center;
-  height: 40px;
+.sim-test-number {
+  width: 280px;
+  max-width: 100%;
 }
 .sim-empty {
   display: flex;
@@ -1731,24 +1705,18 @@ svg.flip {
 .sim-empty strong {
   color: var(--color-text);
 }
-.sim-results .rs-cards {
-  grid-template-columns: 1fr;
-}
 .sim-results .rs-one + .rs-one {
   margin-top: 16px;
   padding-top: 14px;
   border-top: var(--border-width) solid var(--color-border);
 }
 @media (max-width: 1100px) {
-  .sim-layout {
-    grid-template-columns: 1fr;
+  .sim-row.route {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .sim-side {
-    position: static;
+  .sim-grid.six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-}
-.sim-card .field > span.muted {
-  font-weight: 400;
 }
 /* Translation rule match conditions as one compact grid (team trial round 5): a row per field; pattern, list and
    length columns, each condition with its Match / Not Match switch. */

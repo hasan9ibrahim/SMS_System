@@ -4,7 +4,7 @@
 // never the whole country (team trial round 1).
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { FilterCondition, ListId, TrunkListRow } from "@sms/contract";
+import type { FilterCondition, ListId, ListQuery, TrunkListRow } from "@sms/contract";
 import { fetchPickPage } from "../../api/hooks";
 import { Icon } from "../../ui/Icon";
 import { codeChips, DestinationTree, useDestinationTree } from "../rates/DestinationTree";
@@ -13,6 +13,9 @@ export interface Picked<K extends string | number> {
   key: K;
   label: string;
 }
+
+/** Most rows Check all takes from a search at once (select all filtered, team trial round 12). */
+const CHECK_ALL_MAX = 1000;
 
 export function MultiPick<Row extends { id: number }, K extends string | number>({
   list,
@@ -32,19 +35,49 @@ export function MultiPick<Row extends { id: number }, K extends string | number>
   fixed?: FilterCondition[];
 }) {
   const [q, setQ] = useState("");
+  const [busy, setBusy] = useState(false);
+  const search = q.trim();
+  const body = (limit: number, withTotal: boolean, withSearch = true): ListQuery => ({
+    ...(withSearch && search ? { search } : {}),
+    ...(fixed?.length ? { filter: { logic: "and", conditions: fixed } } : {}),
+    limit,
+    withTotal,
+  });
   const results = useQuery({
     queryKey: ["picker", list, q, fixed],
-    queryFn: () =>
-      fetchPickPage<Row>(list, {
-        ...(q.trim() ? { search: q.trim() } : {}),
-        ...(fixed?.length ? { filter: { logic: "and", conditions: fixed } } : {}),
-        limit: 30,
-        withTotal: false,
-      }),
+    queryFn: () => fetchPickPage<Row>(list, body(30, true)),
     staleTime: 30_000,
   });
+  // "of M": every row the picker offers, the search aside (team trial round 12).
+  const offered = useQuery({
+    queryKey: ["picker", list, "total", fixed],
+    queryFn: () => fetchPickPage<Row>(list, body(1, true, false)),
+    staleTime: 60_000,
+  });
+  const rows = results.data?.rows ?? [];
+  const matching = results.data?.total ?? rows.length;
   const has = (k: K) => value.some((v) => v.key === k);
   const toggle = (p: Picked<K>) => onChange(has(p.key) ? value.filter((v) => v.key !== p.key) : [...value, p]);
+  // Check all / Uncheck all act on what the search matches, not only the rows on screen.
+  const matched = async (): Promise<Picked<K>[]> =>
+    matching <= rows.length
+      ? rows.map(toPicked)
+      : (await fetchPickPage<Row>(list, body(Math.min(matching, CHECK_ALL_MAX), false))).rows.map(toPicked);
+  const bulk = async (check: boolean) => {
+    if (!check && !search) return onChange([]);
+    setBusy(true);
+    try {
+      const picks = await matched();
+      if (check) onChange([...value, ...picks.filter((p) => !has(p.key))]);
+      else {
+        const drop = new Set(picks.map((p) => p.key));
+        onChange(value.filter((v) => !drop.has(v.key)));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  const total = offered.data?.total;
   return (
     <div className="multi-pick">
       <div className="chips">
@@ -58,19 +91,45 @@ export function MultiPick<Row extends { id: number }, K extends string | number>
         ))}
         {value.length === 0 && <span className="muted small">Nothing chosen yet.</span>}
       </div>
-      <input placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder} />
-      <div className="pick-list">
-        {results.data?.rows.map((r) => {
-          const p = toPicked(r);
-          return (
-            <label key={r.id} className="choice-row">
-              <input type="checkbox" checked={has(p.key)} onChange={() => toggle(p)} />
-              <span>{p.label}</span>
-              {detailOf && <span className="muted small">{detailOf(r)}</span>}
-            </label>
-          );
-        })}
-        {results.data?.rows.length === 0 && <p className="muted small pad">No matches.</p>}
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+      <div className="checklist-bar">
+        <span className="muted">
+          Selected {value.length.toLocaleString("en-US")}
+          {total != null ? ` of ${total.toLocaleString("en-US")}` : ""}
+          {search && results.data ? ` · ${matching.toLocaleString("en-US")} match` : ""}
+        </span>
+        <span className="checklist-actions">
+          <button type="button" className="link" disabled={busy || !matching} onClick={() => void bulk(true)}>
+            {search ? "Check shown" : "Check all"}
+          </button>
+          <button type="button" className="link" disabled={busy || !value.length} onClick={() => void bulk(false)}>
+            {search ? "Uncheck shown" : "Uncheck all"}
+          </button>
+        </span>
+      </div>
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder} />
+        </div>
+        <div className="pick-list">
+          {rows.map((r) => {
+            const p = toPicked(r);
+            return (
+              <label key={r.id} className="choice-row">
+                <input type="checkbox" checked={has(p.key)} onChange={() => toggle(p)} />
+                <span>{p.label}</span>
+                {detailOf && <span className="muted small">{detailOf(r)}</span>}
+              </label>
+            );
+          })}
+          {results.data?.rows.length === 0 && <p className="muted small pad">No matches.</p>}
+          {matching > rows.length && (
+            <p className="muted small pad">
+              {(matching - rows.length).toLocaleString("en-US")} more: type to narrow the list.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -149,7 +208,8 @@ export function RefMulti<T extends string | number>({
   placeholder: string;
 }) {
   const [q, setQ] = useState("");
-  const shown = options.filter((o) => o.label.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 200);
+  const needle = q.trim().toLowerCase();
+  const shown = options.filter((o) => o.label.toLowerCase().includes(needle)).slice(0, 200);
   return (
     <div className="multi-pick">
       <div className="chips">
@@ -162,20 +222,50 @@ export function RefMulti<T extends string | number>({
           </span>
         ))}
       </div>
-      {options.length > 8 && (
-        <input placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder} />
-      )}
-      <div className="pick-list short">
-        {shown.map((o) => (
-          <label key={o.value} className="choice-row">
-            <input
-              type="checkbox"
-              checked={value.includes(o.value)}
-              onChange={(e) => onChange(e.target.checked ? [...value, o.value] : value.filter((x) => x !== o.value))}
-            />
-            <span>{o.label}</span>
-          </label>
-        ))}
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+      <div className="checklist-bar">
+        <span className="muted">
+          Selected {value.length} of {options.length}
+          {needle ? ` · ${shown.length} shown` : ""}
+        </span>
+        <span className="checklist-actions">
+          <button
+            type="button"
+            className="link"
+            disabled={shown.every((o) => value.includes(o.value))}
+            onClick={() => onChange([...value, ...shown.map((o) => o.value).filter((v) => !value.includes(v))])}
+          >
+            {needle ? "Check shown" : "Check all"}
+          </button>
+          <button
+            type="button"
+            className="link"
+            disabled={!value.length}
+            onClick={() => onChange(needle ? value.filter((v) => !shown.some((o) => o.value === v)) : [])}
+          >
+            {needle ? "Uncheck shown" : "Uncheck all"}
+          </button>
+        </span>
+      </div>
+      <div className="checklist-box">
+        {options.length > 8 && (
+          <div className="checklist-search">
+            <Icon name="search" size={13} />
+            <input placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)} aria-label={placeholder} />
+          </div>
+        )}
+        <div className="pick-list short">
+          {shown.map((o) => (
+            <label key={o.value} className="choice-row">
+              <input
+                type="checkbox"
+                checked={value.includes(o.value)}
+                onChange={(e) => onChange(e.target.checked ? [...value, o.value] : value.filter((x) => x !== o.value))}
+              />
+              <span>{o.label}</span>
+            </label>
+          ))}
+        </div>
       </div>
     </div>
   );

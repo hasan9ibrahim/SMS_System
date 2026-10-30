@@ -373,9 +373,11 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
   // policyId 0 = not chosen yet
   const [hlr, setHlr] = useState<HlrAction>(rule.hlrAction ?? { policyId: 0, customerTrunkIds: [] });
 
-  // The category block tells the trunk block what is picked (rule window, team trial round 8).
+  // The category block tells the trunk block what is picked (rule window, team trial round 8). A ticked category
+  // counts as Inclusive even before the mode was switched (team trial round 12: a new rule starts on All).
   useEffect(() => {
-    if (key === "category") pendingCategory?.set(categories.length ? mode : "all", categories);
+    if (key === "category")
+      pendingCategory?.set(categories.length ? (mode === "all" ? "inclusive" : mode) : "all", categories);
   }, [key, mode, categories]); // eslint-disable-line react-hooks/exhaustive-deps
   const catMode = pendingCategory ? pendingCategory.mode : rule.categoryMode;
   const catIds = pendingCategory ? pendingCategory.ids : rule.categoryIds;
@@ -413,13 +415,25 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
       return {
         form: (
           <>
-            <Mode value={mode === "all" ? "inclusive" : mode} onChange={setMode} />
+            {/* All by default (team trial round 12); ticking a category makes it Inclusive, All clears the ticks. */}
+            <Mode
+              value={mode}
+              onChange={(m) => {
+                setMode(m);
+                if (m === "all") setCategories([]);
+              }}
+              allowAll
+            />
             {/* A compact list with search, "Selected N of M", Check all / Uncheck all (team trial round 2). */}
             <CheckList
               label="Product categories"
               items={(ref.data?.productCategories ?? []).map((c) => ({ value: c.id, label: c.name }))}
               selected={categories}
-              onChange={setCategories}
+              onChange={(next) => {
+                setCategories(next);
+                if (!next.length) setMode("all");
+                else if (mode === "all") setMode("inclusive");
+              }}
               height={140}
               autoFocus={false}
             />

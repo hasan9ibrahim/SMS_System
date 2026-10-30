@@ -442,13 +442,16 @@ function RateTablesField({ form }: { form: FormApi<TrunkForm> }) {
               ⠿
             </span>
             <span className="pos">{i + 1}</span>
+            {/* Swap the table in place, keeping its position (team trial round 12). */}
             <ListLookup<RateTableRow>
               list="rate_tables"
               value={id}
-              disabled
               clearable={false}
-              onChange={() => {}}
+              fixed={[{ field: "kind", op: "eq", value: "customer" }]}
+              exclude={ids.filter((x) => x !== id)}
+              onChange={(r) => r && r.id !== id && setIds(ids.map((x, j) => (j === i ? r.id : x)))}
               labelOf={(r) => `${r.name} (${r.currency})`}
+              detailOf={(r) => `${r.category} · ${r.activeLines.toLocaleString("en-US")} rates`}
             />
             <span className="move-btns">
               <Button small variant="ghost" aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>

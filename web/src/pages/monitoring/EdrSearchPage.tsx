@@ -165,6 +165,25 @@ function StatusChip({
             Final attempt only
           </label>
           <div className="menu-sep" />
+          {/* Count and Check all / Uncheck all above the statuses (team trial round 12). None ticked = all. */}
+          <div className="checklist-bar chip-checks-bar">
+            <span className="muted">
+              {picked.length ? `Selected ${picked.length} of ${statuses.length}` : "None ticked: showing all"}
+            </span>
+            <span className="checklist-actions">
+              <button
+                type="button"
+                className="link"
+                disabled={picked.length === statuses.length}
+                onClick={() => set("msgStatus", { field: "msgStatus", op: "in", values: statuses.map((o) => o.value) })}
+              >
+                Check all
+              </button>
+              <button type="button" className="link" disabled={!picked.length} onClick={() => set("msgStatus", null)}>
+                Uncheck all
+              </button>
+            </span>
+          </div>
           {statuses.map((o) => (
             <label key={o.value} className="choice-row">
               <input type="checkbox" checked={picked.includes(o.value)} onChange={() => toggle(o.value)} />

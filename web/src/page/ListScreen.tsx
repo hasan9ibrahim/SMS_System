@@ -157,33 +157,78 @@ function ColumnsMenu({
   onChange: (s: GridState) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   const ref = useRef<HTMLButtonElement>(null);
   if (!fields) return null;
   const visible = state.visible ?? fields.fields.filter((f) => !f.hidden).map((f) => f.field);
+  const all = fields.fields.filter((f) => !f.filterOnly);
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? all.filter((f) => f.label.toLowerCase().includes(needle)) : all;
+  const order = fields.fields.map((x) => x.field);
+  // Check all / Uncheck all on the columns the search shows (team trial round 12); a grid keeps at least one column.
+  const setShown = (check: boolean) => {
+    const names = new Set(shown.map((f) => f.field));
+    const next = check
+      ? order.filter((n) => names.has(n) || visible.includes(n))
+      : visible.filter((n) => !names.has(n));
+    onChange({ ...state, visible: next.length ? next : visible.slice(0, 1) });
+  };
+  const count = all.filter((f) => visible.includes(f.field)).length;
   return (
     <>
       <button ref={ref} type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen((v) => !v)}>
         <Icon name="columns" size={13} /> Columns
       </button>
-      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="choice-pop">
-        {fields.fields
-          .filter((f) => !f.filterOnly)
-          .map((f) => (
-            <label key={f.field} className="choice-row">
-              <input
-                type="checkbox"
-                checked={visible.includes(f.field)}
-                onChange={(e) => {
-                  const next = e.target.checked
-                    ? fields.fields.map((x) => x.field).filter((n) => n === f.field || visible.includes(n))
-                    : visible.filter((n) => n !== f.field);
-                  if (next.length) onChange({ ...state, visible: next });
-                }}
-              />
-              {f.label}
-              {f.hidden && <span className="muted small">hidden by default</span>}
-            </label>
-          ))}
+      <Popover anchor={ref} open={open} onClose={() => setOpen(false)} align="end" className="choice-pop columns-pop">
+        {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+        <div className="checklist-bar">
+          <span className="muted">
+            Shown {count} of {all.length}
+          </span>
+          <span className="checklist-actions">
+            <button
+              type="button"
+              className="link"
+              disabled={shown.every((f) => visible.includes(f.field))}
+              onClick={() => setShown(true)}
+            >
+              {needle ? "Check shown" : "Check all"}
+            </button>
+            <button type="button" className="link" onClick={() => setShown(false)}>
+              {needle ? "Uncheck shown" : "Uncheck all"}
+            </button>
+          </span>
+        </div>
+        <div className="checklist-box">
+          <div className="checklist-search">
+            <Icon name="search" size={13} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search columns…"
+              aria-label="Search columns"
+            />
+          </div>
+          <div className="columns-pop-list">
+            {shown.map((f) => (
+              <label key={f.field} className="choice-row">
+                <input
+                  type="checkbox"
+                  checked={visible.includes(f.field)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? order.filter((n) => n === f.field || visible.includes(n))
+                      : visible.filter((n) => n !== f.field);
+                    if (next.length) onChange({ ...state, visible: next });
+                  }}
+                />
+                {f.label}
+                {f.hidden && <span className="muted small">hidden by default</span>}
+              </label>
+            ))}
+            {!shown.length && <p className="muted small pad">No column matches.</p>}
+          </div>
+        </div>
         <div className="menu-sep" />
         <button type="button" className="menu-item" onClick={() => onChange({ ...state, visible: null })}>
           <Icon name="refresh" size={13} /> <span>Default columns</span>

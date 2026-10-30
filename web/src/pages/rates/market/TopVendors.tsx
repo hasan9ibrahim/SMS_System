@@ -48,6 +48,18 @@ function EditDialog({ initial, done }: { initial: Draft; done: (saved: boolean) 
       needle.startsWith("%") ? x.toLowerCase().includes(needle.slice(1)) : x.toLowerCase().startsWith(needle),
     );
   const extra = d.vendors.filter((v) => !listed.has(v.vendorTrunkId));
+  const shownVendors = (cand.data?.vendors ?? []).filter(matches);
+  // Check all / Uncheck all on the vendor trunks the search shows (team trial round 12).
+  const setAll = (vs: MarketTopVendor[], check: boolean) => {
+    const ids = new Set(vs.map((v) => v.vendorTrunkId));
+    setD({
+      ...d,
+      vendors: check
+        ? [...d.vendors, ...vs.filter((v) => !picked.has(v.vendorTrunkId))]
+        : d.vendors.filter((v) => !ids.has(v.vendorTrunkId)),
+    });
+  };
+
   const submit = () => {
     setError(null);
     save.mutate(
@@ -110,36 +122,65 @@ function EditDialog({ initial, done }: { initial: Draft; done: (saved: boolean) 
           Trunks pricing {d.mccmncs[0]}; the choice is saved for every destination.
         </p>
       )}
-      <input
-        type="search"
-        placeholder="Search vendor trunks or vendors…"
-        value={find}
-        onChange={(e) => setFind(e.target.value)}
-        aria-label="Search vendor trunks"
-      />
-      <div className="pick-list top-vendor-list">
-        {!d.mccmncs.length && <p className="muted small pad">Pick the destinations first.</p>}
-        {cand.isLoading && <p className="muted small pad">Loading…</p>}
-        {(cand.data?.vendors ?? []).map((v, i) =>
-          !matches(v) ? null : (
-            <label key={v.vendorTrunkId} className="choice-row">
-              <input type="checkbox" checked={picked.has(v.vendorTrunkId)} onChange={() => toggle(v)} />
-              <span>
-                <span className="muted small num">{i + 1}.</span> {v.vendorTrunk}{" "}
-                {v.tier === "tier1" && <span className="chip-tag blue">Tier 1</span>}
-              </span>
-              <span className="muted small num">
-                {v.vendor} · {formatRate(v.rateEur)} EUR
-              </span>
-            </label>
-          ),
-        )}
-        {needle && cand.isSuccess && !cand.data.vendors.some(matches) && (
-          <p className="muted small pad">No vendor trunk matches.</p>
-        )}
-        {cand.isSuccess && !cand.data.vendors.length && (
-          <p className="muted small pad">No live vendor trunk prices {d.mccmncs[0]}.</p>
-        )}
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+      <div className="checklist-bar">
+        <span className="muted">
+          Selected {picked.size.toLocaleString("en-US")} of {(cand.data?.vendors.length ?? 0).toLocaleString("en-US")}
+          {needle ? ` · ${shownVendors.length.toLocaleString("en-US")} shown` : ""}
+        </span>
+        <span className="checklist-actions">
+          <button
+            type="button"
+            className="link"
+            disabled={!shownVendors.some((v) => !picked.has(v.vendorTrunkId))}
+            onClick={() => setAll(shownVendors, true)}
+          >
+            {needle ? "Check shown" : "Check all"}
+          </button>
+          <button
+            type="button"
+            className="link"
+            disabled={!shownVendors.some((v) => picked.has(v.vendorTrunkId))}
+            onClick={() => setAll(shownVendors, false)}
+          >
+            {needle ? "Uncheck shown" : "Uncheck all"}
+          </button>
+        </span>
+      </div>
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input
+            placeholder="Search vendor trunks or vendors…"
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            aria-label="Search vendor trunks"
+          />
+        </div>
+        <div className="pick-list top-vendor-list">
+          {!d.mccmncs.length && <p className="muted small pad">Pick the destinations first.</p>}
+          {cand.isLoading && <p className="muted small pad">Loading…</p>}
+          {(cand.data?.vendors ?? []).map((v, i) =>
+            !matches(v) ? null : (
+              <label key={v.vendorTrunkId} className="choice-row">
+                <input type="checkbox" checked={picked.has(v.vendorTrunkId)} onChange={() => toggle(v)} />
+                <span>
+                  <span className="muted small num">{i + 1}.</span> {v.vendorTrunk}{" "}
+                  {v.tier === "tier1" && <span className="chip-tag blue">Tier 1</span>}
+                </span>
+                <span className="muted small num">
+                  {v.vendor} · {formatRate(v.rateEur)} EUR
+                </span>
+              </label>
+            ),
+          )}
+          {needle && cand.isSuccess && !cand.data.vendors.some(matches) && (
+            <p className="muted small pad">No vendor trunk matches.</p>
+          )}
+          {cand.isSuccess && !cand.data.vendors.length && (
+            <p className="muted small pad">No live vendor trunk prices {d.mccmncs[0]}.</p>
+          )}
+        </div>
       </div>
       {extra.length > 0 && (
         <div className="chips">

@@ -32,6 +32,7 @@ import { ListScreen } from "../../../page/ListScreen";
 import { useTabNavigate } from "../../../shell/tabContext";
 import { Chart, useChartColors } from "../../../ui/Chart";
 import { ChecklistChip } from "../../../ui/ChecklistChip";
+import { Icon } from "../../../ui/Icon";
 import { ask, toast } from "../../../ui/feedback";
 import { Button, Modal, StatusDot } from "../../../ui/primitives";
 import { problemText } from "../../routing/dialogs";
@@ -374,57 +375,78 @@ function ClientChecklist({
       }),
     staleTime: 30_000,
   });
+  // "of M": every client, the search aside (team trial round 12).
+  const offered = useQuery({
+    queryKey: ["list", "market-rule-clients", "total"],
+    queryFn: () =>
+      fetchPickPage<Enterprise>("enterprises", {
+        limit: 1,
+        withTotal: true,
+        filter: { logic: "and", conditions: [{ field: "type", op: "in", values: ["customer", "reciprocal"] }] },
+      }),
+    staleTime: 60_000,
+  });
   const rows = (results.data?.rows ?? []).filter((r) => !r.archivedAt);
   const free = rows.filter((r) => !taken.has(r.id));
   const allShown = free.length > 0 && free.every((r) => ids.includes(r.id));
   const toggle = (id: number) => onChange(ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]);
   return (
     <div className="multi-pick table-scope">
-      <input
-        type="search"
-        placeholder="Search clients…"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        aria-label="Search clients"
-      />
-      <div className="pick-list">
-        {free.length > 0 && (
-          <label className="choice-row select-all">
-            <input
-              type="checkbox"
-              checked={allShown}
-              onChange={() =>
-                onChange(
-                  allShown
-                    ? ids.filter((id) => !free.some((r) => r.id === id))
-                    : [...new Set([...ids, ...free.map((r) => r.id)])],
-                )
-              }
-            />
-            <span className="strong">Select all shown</span>
-            <span className="muted small">
-              {rows.length}
-              {results.data?.total && results.data.total > rows.length ? ` of ${results.data.total}` : ""} clients
-            </span>
-          </label>
-        )}
-        {rows.map((r) => (
-          <label key={r.id} className="choice-row" title={taken.has(r.id) ? "Already has a rule" : undefined}>
-            <input
-              type="checkbox"
-              disabled={taken.has(r.id)}
-              checked={taken.has(r.id) || ids.includes(r.id)}
-              onChange={() => toggle(r.id)}
-            />
-            <span>{r.name}</span>
-            <span className="muted small">
-              {taken.has(r.id)
-                ? "has a rule"
-                : [r.type === "reciprocal" ? "Bilateral" : null, r.accountManagerName].filter(Boolean).join(" · ")}
-            </span>
-          </label>
-        ))}
-        {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
+      {/* Count and Check all / Uncheck all above the search, the search joined to the list (team trial round 12). */}
+      <div className="checklist-bar">
+        <span className="muted">
+          Selected {ids.length.toLocaleString("en-US")}
+          {offered.data ? ` of ${offered.data.total.toLocaleString("en-US")}` : ""}
+          {q.trim() && results.data ? ` · ${rows.length.toLocaleString("en-US")} match` : ""}
+        </span>
+        <span className="checklist-actions">
+          <button
+            type="button"
+            className="link"
+            disabled={!free.length || allShown}
+            onClick={() => onChange([...new Set([...ids, ...free.map((r) => r.id)])])}
+          >
+            {q.trim() ? "Check shown" : "Check all"}
+          </button>
+          <button
+            type="button"
+            className="link"
+            disabled={!ids.length}
+            onClick={() => onChange(q.trim() ? ids.filter((id) => !free.some((r) => r.id === id)) : [])}
+          >
+            {q.trim() ? "Uncheck shown" : "Uncheck all"}
+          </button>
+        </span>
+      </div>
+      <div className="checklist-box">
+        <div className="checklist-search">
+          <Icon name="search" size={13} />
+          <input
+            placeholder="Search clients…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            aria-label="Search clients"
+          />
+        </div>
+        <div className="pick-list">
+          {rows.map((r) => (
+            <label key={r.id} className="choice-row" title={taken.has(r.id) ? "Already has a rule" : undefined}>
+              <input
+                type="checkbox"
+                disabled={taken.has(r.id)}
+                checked={taken.has(r.id) || ids.includes(r.id)}
+                onChange={() => toggle(r.id)}
+              />
+              <span>{r.name}</span>
+              <span className="muted small">
+                {taken.has(r.id)
+                  ? "has a rule"
+                  : [r.type === "reciprocal" ? "Bilateral" : null, r.accountManagerName].filter(Boolean).join(" · ")}
+              </span>
+            </label>
+          ))}
+          {results.isSuccess && rows.length === 0 && <p className="muted small pad">No matches.</p>}
+        </div>
       </div>
     </div>
   );

@@ -42,17 +42,32 @@ export function ChecklistChip({
         {label}: {shown}
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} className="picker-pop">
+        {/* Count and Check all / Uncheck all on top, as in every multi-select (team trial round 12). None ticked
+            filters nothing. */}
+        <div className="checklist-bar chip-checks-bar">
+          <span className="muted">
+            {picked.size ? `Selected ${picked.size} of ${options.length}` : "None ticked: showing all"}
+          </span>
+          <span className="checklist-actions">
+            <button
+              type="button"
+              className="link"
+              disabled={picked.size === options.length}
+              onClick={() => onChange({ field, op: "in", values: options.map((o) => o.value) })}
+            >
+              Check all
+            </button>
+            <button type="button" className="link" disabled={!picked.size} onClick={() => onChange(null)}>
+              Uncheck all
+            </button>
+          </span>
+        </div>
         <div className="picker-list check-list" role="listbox" aria-label={label}>
           {options.map((o) => (
             <label key={o.value} className="toggle-inline">
               <input type="checkbox" checked={picked.has(o.value)} onChange={() => toggle(o.value)} /> {o.label}
             </label>
           ))}
-          {picked.size > 0 && (
-            <button type="button" className="link small" onClick={() => onChange(null)}>
-              Show all
-            </button>
-          )}
         </div>
       </Popover>
     </>

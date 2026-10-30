@@ -484,7 +484,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Columns with fixed values (status, type, yes/no) show a drop-down instead. Tick the values you want; **Select all** removes the filter. The button shows **All**, the single value, or for example **2 of 5**.",
+            text: "Columns with fixed values (status, type, yes/no) show a drop-down instead. **Selected N of M** is at the top; tick the values you want; **Select all** removes the filter. The button shows **All**, the single value, or for example **2 of 5**.",
           },
           {
             kind: "fields",
@@ -614,7 +614,8 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "**Columns** at the right of the filter card lists every field. Tick or untick to show or hide a column. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
+              "**Columns** at the right of the filter card lists every field. Tick or untick to show or hide a column; the search box on top of the list finds a column by name. Fields marked **hidden by default** are extra columns you can add. At least one column stays visible.",
+              "Every multi-select list works the same way: **Selected N of M** and **Check all** / **Uncheck all** sit above the search box, and the search box sits on top of the list. While you search, the links become **Check shown** / **Uncheck shown** and act only on what the search found.",
               "**Default columns** in the same menu goes back to the standard set.",
               "Drag the right edge of a column header to make it wider or narrower.",
             ],

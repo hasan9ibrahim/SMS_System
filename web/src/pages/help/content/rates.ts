@@ -579,7 +579,7 @@ export const topics: HelpTopic[] = [
               "Tick a **country** to select all its (shown) networks. A half-filled box means only some are selected. The arrow opens the country to tick single networks.",
               "The country's **All networks** row (shown in grey) is the country-level fallback code.",
               "When you pick codes for a rule (for example top vendors per destination), a whole country counts as all its codes; the **All networks** row is only the country default.",
-              "**Selected X of Y networks** counts what you picked. **Select all** / **Clear all** act on everything; while searching they become **Select shown** / **Clear shown** and act only on the search results.",
+              "**Selected X of Y networks** counts what you picked. **Check all** / **Uncheck all**, above the search box, act on everything; while searching they become **Check shown** / **Uncheck shown** and act only on the search results.",
             ],
           },
         ],
@@ -1287,7 +1287,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Clients",
-                what: "Every client (customers and Bilateral partners). Search, tick one or many (**Select all shown**), and **Add rules** makes one rule per client. Clients that already have a rule are greyed out.",
+                what: "Every client (customers and Bilateral partners). Search, tick one or many (**Check all** above the search box), and **Add rules** makes one rule per client. Clients that already have a rule are greyed out.",
               },
               {
                 name: "keep margin ≥ %",
@@ -1348,7 +1348,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "Clients' rate tables",
-                what: "The customer tables to change, picked like Customer trunks on a route rule. **Inclusive**: tick the tables to change. **Exclusive**: every customer table except the ones you tick. The search box finds a table by its name, a customer trunk or an enterprise; each row shows the trunks using the table (or the enterprises) and its currency. **Select all shown** ticks every row found. Ticked tables show as chips above the list; remove one with ×. At least one table is required.",
+                what: "The customer tables to change, picked like Customer trunks on a route rule. **Inclusive**: tick the tables to change. **Exclusive**: every customer table except the ones you tick. The search box finds a table by its name, a customer trunk or an enterprise; each row shows the trunks using the table (or the enterprises) and its currency. **Check all** above the search box ticks every row found (**Check shown** while searching). Ticked tables show as chips above the list; remove one with ×. At least one table is required.",
               },
               {
                 name: "Pick countries and networks…",
