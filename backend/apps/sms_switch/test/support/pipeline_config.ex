@@ -193,6 +193,12 @@ defmodule Sms.Switch.Test.PipelineConfig do
     [table, id, mccmnc, Decimal.new(rate), currency, from, nil, false, sender]
   end
 
+  @doc "A blocked rate line row (blocked means blocked, decided 2026-10-30), current since an hour ago."
+  def blocked(table, id, mccmnc, sender \\ nil) do
+    from = DateTime.add(DateTime.utc_now(), -3_600)
+    [table, id, mccmnc, Decimal.new("0"), "EUR", from, nil, true, sender]
+  end
+
   @doc "A route rule vendor row."
   def route_vendor(rule_id, vendor_trunk_id, level \\ 1),
     do: %{

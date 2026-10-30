@@ -196,6 +196,11 @@ defmodule Sms.Switch.Commands.Inject do
   def reason_text({:bad_input, text}) when is_binary(text), do: text
   def reason_text({status, reason}) when is_atom(status), do: "#{reason_text(reason)} (#{status})"
   def reason_text(:no_customer_rate), do: "no customer rate for the destination"
+
+  def reason_text(:customer_rate_blocked),
+    do: "the customer's rate for the destination is blocked"
+
+  def reason_text(:vendor_rate_blocked), do: "the vendor's rate for the destination is blocked"
   def reason_text(:no_rule), do: "no route rule matches"
   def reason_text(:blocked), do: "blocked by a route or translation rule"
   def reason_text(:no_vendor), do: "no vendor qualifies"

@@ -201,6 +201,11 @@ interface Line {
 }
 
 interface VendorLine extends Line {
+  /**
+   * The line that applies for this table is blocked (blocked means blocked, decided 2026-10-30): no rate for the
+   * destination, and routing does not use the trunk there. Lists leave these out (`unblockedLines`).
+   */
+  blocked: boolean;
   trunkId: number;
   trunkName: string;
   enterpriseId: number;
@@ -291,7 +296,11 @@ function tableFilters(f: Filters, values: unknown[], side: "vendor" | "customer"
   return where.length ? `AND ${where.join(" AND ")}` : "";
 }
 
-/** Each vendor trunk's line valid at `at` for each destination. */
+/**
+ * Each vendor trunk's line valid at `at` for each destination: per rate table, the sender's line first, the network
+ * before its country. The first line decides, so a blocked one comes back `blocked` instead of falling back to the
+ * country line (blocked means blocked, decided 2026-10-30).
+ */
 export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<VendorLine[]> {
   if (!dests.length) return [];
   const p = pairs(dests);
@@ -300,24 +309,25 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
   const { rows } = await db.query(
     `SELECT x.*, nx.rate AS next_rate, nx.conv AS next_conv, nx.valid_from AS next_from FROM (
        SELECT DISTINCT ON (d.req, rt.id) d.req, rt.id AS table_id, l.mccmnc AS code, l.rate, l.currency,
-              ${toPlatformSql("l.rate")} AS conv, l.sender_id, l.valid_from, l.valid_to,
+              ${toPlatformSql("l.rate")} AS conv, l.sender_id, l.valid_from, l.valid_to, l.is_blocked,
               vt.id AS trunk_id, vt.name AS trunk_name, vt.status, e.id AS enterprise_id, e.name AS enterprise_name,
               e.tier, pc.name AS category
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
-         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)} AND NOT l.is_blocked
+         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)}
               AND (l.sender_id IS NULL OR l.sender_id = $5)
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
          JOIN vendor_trunks vt ON vt.id = rt.vendor_trunk_id AND vt.deleted_at IS NULL
          JOIN enterprises e ON e.id = vt.enterprise_id
          JOIN product_categories pc ON pc.id = rt.product_category_id
-         JOIN currency_latest cl ON cl.iso = l.currency
-        WHERE true ${extra}
+         LEFT JOIN currency_latest cl ON cl.iso = l.currency
+        WHERE (l.is_blocked OR cl.iso IS NOT NULL) ${extra}
         ORDER BY d.req, rt.id, l.valid_from > $4, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
      ${NEXT}`,
     values,
   );
   return rows.map((r) => ({
     ...lineOf(r),
+    blocked: r.is_blocked === true,
     trunkId: Number(r.trunk_id),
     trunkName: r.trunk_name,
     enterpriseId: Number(r.enterprise_id),
@@ -328,7 +338,13 @@ export async function vendorLines(db: Db, dests: Dest[], f: Filters): Promise<Ve
   }));
 }
 
-/** Each customer trunk's sell rate: the first of its rate tables with a line (§5.4). */
+/** The vendor lines that price: the blocked ones left out. */
+export const unblockedLines = (lines: VendorLine[]) => lines.filter((l) => !l.blocked);
+
+/**
+ * Each customer trunk's sell rate: the first of its rate tables with a line (§5.4). The first line decides, so a
+ * blocked one leaves the trunk without a rate there (blocked means blocked, decided 2026-10-30).
+ */
 export type { ClientLine, Dest };
 
 export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<ClientLine[]> {
@@ -342,9 +358,9 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
               l.currency, ${toPlatformSql("l.rate")} AS conv, l.sender_id, l.valid_from, l.valid_to,
               ct.id AS trunk_id, ct.name AS trunk_name, ct.status, ct.product_category_id AS trunk_category_id,
               e.id AS enterprise_id, e.name AS enterprise_name, pc.name AS category,
-              am.id AS am_id, am.first_name || ' ' || am.last_name AS am_name
+              am.id AS am_id, am.first_name || ' ' || am.last_name AS am_name, l.is_blocked
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
-         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)} AND NOT l.is_blocked
+         JOIN rate_lines l ON l.mccmnc = d.code AND ${lineWhen(f)}
               AND (l.sender_id IS NULL OR l.sender_id = $5)
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'customer' AND rt.deleted_at IS NULL
          JOIN customer_trunk_rate_tables ctr ON ctr.rate_table_id = rt.id
@@ -352,10 +368,11 @@ export async function clientLines(db: Db, dests: Dest[], f: Filters): Promise<Cl
          JOIN enterprises e ON e.id = ct.enterprise_id
          LEFT JOIN product_categories pc ON pc.id = ct.product_category_id
          LEFT JOIN users am ON am.id = e.account_manager_id
-         JOIN currency_latest cl ON cl.iso = l.currency
-        WHERE true ${extra}
+         LEFT JOIN currency_latest cl ON cl.iso = l.currency
+        WHERE (l.is_blocked OR cl.iso IS NOT NULL) ${extra}
         ORDER BY d.req, ct.id, ctr.position, l.valid_from > $4, (l.sender_id IS NOT NULL) DESC, d.pref, l.rate / cl.rate_per_eur) x
-     ${NEXT}`,
+     ${NEXT}
+     WHERE NOT x.is_blocked`,
     values,
   );
   return rows.map((r) => ({
@@ -388,7 +405,10 @@ async function rulesNow(db: Db): Promise<RuleCore[]> {
 }
 
 const COST_TTL_MS = 60_000;
-const costCache = new Map<string, { at: number; costs: { trunkId: number; conv: number }[] }>();
+const costCache = new Map<
+  string,
+  { at: number; costs: { trunkId: number; conv: number | null; blocked: boolean }[] }
+>();
 
 /** Forgets cached routing costs and rules (after a rate, rule or trunk change, so routes follow it at once). */
 export function clearRoutingCostCache() {
@@ -401,7 +421,10 @@ export function clearRoutingCostCache() {
  * line for the code, else its country's (a country-level code never takes a network's line).
  * Costs do not depend on the client, so they are kept a minute across Route map trunks.
  */
-async function routingCosts(db: Db, reqs: string[]): Promise<{ req: string; trunkId: number; conv: number }[]> {
+async function routingCosts(
+  db: Db,
+  reqs: string[],
+): Promise<{ req: string; trunkId: number; conv: number | null; blocked: boolean }[]> {
   const now = Date.now();
   const missing = reqs.filter((r) => (costCache.get(r)?.at ?? 0) < now - COST_TTL_MS);
   if (missing.length) {
@@ -415,20 +438,49 @@ async function routingCosts(db: Db, reqs: string[]): Promise<{ req: string; trun
         pref.push(i);
       });
     const { rows } = await db.query(
-      `SELECT DISTINCT ON (d.req, rt.vendor_trunk_id) d.req, rt.vendor_trunk_id AS trunk_id, ${toPlatformSql("l.rate")} AS conv
+      // The line in force decides, network before country: a blocked one marks the trunk blocked there.
+      `SELECT DISTINCT ON (d.req, rt.vendor_trunk_id) d.req, rt.vendor_trunk_id AS trunk_id,
+              ${toPlatformSql("l.rate")} AS conv, l.is_blocked
          FROM unnest($1::text[], $2::text[], $3::int[]) AS d(req, code, pref)
-         JOIN rate_lines l ON l.mccmnc = d.code AND l.sender_id IS NULL AND NOT l.is_blocked
+         JOIN rate_lines l ON l.mccmnc = d.code AND l.sender_id IS NULL
               AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now())
          JOIN rate_tables rt ON rt.id = l.rate_table_id AND rt.kind = 'vendor' AND rt.deleted_at IS NULL
-         JOIN currency_latest cl ON cl.iso = l.currency
-        ORDER BY d.req, rt.vendor_trunk_id, d.pref`,
+         LEFT JOIN currency_latest cl ON cl.iso = l.currency
+        WHERE l.is_blocked OR cl.iso IS NOT NULL
+        ORDER BY d.req, rt.vendor_trunk_id, d.pref, rt.id`,
       [req, code, pref],
     );
-    const fresh = new Map(missing.map((r) => [r, [] as { trunkId: number; conv: number }[]]));
-    for (const r of rows) fresh.get(r.req)!.push({ trunkId: Number(r.trunk_id), conv: Number(r.conv) });
+    const fresh = new Map(missing.map((r) => [r, [] as { trunkId: number; conv: number | null; blocked: boolean }[]]));
+    for (const r of rows)
+      fresh.get(r.req)!.push({
+        trunkId: Number(r.trunk_id),
+        conv: r.is_blocked ? null : Number(r.conv),
+        blocked: r.is_blocked === true,
+      });
     for (const [r, costs] of fresh) costCache.set(r, { at: now, costs });
   }
   return reqs.flatMap((r) => (costCache.get(r)?.costs ?? []).map((c) => ({ req: r, ...c })));
+}
+
+/**
+ * One line per destination and vendor trunk from the lookup's lines (one per rate table), the one the switch takes:
+ * the network's before its country's, then the first table. A blocked one stays blocked.
+ */
+export function switchLines(lines: VendorLine[]): { req: string; trunkId: number; conv: number | null; blocked: boolean }[] {
+  const best = new Map<string, VendorLine>();
+  const rank = (l: VendorLine) => [l.code === l.req ? 0 : 1, l.tableId];
+  for (const l of lines) {
+    const key = `${l.req}|${l.trunkId}`;
+    const cur = best.get(key);
+    const [a, b] = [rank(l), cur && rank(cur)];
+    if (!cur || a[0]! < b![0]! || (a[0] === b![0] && a[1]! < b![1]!)) best.set(key, l);
+  }
+  return [...best.values()].map((l) => ({
+    req: l.req,
+    trunkId: l.trunkId,
+    conv: l.blocked ? null : l.conv,
+    blocked: l.blocked,
+  }));
 }
 
 /**
@@ -445,7 +497,7 @@ async function routingOptions(
   const [quality, { rows: trunks }, lines] = await Promise.all([
     vendorQuality(),
     db.query(`SELECT id, name, product_category_id FROM vendor_trunks vt WHERE deleted_at IS NULL AND ${ROUTABLE_VENDOR_SQL}`),
-    vendorsNow ? vendorsNow.map((l) => ({ req: l.req, trunkId: l.trunkId, conv: l.conv })) : routingCosts(db, reqs),
+    vendorsNow ? switchLines(vendorsNow) : routingCosts(db, reqs),
   ]);
   const base = (): Map<number, VendorOption> =>
     new Map(
@@ -463,7 +515,10 @@ async function routingOptions(
   const out = new Map(reqs.map((r) => [r, base()]));
   for (const l of lines) {
     const o = out.get(l.req)?.get(l.trunkId);
-    if (o) o.cost = l.conv;
+    if (!o) continue;
+    o.cost = l.conv;
+    // Blocked means blocked (decided 2026-10-30): the trunk takes no traffic to the destination.
+    if (l.blocked) o.blocked = true;
   }
   // QBR orders vendors by the destination's effective DLR (QBR stats, §6.3) where known.
   const codes = [...new Set(reqs.flatMap((r) => [r, r.slice(0, 3)]))];
@@ -668,13 +723,15 @@ export function lookupRates(request: FastifyRequest, reply: FastifyReply) {
       scheduled: !!input.showScheduled,
       ...(input.myClientsOnly ? { accountManagerIds: [me.id] } : {}),
     };
-    const [vLines, cLines, vTraffic, cTraffic] = await Promise.all([
+    const [vAll, cLines, vTraffic, cTraffic] = await Promise.all([
       vendorLines(pool, [dest!], f),
       clientLines(pool, [dest!], f),
       trafficByTrunk([dest!], "v", 24),
       trafficByTrunk([dest!], "c", 24 * 7),
     ]);
-    const routed = await routedVendors(pool, cLines, vendorsAsRoutingSees(f, vLines));
+    // Routing sees blocked lines (the trunk is skipped); the list shows only lines that price.
+    const routed = await routedVendors(pool, cLines, vendorsAsRoutingSees(f, vAll));
+    const vLines = unblockedLines(vAll);
     const routedIds = new Set([...routed.values()].filter((r): r is Routed => !!r).map((r) => r.vendorTrunkId));
     const active = vLines.filter((v) => v.status === "active");
     const bestCost = active.length ? Math.min(...active.map((v) => v.conv)) : null;
@@ -823,10 +880,11 @@ const vendorsAsRoutingSees = (f: Filters, lines: VendorLine[]) =>
 
 /** Lines, routing and highlights for a set of destinations. */
 async function rowData(db: Db, dests: Dest[], f: Filters, needRouting: boolean): Promise<RowData[]> {
-  const [vLines, cLines] = await Promise.all([vendorLines(db, dests, f), clientLines(db, dests, f)]);
+  const [vAll, cLines] = await Promise.all([vendorLines(db, dests, f), clientLines(db, dests, f)]);
   const routed = needRouting
-    ? await routedVendors(db, cLines, vendorsAsRoutingSees(f, vLines))
+    ? await routedVendors(db, cLines, vendorsAsRoutingSees(f, vAll))
     : new Map<string, Routed | null>();
+  const vLines = unblockedLines(vAll);
   const vBy = new Map<string, VendorLine[]>();
   const cBy = new Map<string, ClientLine[]>();
   for (const v of vLines) vBy.set(v.req, [...(vBy.get(v.req) ?? []), v]);

@@ -233,12 +233,16 @@ export function rateFileName(t: TrunkInfo, ext: string, username: string | null)
   );
 }
 
-/** Current and scheduled lines of the trunk's rate table (blocked lines left out). */
+/**
+ * Current and scheduled lines of the trunk's rate table. A blocked network is listed as Blocked with no rate, so the
+ * client does not read its country's All networks price as covering it (blocked means blocked, decided 2026-10-30).
+ */
 async function rateSheet(c: Db, t: TrunkInfo) {
   const { rows } = await c.query(
-    `SELECT co.name AS country, m.network, l.mccmnc, l.dial_code, l.rate, l.currency, l.valid_from, l.change_type
+    `SELECT co.name AS country, m.network, l.mccmnc, l.dial_code, l.rate, l.currency, l.valid_from, l.change_type,
+            l.is_blocked
        FROM rate_lines l JOIN mccmnc m ON m.id = l.mccmnc_id LEFT JOIN countries co ON co.id = m.country_id
-      WHERE l.rate_table_id = $1 AND l.sender_id IS NULL AND NOT l.is_blocked
+      WHERE l.rate_table_id = $1 AND l.sender_id IS NULL
         AND (l.valid_to IS NULL OR l.valid_to > now())
       ORDER BY co.name, m.network NULLS FIRST, l.mccmnc, l.valid_from`,
     [t.rateTableId],
@@ -248,10 +252,10 @@ async function rateSheet(c: Db, t: TrunkInfo) {
     network: (r.network as string) ?? "All networks",
     mccmnc: r.mccmnc as string,
     dialCode: (r.dial_code as string) ?? "",
-    rate: Number(r.rate),
+    rate: r.is_blocked ? null : Number(r.rate),
     currency: String(r.currency).trim(),
     effective: ymd(r.valid_from),
-    change: (r.valid_from as Date).getTime() > Date.now() ? `scheduled ${r.change_type}` : r.change_type,
+    change: `${(r.valid_from as Date).getTime() > Date.now() ? "scheduled " : ""}${r.is_blocked ? "Blocked" : r.change_type}`,
   }));
 }
 

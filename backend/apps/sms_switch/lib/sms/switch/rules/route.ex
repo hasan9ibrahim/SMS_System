@@ -714,7 +714,16 @@ defmodule Sms.Switch.Rules.Route do
   defp margin_ok?(c, %{rule: rule}), do: c.margin >= rule.margin
 
   defp usable?(c, ctx),
-    do: not egress_blocked?(c, ctx) and margin_ok?(c, ctx) and not tps_full?(c, ctx)
+    do:
+      not egress_blocked?(c, ctx) and not rate_blocked?(c, ctx) and margin_ok?(c, ctx) and
+        not tps_full?(c, ctx)
+
+  # Blocked means blocked (decided 2026-10-30): a vendor whose rate line for the destination is blocked, or whose
+  # Sender ID line for the sender it would receive is (`rate_blocked`, found by the router), takes no traffic there.
+  defp rate_blocked?(c, ctx),
+    do:
+      get_in(ctx.options, [c.vendor_trunk_id, :blocked]) == true or
+        c.vendor_trunk_id in (ctx.m[:rate_blocked] || MapSet.new())
 
   # §13.8 vendor capacity option: a vendor at the rule's % of its TPS limit is skipped, so the next level takes it.
   defp tps_full?(c, %{rule: %{skip_vendor_at_tps_pct: pct}, m: m}) when is_integer(pct),
@@ -735,6 +744,9 @@ defmodule Sms.Switch.Rules.Route do
     cond do
       egress_blocked?(c, ctx) ->
         "blocked by its vendor translation rule"
+
+      rate_blocked?(c, ctx) ->
+        "its rate for this destination is blocked"
 
       tps_full?(c, ctx) ->
         "at #{ctx.rule.skip_vendor_at_tps_pct} % of its TPS limit"

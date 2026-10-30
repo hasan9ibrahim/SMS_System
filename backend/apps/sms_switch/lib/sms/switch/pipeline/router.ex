@@ -8,7 +8,9 @@ defmodule Sms.Switch.Pipeline.Router do
     2. the chosen vendor trunk's own (egress) translation rules on the message; when they block it, that vendor is
        skipped and routing runs again without it, up to ten times (decided 2026-10-18);
     3. the same for a vendor with no bound connection on either server, so a message no connected vendor can take is
-       refused before the customer's resp (0x45, decided Q15; backend step 7).
+       refused before the customer's resp (0x45, decided Q15; backend step 7);
+    4. the same for a vendor whose rate line in force is blocked (blocked means blocked, decided 2026-10-30), priced
+       with the sender it would receive after its egress translation (§6.2, decided 2026-10-30).
 
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
@@ -23,7 +25,6 @@ defmodule Sms.Switch.Pipeline.Router do
           optional(:hlr_ported) => boolean() | nil,
           optional(:count_rule_tps) => boolean(),
           optional(:parts) => pos_integer(),
-          optional(:rate_sender) => String.t() | nil,
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -138,27 +139,61 @@ defmodule Sms.Switch.Pipeline.Router do
         {:error, :no_vendor, decision}
 
       %{outcome: :route, vendor: %{vendor_trunk_id: vt}} ->
-        egress = egress(vt, input)
-
-        cond do
-          not egress.blocked and bound?(vt) ->
-            cost = Config.vendor_rate(vt, context.mccmnc, input.now_ms, input[:rate_sender])
-            _ = count_warmup(rules, decision, input)
-            {:ok, %{decision: decision, vendor_trunk_id: vt, cost: cost, egress: egress}}
-
-          tries > 1 ->
-            try_route(rules, context, options, input, MapSet.put(skip, vt), tries - 1)
-
-          true ->
-            {:error, :no_vendor, decision}
-        end
+        routed(rules, context, options, input, skip, tries, decision, vt)
     end
   end
+
+  # The vendor routing picked, or routing run again without it (up to `tries` times) when its egress translation
+  # blocks the message, its rate for the destination is blocked (§6.2, blocked means blocked, decided 2026-10-30) or
+  # it has no connection.
+  defp routed(rules, context, options, input, skip, tries, decision, vt) do
+    egress = egress(vt, input)
+
+    case vendor_check(vt, context.mccmnc, egress, input) do
+      {:ok, price} ->
+        _ = count_warmup(rules, decision, input)
+        {:ok, %{decision: decision, vendor_trunk_id: vt, cost: price, egress: egress}}
+
+      :rate_blocked when tries > 1 ->
+        blocked = MapSet.put(context[:rate_blocked] || MapSet.new(), vt)
+
+        try_route(
+          rules,
+          Map.put(context, :rate_blocked, blocked),
+          options,
+          input,
+          skip,
+          tries - 1
+        )
+
+      _passed_over when tries > 1 ->
+        try_route(rules, context, options, input, MapSet.put(skip, vt), tries - 1)
+
+      _passed_over ->
+        {:error, :no_vendor, decision}
+    end
+  end
+
+  # The vendor's price for the message, or why it is passed over.
+  defp vendor_check(_vendor_trunk_id, _mccmnc, %{blocked: true}, _input), do: :egress_blocked
+
+  defp vendor_check(vendor_trunk_id, mccmnc, egress, input) do
+    case vendor_price(vendor_trunk_id, mccmnc, egress, input) do
+      :blocked -> :rate_blocked
+      price -> if bound?(vendor_trunk_id), do: {:ok, price}, else: :unbound
+    end
+  end
+
+  # The vendor's price for the message: its Sender ID lines match the sender it receives after its egress
+  # translation (§6.2, decided 2026-10-30); `:blocked` when the line in force is blocked.
+  defp vendor_price(vendor_trunk_id, mccmnc, egress, input),
+    do: Config.vendor_price(vendor_trunk_id, mccmnc, input.now_ms, egress.after.sender)
 
   @doc """
   The route to one chosen vendor trunk (Test SMS or Repush to a vendor, backend step 11c): its egress translation and
   its cost, with no route rule (`decided_by` manual). Errors: `:unknown_vendor`, `:vendor_inactive` (inactive or
-  stopped), `:blocked` (its egress translation blocks the message).
+  stopped), `:blocked` (its egress translation blocks the message), `:vendor_rate_blocked` (its rate line for the
+  destination is blocked).
   """
   @spec forced(integer(), input()) ::
           {:ok,
@@ -168,7 +203,7 @@ defmodule Sms.Switch.Pipeline.Router do
              cost: Config.rate() | nil,
              egress: Translation.result()
            }}
-          | {:error, :unknown_vendor | :vendor_inactive | :blocked, nil}
+          | {:error, :unknown_vendor | :vendor_inactive | :blocked | :vendor_rate_blocked, nil}
   def forced(vendor_trunk_id, input) do
     case Config.vendor_trunk(vendor_trunk_id) do
       nil ->
@@ -179,28 +214,28 @@ defmodule Sms.Switch.Pipeline.Router do
 
       _trunk ->
         egress = egress(vendor_trunk_id, input)
+        price = vendor_price(vendor_trunk_id, input.destination.mccmnc, egress, input)
 
-        if egress.blocked do
-          {:error, :blocked, nil}
-        else
-          {:ok,
-           %{
-             decision: %{
-               rule_id: nil,
-               route_type: :manual,
-               outcome: :route,
-               vendor: %{vendor_trunk_id: vendor_trunk_id, level: 0, decided_by: :manual}
-             },
-             vendor_trunk_id: vendor_trunk_id,
-             cost:
-               Config.vendor_rate(
-                 vendor_trunk_id,
-                 input.destination.mccmnc,
-                 input.now_ms,
-                 input[:rate_sender]
-               ),
-             egress: egress
-           }}
+        cond do
+          egress.blocked ->
+            {:error, :blocked, nil}
+
+          price == :blocked ->
+            {:error, :vendor_rate_blocked, nil}
+
+          true ->
+            {:ok,
+             %{
+               decision: %{
+                 rule_id: nil,
+                 route_type: :manual,
+                 outcome: :route,
+                 vendor: %{vendor_trunk_id: vendor_trunk_id, level: 0, decided_by: :manual}
+               },
+               vendor_trunk_id: vendor_trunk_id,
+               cost: price,
+               egress: egress
+             }}
         end
     end
   end

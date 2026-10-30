@@ -65,7 +65,16 @@ defmodule Sms.Switch.Commands.ChecksTest do
     end
 
     test "every routing refusal has a reason the screen can show" do
-      for reason <- [:no_customer_rate, :no_rule, :blocked, :no_vendor, :not_ready, :multipart] do
+      for reason <- [
+            :no_customer_rate,
+            :customer_rate_blocked,
+            :vendor_rate_blocked,
+            :no_rule,
+            :blocked,
+            :no_vendor,
+            :not_ready,
+            :multipart
+          ] do
         assert reason |> Inject.reason_text() |> String.length() > 5
       end
 
