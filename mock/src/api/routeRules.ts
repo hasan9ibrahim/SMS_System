@@ -26,7 +26,7 @@ import { withDb } from "../db.js";
 import { chRows } from "../edr.js";
 import { listFields } from "../lists/fields.js";
 import { routeRuleList } from "../lists/defs.js";
-import { compileQuery, runList } from "../lists/engine.js";
+import { exportRows, runList } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { decide, quickMatch, type MessageContext, type VendorOption } from "../routing/evaluate.js";
@@ -593,8 +593,12 @@ export function exportRouteRules(request: FastifyRequest, reply: FastifyReply) {
   const errors = checkListQuery(query, listFields.route_rules);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    const q = compileQuery(routeRuleList as never, { ...query, limit: 100_000, cursor: null } as ListQuery);
-    const { rows } = await pool.query(q.sql, q.values);
+    // As the viewer sees the list: masked trunk and vendor names, withheld margins (§13.17, security audit).
+    const rows = (await exportRows(pool, routeRuleList, {
+      ...query,
+      limit: 100_000,
+      cursor: null,
+    } as ListQuery)) as unknown as Record<string, unknown>[];
     const cols: [string, string][] = [
       ["ID", "id"],
       ["Rule", "name"],
@@ -612,10 +616,7 @@ export function exportRouteRules(request: FastifyRequest, reply: FastifyReply) {
       ["Start (UTC)", "startsAt"],
       ["Stop (UTC)", "stopsAt"],
     ];
-    const lines = rows.slice(0, q.limit).map((r) => {
-      const row = routeRuleList.mapRow(r) as unknown as Record<string, unknown>;
-      return cols.map(([, k]) => csvCell(row[k])).join(",");
-    });
+    const lines = rows.map((row) => cols.map(([, k]) => csvCell(row[k])).join(","));
     return reply
       .type("text/csv; charset=utf-8")
       .header("content-disposition", 'attachment; filename="route_rules.csv"')

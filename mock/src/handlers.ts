@@ -551,7 +551,7 @@ import {
   sendTroubleTicket,
   updateEdrTemplate,
 } from "./api/observation.js";
-import { cancelEdrDownload, downloadEdrFile, requestEdrDownload } from "./api/edrDownloads.js";
+import { cancelEdrDownload, downloadEdrFile, queryEdrDownloads, requestEdrDownload } from "./api/edrDownloads.js";
 import {
   downloadSignalingCapture,
   exportNetworkBinds,
@@ -1053,7 +1053,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveEdrTemplate,
   restoreEdrTemplate,
   requestEdrDownload,
-  queryEdrDownloads: queryList("edr_downloads"),
+  queryEdrDownloads,
   cancelEdrDownload,
   downloadEdrFile,
   queryNetworkBinds: queryList("network_binds"),

@@ -28,6 +28,7 @@ import { usePageStatus, useTabNavigate } from "../../shell/tabContext";
 import { Chart, useChartColors } from "../../ui/Chart";
 import { Icon } from "../../ui/Icon";
 import { Popover } from "../../ui/primitives";
+import { Withheld } from "../../grid/DataGrid";
 import { qualityClass } from "../../ui/quality";
 import {
   analyticsPath,
@@ -506,6 +507,14 @@ function Section({
 
 // ---------------------------------------------------------------- 1. summary bar
 
+/** A figure: "—" before the first push, Hidden when the visibility policy withholds it (§13.17). */
+function figure(value: number | null | undefined, shown: number, format: (v: number) => string): ReactNode {
+  if (value === undefined) return "—";
+  return value === null ? <Withheld text="Hidden" /> : format(shown);
+}
+/** Money in a top list, or Hidden when withheld (§13.17). */
+const cash = (v: number | null, cur: string): ReactNode => (v === null ? <Withheld text="Hidden" /> : money(v, cur));
+
 function Counter({
   label,
   value,
@@ -516,7 +525,8 @@ function Counter({
   sub,
 }: {
   label: string;
-  value: number | undefined;
+  /** Null: withheld by the viewer's visibility policy (§13.17). */
+  value: number | null | undefined;
   format: (v: number) => string;
   tone?: "good" | "warn" | "bad";
   /** Extra class on the value, e.g. the ASR/DLR quality colour (§13.4). */
@@ -528,7 +538,7 @@ function Counter({
   return (
     <div className={`dash-kpi${tone ? ` ${tone}` : ""}`}>
       <span className="label">{label}</span>
-      <span className={`value ${valueClass ?? ""}`}>{value === undefined ? "—" : format(shown)}</span>
+      <span className={`value ${valueClass ?? ""}`}>{figure(value, shown, format)}</span>
       {sub && <span className="sub">{sub}</span>}
     </div>
   );
@@ -609,7 +619,7 @@ function PairCard({
   dot?: boolean;
   rows: {
     label: string;
-    value: number | undefined;
+    value: number | null | undefined;
     format: (v: number) => string;
     valueClass?: string;
   }[];
@@ -638,7 +648,7 @@ function PairRow({
   animate,
 }: {
   label: string;
-  value: number | undefined;
+  value: number | null | undefined;
   format: (v: number) => string;
   valueClass?: string;
   animate: boolean;
@@ -647,7 +657,7 @@ function PairRow({
   return (
     <div className="pair-row">
       <span className="label">{label}</span>
-      <span className={`value ${valueClass ?? ""}`}>{value === undefined ? "—" : format(shown)}</span>
+      <span className={`value ${valueClass ?? ""}`}>{figure(value, shown, format)}</span>
     </div>
   );
 }
@@ -683,7 +693,7 @@ function SummaryBar({
               label: "Margin",
               value: s?.margin,
               format: (v) => money(v, cur),
-              valueClass: s && s.margin < 0 ? "neg" : undefined,
+              valueClass: s?.margin != null && s.margin < 0 ? "neg" : undefined,
             },
           ]}
         />
@@ -1202,8 +1212,8 @@ function TopParties({ tops, onOpen }: { tops: DashboardTopsEvent | null; onOpen:
                         <span className="t">{r.party.name}</span>
                       </span>
                       <span className="r num">{int(r.attempts)}</span>
-                      <span className="r num">{money(r.money, cur)}</span>
-                      <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
+                      <span className="r num">{cash(r.money, cur)}</span>
+                      <span className={`r num${r.margin !== null && r.margin < 0 ? " neg" : ""}`}>{cash(r.margin, cur)}</span>
                       <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
                       <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
                     </button>
@@ -1265,8 +1275,8 @@ function TopDestinations({ tops, onOpen }: { tops: DashboardTopsEvent | null; on
               </span>
               <span className="num muted">{r.networks}</span>
               <span className="r num">{int(r.attempts)}</span>
-              <span className="r num">{money(r.revenue, cur)}</span>
-              <span className={`r num${r.margin < 0 ? " neg" : ""}`}>{money(r.margin, cur)}</span>
+              <span className="r num">{cash(r.revenue, cur)}</span>
+              <span className={`r num${r.margin !== null && r.margin < 0 ? " neg" : ""}`}>{cash(r.margin, cur)}</span>
               <span className={`r num ${qualityClass(r.asr)}`}>{pct(r.asr)}</span>
               <span className={`r num ${qualityClass(r.dlr)}`}>{pct(r.dlr)}</span>
             </button>

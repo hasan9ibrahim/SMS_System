@@ -92,6 +92,22 @@ export async function sessionOfToken(pool: pg.Pool, token: string): Promise<Requ
   return { userId: Number(r.user_id), sessionId: Number(r.id) };
 }
 
+/**
+ * Whether a session is still open (not ended, idle or past its lifetime) for an active user, without counting the look
+ * as activity: the live socket checks it every minute, which must not keep an idle session alive (§13.28).
+ */
+export async function sessionOpen(pool: pg.Pool, sessionId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM user_sessions s JOIN users u ON u.id = s.user_id
+      WHERE s.id = $1 AND s.ended_at IS NULL
+        AND s.last_seen_at > now() - make_interval(hours => ${IDLE_HOURS})
+        AND s.logged_in_at > now() - make_interval(hours => ${MAX_HOURS})
+        AND u.status = 'active' AND u.deleted_at IS NULL`,
+    [sessionId],
+  );
+  return rows.length > 0;
+}
+
 /** The user of a request, or null when sign-in is required and there is none. */
 export async function requestUser(request: FastifyRequest, pool: () => pg.Pool): Promise<RequestUser | null> {
   const viaApi = forwarded(request);

@@ -30,6 +30,7 @@ import {
   timeBounds,
   timeCondition,
   toGridRow,
+  withheldCells,
   type EdrGridRow,
 } from "./monitorModel";
 import { RequestDialog } from "./parts";
@@ -45,7 +46,7 @@ export const fetchEdrs = (body: ListQuery): Promise<ListPage<EdrGridRow>> =>
   fetchListPage<EdrRow>("edrs", body).then((p) => {
     const rows = p.rows.map(toGridRow);
     for (const r of rows) seen.set(r.id, r);
-    return { ...p, rows };
+    return { ...p, rows, masked: withheldCells(rows) };
   });
 /** Today 00:00 – 23:59 UTC on Start Time, the page's default period (team trial round 2). */
 const todayCondition = () => {

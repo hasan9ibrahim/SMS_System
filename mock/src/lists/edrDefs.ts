@@ -18,7 +18,14 @@ const DESTINATIONS: NameSource = {
   id: "d.code",
 };
 
-const named = (src: NameSource, idSql: string): ChColumn => ({ sql: idSql, names: { ...src, idSql } });
+const named = (src: NameSource, idSql: string, mask?: ChColumn["mask"]): ChColumn => ({
+  sql: idSql,
+  names: { ...src, idSql },
+  ...(mask ? { mask } : {}),
+});
+// Withheld from a viewer who does not own that side (§13.17, visibility/edr.ts).
+const customer = (item: "sellRates" | "revenue" | "contacts") => ({ vis: { item, side: "customer" as const } });
+const vendor = (item: "cost" | "contacts") => ({ vis: { item, side: "vendor" as const } });
 const has = (arr: string) => (c: { op: string; value?: unknown; values?: unknown[] }) => {
   const vs = (c.values ?? [c.value]).map((v) => String(Math.trunc(Number(v))));
   const any = `hasAny(${arr}, [${vs.join(",")}])`;
@@ -83,10 +90,10 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   productCategoryId: { sql: "product_category_id" },
   productCategory: named(CATEGORIES, "product_category_id"),
   customerEnterpriseId: { sql: "c_enterprise_id" },
-  customerEnterprise: named(ENTERPRISES, "c_enterprise_id"),
+  customerEnterprise: named(ENTERPRISES, "c_enterprise_id", "enterprise"),
   customerTrunkId: { sql: "c_trunk_id" },
-  customerTrunk: named(CUSTOMER_TRUNKS, "c_trunk_id"),
-  customerIp: { sql: "IPv4NumToString(c_ip)" },
+  customerTrunk: named(CUSTOMER_TRUNKS, "c_trunk_id", "customerTrunk"),
+  customerIp: { sql: "IPv4NumToString(c_ip)", ...customer("contacts") },
   customerPort: { sql: "c_port" },
   customerSessionId: { sql: "c_session_id" },
   customerBindType: { sql: "c_bind_type" },
@@ -117,16 +124,16 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorDestination: named(DESTINATIONS, "toUInt64OrZero(v_mccmnc)"),
   customerBillingType: { sql: "c_billing_type" },
   customerRateTableId: { sql: "c_rate_table_id" },
-  customerRate: { sql: "toFloat64(c_rate)" },
+  customerRate: { sql: "toFloat64(c_rate)", ...customer("sellRates") },
   customerCurrency: { sql: "c_currency" },
-  customerSysRate: { sql: "toFloat64(c_sys_rate)" },
+  customerSysRate: { sql: "toFloat64(c_sys_rate)", ...customer("sellRates") },
   translationRuleIds: { sql: "c_translation_rule_ids", where: has("c_translation_rule_ids") },
   customerMsgStatus: { sql: "c_msg_status", outcome: { sql: "c_msg_status", merge: "status" } },
   vendorEnterpriseId: { sql: "v_enterprise_id" },
-  vendorEnterprise: named(ENTERPRISES, "v_enterprise_id"),
+  vendorEnterprise: named(ENTERPRISES, "v_enterprise_id", "enterprise"),
   vendorTrunkId: { sql: "v_trunk_id" },
-  vendorTrunk: named(VENDOR_TRUNKS, "v_trunk_id"),
-  vendorIp: { sql: "if(v_trunk_id = 0, '', IPv4NumToString(v_ip))" },
+  vendorTrunk: named(VENDOR_TRUNKS, "v_trunk_id", "vendorTrunk"),
+  vendorIp: { sql: "if(v_trunk_id = 0, '', IPv4NumToString(v_ip))", ...vendor("contacts") },
   vendorPort: { sql: "v_port" },
   // One ID per part of a multipart message, comma separated: a filter matches any of them (team trial round 2).
   vendorMsgId: { sql: "v_message_id", where: msgIdWhere },
@@ -134,9 +141,9 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorMccmnc: { sql: "v_mccmnc" },
   vendorBillingType: { sql: "v_billing_type" },
   vendorRateTableId: { sql: "v_rate_table_id" },
-  vendorRate: { sql: "toFloat64(v_rate)" },
+  vendorRate: { sql: "toFloat64(v_rate)", ...vendor("cost") },
   vendorCurrency: { sql: "v_currency" },
-  vendorSysRate: { sql: "toFloat64(v_sys_rate)" },
+  vendorSysRate: { sql: "toFloat64(v_sys_rate)", ...vendor("cost") },
   vendorExRate: { sql: "toFloat64(v_ex_rate)" },
   vendorTranslationRuleIds: { sql: "v_translation_rule_ids", where: has("v_translation_rule_ids") },
   routeRuleId: { sql: "route_rule_id" },
@@ -166,10 +173,10 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   isBuffered: { sql: "is_buffered" },
   isCustomerBillable: { sql: "is_customer_billable", outcome: { sql: "is_customer_billable", merge: "or" } },
   isVendorBillable: { sql: "is_vendor_billable", outcome: { sql: "is_vendor_billable", merge: "or" } },
-  revenue: { sql: "toFloat64(revenue)", outcome: { sql: "revenue", merge: "add" } },
-  cost: { sql: "toFloat64(cost)", outcome: { sql: "cost", merge: "add" } },
-  revenueSys: { sql: "toFloat64(revenue_sys)", outcome: { sql: "revenue_sys", merge: "add" } },
-  costSys: { sql: "toFloat64(cost_sys)", outcome: { sql: "cost_sys", merge: "add" } },
+  revenue: { sql: "toFloat64(revenue)", outcome: { sql: "revenue", merge: "add" }, ...customer("revenue") },
+  cost: { sql: "toFloat64(cost)", outcome: { sql: "cost", merge: "add" }, ...vendor("cost") },
+  revenueSys: { sql: "toFloat64(revenue_sys)", outcome: { sql: "revenue_sys", merge: "add" }, ...customer("revenue") },
+  costSys: { sql: "toFloat64(cost_sys)", outcome: { sql: "cost_sys", merge: "add" }, ...vendor("cost") },
   hlrProviderId: { sql: "hlr_provider_id" },
   hlrProvider: named(HLR_PROVIDERS, "hlr_provider_id"),
   hlrFetchType: { sql: "hlr_fetch_type" },
@@ -218,6 +225,10 @@ export const edrList: ChListDef<EdrRow> = {
   searchNames: ["customerEnterprise", "customerTrunk", "vendorEnterprise", "vendorTrunk"],
   idSql: "edr_id",
   mapRow: (r, names) => edrValues(edrFields.fields, EDR_COLUMNS, r, names) as unknown as EdrRow,
+  owners: {
+    customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" },
+    vendor: { sql: "v_enterprise_id", key: "vendorEnterpriseId" },
+  },
 };
 
 const failedFields = listFields.failed_edrs;
@@ -235,4 +246,5 @@ export const failedEdrList: ChListDef<FailedEdrRow> = {
   searchNames: ["customerEnterprise", "customerTrunk"],
   idSql: "edr_id",
   mapRow: (r, names) => edrValues(failedFields.fields, FAILED_COLUMNS, r, names) as unknown as FailedEdrRow,
+  owners: { customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" } },
 };

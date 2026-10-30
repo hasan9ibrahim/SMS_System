@@ -6280,7 +6280,9 @@ export type paths = {
     };
     /**
      * The exported file
-     * @description CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+     * @description CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls). The file shows the EDRs as the user who
+     *     asked for it may see them (§13.17); a user whose visibility policy restricts anything opens and lists only
+     *     their own downloads (403 for another user's).
      */
     get: operations["downloadEdrFile"];
     put?: never;
@@ -15299,7 +15301,8 @@ export type components = {
       customerEnterprise: string | null;
       customerTrunkId: number;
       customerTrunk: string | null;
-      customerIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerIp: string | null;
       customerPort: number;
       /** @description SMPP session that submitted (§13.1). */
       customerSessionId: string;
@@ -15344,10 +15347,11 @@ export type components = {
       vendorDestination: string;
       customerBillingType: string;
       customerRateTableId: number;
-      customerRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerRate: number | null;
       customerCurrency: string;
-      /** @description Rate in the base currency. */
-      customerSysRate: number;
+      /** @description Rate in the base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      customerSysRate: number | null;
       /** @description Customer translation rules applied. */
       translationRuleIds: number[];
       /** @description Status reported to the customer. */
@@ -15358,16 +15362,19 @@ export type components = {
       /** @description 0 = not routed. */
       vendorTrunkId: number;
       vendorTrunk: string | null;
-      vendorIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorIp: string | null;
       vendorPort: number;
       /** @description The vendor's message ID; one per part for a multipart message, comma separated (team trial round 2). A filter on it matches any of them. */
       vendorMsgId: string;
       vendorMccmnc: string;
       vendorBillingType: string;
       vendorRateTableId: number;
-      vendorRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorRate: number | null;
       vendorCurrency: string;
-      vendorSysRate: number;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      vendorSysRate: number | null;
       vendorExRate: number;
       vendorTranslationRuleIds: number[];
       routeRuleId: number;
@@ -15395,14 +15402,14 @@ export type components = {
       isBuffered: boolean;
       isCustomerBillable: boolean;
       isVendorBillable: boolean;
-      /** @description Customer currency. */
-      revenue: number;
-      /** @description Vendor currency. */
-      cost: number;
-      /** @description Base currency. */
-      revenueSys: number;
-      /** @description Base currency. */
-      costSys: number;
+      /** @description Customer currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      revenue: number | null;
+      /** @description Vendor currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      cost: number | null;
+      /** @description Base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      revenueSys: number | null;
+      /** @description Base currency. Null when withheld by the viewer's visibility policy (§13.17). */
+      costSys: number | null;
       hlrProviderId: number;
       hlrProvider: string | null;
       /** @description none, cached or live. */
@@ -15425,7 +15432,8 @@ export type components = {
       customerEnterprise: string | null;
       customerTrunkId: number;
       customerTrunk: string | null;
-      customerIp: string;
+      /** @description Null when withheld by the viewer's visibility policy (§13.17). */
+      customerIp: string | null;
       customerPort: number;
       customerMsgId: string;
       senderId: string;
@@ -28928,6 +28936,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
@@ -28955,6 +28964,7 @@ export interface operations {
         };
       };
       401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];

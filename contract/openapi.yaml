@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.116.0
+  version: 0.117.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -9339,6 +9339,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EdrDownloadRow"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -9354,7 +9356,9 @@ paths:
       operationId: downloadEdrFile
       summary: "The exported file"
       description: |
-        CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls).
+        CSV (UTF-8, header row) or xlsx (Excel 2003 XML spreadsheet, .xls). The file shows the EDRs as the user who
+        asked for it may see them (§13.17); a user whose visibility policy restricts anything opens and lists only
+        their own downloads (403 for another user's).
       parameters:
         - $ref: "#/components/parameters/RecordId"
       responses:
@@ -9369,6 +9373,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
@@ -25491,7 +25497,8 @@ components:
         customerTrunk:
           type: [string, "null"]
         customerIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerPort:
           type: integer
         customerSessionId:
@@ -25568,12 +25575,13 @@ components:
         customerRateTableId:
           type: integer
         customerRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerCurrency:
           type: string
         customerSysRate:
-          type: number
-          description: "Rate in the base currency."
+          type: [number, "null"]
+          description: "Rate in the base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         translationRuleIds:
           type: array
           items:
@@ -25593,7 +25601,8 @@ components:
         vendorTrunk:
           type: [string, "null"]
         vendorIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorPort:
           type: integer
         vendorMsgId:
@@ -25608,11 +25617,13 @@ components:
         vendorRateTableId:
           type: integer
         vendorRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorCurrency:
           type: string
         vendorSysRate:
-          type: number
+          type: [number, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         vendorExRate:
           type: number
         vendorTranslationRuleIds:
@@ -25664,17 +25675,17 @@ components:
         isVendorBillable:
           type: boolean
         revenue:
-          type: number
-          description: "Customer currency."
+          type: [number, "null"]
+          description: "Customer currency. Null when withheld by the viewer's visibility policy (§13.17)."
         cost:
-          type: number
-          description: "Vendor currency."
+          type: [number, "null"]
+          description: "Vendor currency. Null when withheld by the viewer's visibility policy (§13.17)."
         revenueSys:
-          type: number
-          description: "Base currency."
+          type: [number, "null"]
+          description: "Base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         costSys:
-          type: number
-          description: "Base currency."
+          type: [number, "null"]
+          description: "Base currency. Null when withheld by the viewer's visibility policy (§13.17)."
         hlrProviderId:
           type: integer
         hlrProvider:
@@ -25723,7 +25734,8 @@ components:
         customerTrunk:
           type: [string, "null"]
         customerIp:
-          type: string
+          type: [string, "null"]
+          description: "Null when withheld by the viewer's visibility policy (§13.17)."
         customerPort:
           type: integer
         customerMsgId:

@@ -13,6 +13,8 @@ import type {
 } from "@sms/contract";
 import type pg from "pg";
 import { chQuery } from "../edr.js";
+import type { VisItem } from "../visibility/policy.js";
+import { viewChDef } from "../visibility/edr.js";
 import { decodeCursor, encodeCursor, runList, searchPattern, type ListDef, type ListPage } from "./engine.js";
 
 /** A ClickHouse string literal. */
@@ -29,6 +31,11 @@ export interface NameSource {
   table: string;
   name: string;
   id: string;
+  /**
+   * The viewer's masking (§13.17, visibility/edr.ts): IDs they do not own show as `label(id)` and are never found by
+   * a name filter or the quick search.
+   */
+  view?: { own: (id: number) => boolean; label: (id: number) => string };
 }
 
 export interface ChColumn {
@@ -46,6 +53,10 @@ export interface ChColumn {
    * money, "or" its billable flag (filters and sorts on those read the attempt row).
    */
   outcome?: { sql: string; merge: "status" | "add" | "or"; when?: string };
+  /** Withheld from a viewer who does not own that side of the message (§13.17): the item and the side. */
+  vis?: { item: VisItem; side: "customer" | "vendor" };
+  /** A name masked for a viewer who does not own it (§13.17). */
+  mask?: "enterprise" | "customerTrunk" | "vendorTrunk";
 }
 
 export interface ChListDef<Row> {
@@ -60,6 +71,8 @@ export interface ChListDef<Row> {
   searchNames?: string[];
   idSql: string;
   mapRow: (row: Record<string, unknown>, names: NameMaps) => Row;
+  /** The enterprise of each side, as SQL and as the row's field, for visibility (§13.17). */
+  owners?: { customer: { sql: string; key: string }; vendor?: { sql: string; key: string } };
 }
 
 export type NameMaps = Map<string, Map<number, string>>;
@@ -75,11 +88,14 @@ const nameCache = new Map<string, { at: number; map: Map<number, string> }>();
 export async function namesOf(pool: pg.Pool, src: NameSource): Promise<Map<number, string>> {
   const key = `${src.table}|${src.name}`;
   const hit = nameCache.get(key);
-  if (hit && Date.now() - hit.at < 60_000) return hit.map;
-  const { rows } = await pool.query(`SELECT ${src.id} AS id, ${src.name} AS name FROM ${src.table}`);
-  const map = new Map(rows.map((r) => [Number(r.id), String(r.name)]));
-  nameCache.set(key, { at: Date.now(), map });
-  return map;
+  let map = hit && Date.now() - hit.at < 60_000 ? hit.map : null;
+  if (!map) {
+    const { rows } = await pool.query(`SELECT ${src.id} AS id, ${src.name} AS name FROM ${src.table}`);
+    map = new Map(rows.map((r) => [Number(r.id), String(r.name)]));
+    nameCache.set(key, { at: Date.now(), map });
+  }
+  const view = src.view;
+  return view ? new Map([...map].map(([id, name]) => [id, view.own(id) ? name : view.label(id)])) : map;
 }
 
 /** IDs whose name meets the (positive) condition, using the PostgreSQL list engine. */
@@ -98,7 +114,8 @@ async function idsMatching(pool: pg.Pool, src: NameSource, c: FilterCondition, f
     limit: 100_000,
     withTotal: false,
   });
-  return page.rows.map((r) => r.id);
+  const ids = page.rows.map((r) => r.id);
+  return src.view ? ids.filter(src.view.own) : ids;
 }
 
 // ---------------------------------------------------------------- compile
@@ -349,6 +366,8 @@ export const chSelect = (def: ChListDef<unknown>, only?: string[]) =>
  * rows of those IDs. Reading every column of every candidate row before sorting is ~30× slower.
  */
 export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: ListQuery): Promise<ListPage<Row>> {
+  // As the viewer sees it (§13.17): masked names, withheld values, others' traffic left out.
+  def = await viewChDef(def);
   const d = def as ChListDef<unknown>;
   const [whereSql, orderSql, names] = await Promise.all([
     chWhere(pool, d, query),
