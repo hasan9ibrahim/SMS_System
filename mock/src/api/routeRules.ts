@@ -368,6 +368,13 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
     .sort(
       (a, b) => a.level - b.level || Number(a.isBackup) - Number(b.isBackup) || (b.sharePct ?? 0) - (a.sharePct ?? 0),
     );
+  // A percentage split: the vendor alone on its level takes 100 % (team trial round 12; its share is not asked).
+  if (out.huntPolicy === "percentage") {
+    const vs = out.vendors as RouteVendor[];
+    out.vendors = vs.map((v) =>
+      !v.isBackup && vs.filter((x) => !x.isBackup && x.level === v.level).length === 1 ? { ...v, sharePct: 100 } : v,
+    );
+  }
   out.whitelists = (out.whitelists as RouteWhitelist[]).map((w) => ({
     vendorTrunkId: w.vendorTrunkId,
     numberListId: w.numberListId ?? null,

@@ -16,7 +16,7 @@ import { useMe } from "../../api/hooks";
 import { isAdminUser, ListLookup } from "../../records/parts";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal } from "../../ui/primitives";
-import { shareProblems, toInput } from "./ruleModel";
+import { shareProblems, soleOnLevel, toInput, withSoleShares } from "./ruleModel";
 
 /** New rules start at 97; 98–100 are kept for administrators (team trial round 1). */
 export const DEFAULT_PRIORITY = 97;
@@ -346,7 +346,10 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
   );
 }
 
-/** In-place editor of the Vendors column: the vendor split of level 1 (§15.4). */
+/**
+ * In-place editor of the Vendors column (§15.4): the vendors of every level (team trial round 12: level 1 only
+ * before). Backups are kept as they are; a vendor's own backups follow it when it changes and go when it is removed.
+ */
 export function VendorSplitEditor({
   row,
   onClose,
@@ -359,7 +362,7 @@ export function VendorSplitEditor({
   const rule = useRouteRule(row.id);
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
-  const [split, setSplit] = useState<RouteVendor[] | null>(null);
+  const [edited, setEdited] = useState<RouteVendor[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const r = rule.data;
   if (!r)
@@ -381,18 +384,51 @@ export function VendorSplitEditor({
         )}
       </div>
     );
-  const level1 = split ?? r.vendors.filter((v) => v.level === 1 && !v.isBackup);
-  const others = r.vendors.filter((v) => !(v.level === 1 && !v.isBackup));
+  const all = edited ?? r.vendors;
+  const main = all.filter((v) => !v.isBackup);
+  const backups = all.filter((v) => v.isBackup);
+  const levels = [...new Set(main.map((v) => v.level))].sort((a, b) => a - b);
   const pct = r.huntPolicy === "percentage";
-  const setAt = (i: number, patch: Partial<RouteVendor>) =>
-    setSplit(level1.map((v, j) => (j === i ? { ...v, ...patch } : v)));
-  const problems = shareProblems(level1, r.huntPolicy);
+  const setAt = (target: RouteVendor, patch: Partial<RouteVendor>) =>
+    setEdited(
+      all.map((v) =>
+        v === target
+          ? { ...v, ...patch }
+          : // A vendor's own backups follow it to its new trunk.
+            patch.vendorTrunkId && v.isBackup && target.vendorTrunkId && v.backupForVendorTrunkId === target.vendorTrunkId
+            ? { ...v, backupForVendorTrunkId: patch.vendorTrunkId }
+            : v,
+      ),
+    );
+  const remove = (target: RouteVendor) =>
+    setEdited(
+      all.filter(
+        (v) => v !== target && !(v.isBackup && target.vendorTrunkId && v.backupForVendorTrunkId === target.vendorTrunkId),
+      ),
+    );
+  const add = (level: number) =>
+    setEdited([
+      ...all,
+      {
+        level,
+        vendorTrunkId: 0,
+        sharePct: pct ? 0 : null,
+        isBackup: false,
+        warmupCount: null,
+        warmupPer: null,
+        warmupReset: null,
+      },
+    ]);
+  const problems = shareProblems(all, r.huntPolicy);
   const submit = () => {
-    if (!level1.length) return setError("Keep at least one vendor.");
-    if (level1.some((v) => !v.vendorTrunkId)) return setError("Choose a vendor trunk on every row.");
+    if (!main.length) return setError("Keep at least one vendor.");
+    if (main.some((v) => !v.vendorTrunkId)) return setError("Choose a vendor trunk on every row.");
     if (problems.length) return setError(problems.join(" "));
+    const vendors = withSoleShares(all, r.huntPolicy);
+    // A level added here raises the rule's route levels to match (the server refuses vendors above them).
+    const maxRouteLevel = Math.max(r.maxRouteLevel, ...vendors.map((v) => v.level));
     save.mutate(
-      { id: r.id, input: toInput(r, { vendors: [...level1, ...others] }) },
+      { id: r.id, input: toInput(r, { vendors, maxRouteLevel }) },
       {
         onSuccess: (res) => {
           if (res.change) notifySaved(res.change, `Vendors of #${r.id} saved`);
@@ -410,71 +446,65 @@ export function VendorSplitEditor({
       }}
     >
       <div className="split-head">
-        <strong>Level 1 vendors</strong>
+        <strong>Vendors</strong>
         <span className="muted small">{pct ? "percentage split" : r.huntPolicy.replace("_", " ")}</span>
       </div>
-      {level1.map((v, i) => (
-        <div key={i} className="split-row">
-          <ListLookup<TrunkListRow>
-            list="vendor_trunks"
-            value={v.vendorTrunkId || null}
-            clearable={false}
-            onChange={(t) => t && setAt(i, { vendorTrunkId: t.id })}
-            labelOf={(t) => t.name}
-            placeholder="Vendor trunk…"
-          />
-          {pct && (
-            <input
-              className="num w-num"
-              type="number"
-              min={0}
-              max={100}
-              aria-label="Share %"
-              value={v.sharePct ?? ""}
-              onChange={(e) => setAt(i, { sharePct: e.target.value === "" ? null : Number(e.target.value) })}
-            />
-          )}
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Remove vendor"
-            onClick={() => setSplit(level1.filter((_, j) => j !== i))}
-          >
-            <Icon name="x" size={13} />
+      {levels.map((level) => (
+        <div key={level} className="split-level">
+          {levels.length > 1 && <div className="split-level-head muted small">Level {level}</div>}
+          {main
+            .filter((v) => v.level === level)
+            .map((v, i) => (
+              <div key={`${level}-${i}`} className="split-row">
+                <ListLookup<TrunkListRow>
+                  list="vendor_trunks"
+                  value={v.vendorTrunkId || null}
+                  clearable={false}
+                  onChange={(t) => t && setAt(v, { vendorTrunkId: t.id })}
+                  labelOf={(t) => t.name}
+                  placeholder="Vendor trunk…"
+                />
+                {pct &&
+                  (soleOnLevel(all, v) ? (
+                    // Alone on its level it takes everything: no share to type (team trial round 12).
+                    <span className="muted num w-num" title="The only vendor on this level takes all of it">
+                      100%
+                    </span>
+                  ) : (
+                    <input
+                      className="num w-num"
+                      type="number"
+                      min={0}
+                      max={100}
+                      aria-label="Share %"
+                      value={v.sharePct ?? ""}
+                      onChange={(e) => setAt(v, { sharePct: e.target.value === "" ? null : Number(e.target.value) })}
+                    />
+                  ))}
+                <button type="button" className="icon-btn" aria-label="Remove vendor" onClick={() => remove(v)}>
+                  <Icon name="x" size={13} />
+                </button>
+              </div>
+            ))}
+          <button type="button" className="link small split-add" onClick={() => add(level)}>
+            + Add vendor{levels.length > 1 ? ` to level ${level}` : ""}
           </button>
         </div>
       ))}
       <div className="split-foot">
-        <Button
-          small
-          icon="plus"
-          onClick={() =>
-            setSplit([
-              ...level1,
-              {
-                level: 1,
-                vendorTrunkId: 0,
-                sharePct: pct ? 0 : null,
-                isBackup: false,
-                warmupCount: null,
-                warmupPer: null,
-                warmupReset: null,
-              },
-            ])
-          }
-        >
-          Add
+        <Button small icon="plus" onClick={() => add((levels.at(-1) ?? 0) + 1)}>
+          {levels.length ? "Add level" : "Add vendor"}
         </Button>
-        {others.length > 0 && (
+        {backups.length > 0 && (
           <button type="button" className="link small" onClick={onMore}>
-            +{others.length} on other levels
+            {backups.length} backup{backups.length === 1 ? "" : "s"}
           </button>
         )}
         <span className="fb-spacer" />
         <Button small onClick={onClose}>
           Cancel
         </Button>
-        <Button small onClick={submit} disabled={save.isPending || split === null}>
+        <Button small onClick={submit} disabled={save.isPending || edited === null}>
           Save
         </Button>
       </div>

@@ -1214,24 +1214,30 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     const codes = (r.mccmncs as string[]) ?? [];
     const allVendors = (r.vendors as { n: string; s: number | null; l: number; b: boolean }[] | null) ?? [];
     const vendors = allVendors.filter((v) => !v.b);
-    const level1 = vendors.filter((v) => v.l === (vendors[0]?.l ?? 1));
     const type = r.route_type as RouteRuleRow["routeType"];
     const hunt = r.hunt_policy as string;
     const lcrCount = vendors.length || (r.vendor_trunk_mode === "inclusive" ? (r.scope_count as number) : 0);
+    // One level's vendors: a vendor alone takes everything, so no "100" (team trial round 6).
+    const levelText = (vs: typeof vendors) =>
+      vs.length === 1
+        ? vs[0]!.n
+        : hunt === "percentage"
+          ? vs.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
+          : vs.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");
+    // Every level, "L1 … | L2 …" (team trial round 12: level 1 only before, the rest only on hover).
+    const levels = [...new Set(vendors.map((v) => v.l))];
     const vendorsLabel =
       type === "block"
         ? "—"
         : type === "dynamic"
           ? `LCR · ${lcrCount ? `${lcrCount} vendor${lcrCount === 1 ? "" : "s"}` : "all vendors"}`
-          : level1.length === 0
+          : vendors.length === 0
             ? type === "qbr"
               ? "Quality · all vendors"
               : "No vendor"
-            : level1.length === 1
-              ? level1[0]!.n // one vendor takes everything: no "100%" (team trial round 6)
-              : hunt === "percentage"
-                ? level1.map((v) => `${v.n} ${v.s ?? 0}`).join(" · ")
-                : level1.map((v) => v.n).join(hunt === "round_robin" ? " / " : " › ");
+            : levels.length === 1
+              ? levelText(vendors)
+              : levels.map((l) => `L${l} ${levelText(vendors.filter((v) => v.l === l))}`).join(" | ");
     return {
       id: r.id as number,
       name: r.name as string,

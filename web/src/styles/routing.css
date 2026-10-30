@@ -70,6 +70,22 @@
 .split-row .lookup {
   flex: 1;
 }
+/* Every level in the in-place editor (team trial round 12): a small heading per level, Add under its rows. */
+.split-level + .split-level {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: var(--border-width) solid var(--color-border);
+}
+.split-level-head {
+  margin-bottom: 4px;
+}
+.split-add {
+  margin-bottom: 2px;
+}
+span.w-num {
+  display: inline-block;
+  text-align: right;
+}
 .split-foot {
   display: flex;
   align-items: center;
@@ -1896,4 +1912,19 @@ svg.flip {
 }
 .value-rows {
   margin-bottom: 8px;
+}
+
+/* Vendors of several levels: one line each (team trial round 12), inside the row's height. */
+.rr-levels {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+}
+.rr-level {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

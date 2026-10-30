@@ -175,6 +175,35 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     for (const p of ["/vendors", "/senderPattern", "/stopsAt"]) assert.ok(paths.includes(p), `${p} in ${paths}`);
   });
 
+  test("a vendor alone on its level takes 100 %; the grid lists every level (team trial round 12)", async () => {
+    const f = await fixtures();
+    const saved = await ok(
+      "createRouteRule",
+      call(
+        "POST",
+        "/route-rules",
+        ruleInput(f, {
+          name: `Levels ${run}`,
+          maxRouteLevel: 2,
+          whitelists: [],
+          vendors: [
+            { level: 1, vendorTrunkId: f.vendors[0], sharePct: 60 },
+            { level: 1, vendorTrunkId: f.vendors[1], sharePct: 40 },
+            // No share given: alone on level 2.
+            { level: 2, vendorTrunkId: f.vendors[2], sharePct: null },
+          ],
+        }),
+      ),
+      201,
+    );
+    const level2 = saved.record.vendors.find((v: { level: number }) => v.level === 2);
+    assert.equal(level2.sharePct, 100);
+    const list = await query({ ...and({ field: "id", op: "eq", value: saved.record.id }), limit: 1 });
+    const label = list.rows[0].vendorsLabel as string;
+    assert.match(label, /^L1 .+ 60 · .+ 40 \| L2 [^|]+$/, label);
+    assert.doesNotMatch(label, /L2 .* 100/, "a sole vendor shows no share");
+  });
+
   test("edit records only changed fields; undo restores vendors; status alone is enable/disable", async () => {
     const f = await fixtures();
     const created = (

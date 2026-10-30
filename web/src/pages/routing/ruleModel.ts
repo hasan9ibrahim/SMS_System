@@ -339,11 +339,22 @@ export function missingConditions(rule: RouteRuleDetail): ConditionKey[] {
 export function shareProblems(vendors: RouteVendor[], huntPolicy: string): string[] {
   if (huntPolicy !== "percentage") return [];
   const sums = new Map<number, number>();
-  for (const v of vendors) if (!v.isBackup) sums.set(v.level, (sums.get(v.level) ?? 0) + (v.sharePct ?? 0));
+  for (const v of withSoleShares(vendors, huntPolicy))
+    if (!v.isBackup) sums.set(v.level, (sums.get(v.level) ?? 0) + (v.sharePct ?? 0));
   return [...sums]
     .filter(([, s]) => s !== 100)
     .sort(([a], [b]) => a - b)
     .map(([level, s]) => `Level ${level} shares add up to ${s}%, not 100%.`);
+}
+
+/** Whether `v` is the only (non-backup) vendor on its level: with a percentage split it takes 100 % (round 12). */
+export const soleOnLevel = (vendors: RouteVendor[], v: RouteVendor) =>
+  !v.isBackup && vendors.filter((x) => !x.isBackup && x.level === v.level).length === 1;
+
+/** A percentage split with the vendor alone on its level given 100 %, so its share need not be typed. */
+export function withSoleShares(vendors: RouteVendor[], huntPolicy: string): RouteVendor[] {
+  if (huntPolicy !== "percentage") return vendors;
+  return vendors.map((v) => (soleOnLevel(vendors, v) ? { ...v, sharePct: 100 } : v));
 }
 
 /** Each vendor's backups: all chosen, and their shares add up to 100 when there are several. */

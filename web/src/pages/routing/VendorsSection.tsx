@@ -19,7 +19,16 @@ import { problemText } from "./dialogs";
 import { Button, Menu, Popover } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
-import { backupProblems, categoryFilter, formatMargin, ROUTE_TYPES, routeTypeOf, shareProblems } from "./ruleModel";
+import {
+  backupProblems,
+  categoryFilter,
+  formatMargin,
+  ROUTE_TYPES,
+  routeTypeOf,
+  shareProblems,
+  soleOnLevel,
+  withSoleShares,
+} from "./ruleModel";
 
 type Draft = Pick<
   RouteRuleInput,
@@ -281,7 +290,11 @@ export function VendorsSection({
     if (whitelists.some((w) => !w.vendorTrunkId || (!w.numbers.length && !w.numberListId)))
       return "Each whitelist needs a vendor and numbers or a number list.";
     if (!marginOk) return "Minimum margin: a number, with % for a percentage.";
-    return { ...d, vendorTrunkIds: scopeTrunks.map((t) => t.key) };
+    return {
+      ...d,
+      vendors: withSoleShares(vendors, d.huntPolicy ?? "top_down"),
+      vendorTrunkIds: scopeTrunks.map((t) => t.key),
+    };
   };
   const save = async () => {
     const p = check();
@@ -424,16 +437,23 @@ export function VendorsSection({
                       </td>
                       {d.huntPolicy === "percentage" && (
                         <td>
-                          <input
-                            className="num w-num"
-                            type="number"
-                            min={0}
-                            max={100}
-                            aria-label="Share %"
-                            value={v.sharePct ?? ""}
-                            disabled={v.isBackup}
-                            onChange={(e) => setVendor(i, { sharePct: numOrNull(e.target.value) })}
-                          />
+                          {soleOnLevel(vendors, v) ? (
+                            // Alone on its level it takes everything: no share to type (team trial round 12).
+                            <span className="muted num" title="The only vendor on this level takes all of it">
+                              100%
+                            </span>
+                          ) : (
+                            <input
+                              className="num w-num"
+                              type="number"
+                              min={0}
+                              max={100}
+                              aria-label="Share %"
+                              value={v.sharePct ?? ""}
+                              disabled={v.isBackup}
+                              onChange={(e) => setVendor(i, { sharePct: numOrNull(e.target.value) })}
+                            />
+                          )}
                         </td>
                       )}
                       <td>
