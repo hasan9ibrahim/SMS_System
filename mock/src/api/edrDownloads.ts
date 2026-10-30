@@ -21,6 +21,7 @@ import { sendProblem } from "../problem.js";
 import { notFound } from "./masterData.js";
 import { getCurrentUser } from "./session.js";
 import { badInput } from "./switchTools.js";
+import { csvTextSql } from "../csvSafe.js";
 
 type Params = { id: number };
 const MAX_ROWS = 1_000_000;
@@ -239,7 +240,13 @@ export function downloadEdrFile(request: FastifyRequest, reply: FastifyReply) {
 // ---------------------------------------------------------------- export
 
 /** SELECT list with column labels as the header: names as text, booleans as Yes / No. */
-async function exportSelect(pool: pg.Pool, kind: string, columns: string[], expr: (field: string) => string) {
+async function exportSelect(
+  pool: pg.Pool,
+  kind: string,
+  columns: string[],
+  expr: (field: string) => string,
+  csv = false,
+) {
   const def = defOf(kind);
   const byName = new Map(fieldsOf(kind).fields.map((f) => [f.field, f]));
   const parts: string[] = [];
@@ -254,6 +261,8 @@ async function exportSelect(pool: pg.Pool, kind: string, columns: string[], expr
     } else if (f.type === "boolean") out = `if(${sql} = 1, 'Yes', 'No')`;
     else if (c.endsWith("RuleIds")) out = `arrayStringConcat(arrayMap(x -> toString(x), ${sql}), ' ')`;
     else if (f.type === "datetime") out = `toString(${sql})`;
+    // Text that starts like a formula opens as text in a spreadsheet (security audit, team trial round 12).
+    if (csv && !NUMERIC.has(f.type) && f.type !== "boolean" && f.type !== "datetime") out = csvTextSql(out);
     parts.push(`${out} AS \`${f.label.replace(/`/g, "")}\``);
   }
   return { select: parts.join(", "), fields: columns.map((c) => byName.get(c)!) };
@@ -277,7 +286,7 @@ async function runExport(
   const [where, order] = await Promise.all([chWhere(pool, def, query), chOrder(pool, def, query)]);
   // The switch's outcome rows merged in (final status, delay, receipt-billed money; backend step 11b).
   const joined = outcomeJoin(def, raw.columns as string[], where);
-  const sel = await exportSelect(pool, kind, raw.columns as string[], joined.expr);
+  const sel = await exportSelect(pool, kind, raw.columns as string[], joined.expr, !xlsx);
   mkdirSync(DIR, { recursive: true });
   const path = join(DIR, `${kind}_${raw.id}.${xlsx ? "xls" : "csv"}`);
   const sql = `SELECT ${sel.select} FROM ${joined.from} WHERE ${where} ORDER BY ${order} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}

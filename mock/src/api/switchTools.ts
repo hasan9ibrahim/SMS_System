@@ -56,6 +56,7 @@ import { getCurrentUser } from "./session.js";
 import { mccmncLookup } from "./translationRules.js";
 import { inTransaction } from "./views.js";
 import { production } from "../mode.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -223,7 +224,7 @@ export function sheetFile(t: TrunkInfo, lines: Awaited<ReturnType<typeof rateShe
   const name = `Rates_${t.name.replace(/\W+/g, "_")}_${today()}.${fileType === "csv" ? "csv" : "xls"}`;
   if (fileType === "csv") {
     const cell = (v: unknown) => {
-      const s = String(v ?? "");
+      const s = csvText(v);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const csv = [

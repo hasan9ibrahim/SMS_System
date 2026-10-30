@@ -30,6 +30,7 @@ import { archivedInfo, dependencies, isAdmin, iso, recordChange, type DiffEntry,
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { sendRateNotices } from "./rateNotices.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Rate table ${id} not found`);
@@ -134,8 +135,7 @@ export function queryRateLines(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 

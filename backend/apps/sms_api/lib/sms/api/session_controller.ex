@@ -22,16 +22,21 @@ defmodule Sms.Api.SessionController do
     end
   end
 
+  # The code and resend calls count toward the address's limit too (security audit, team trial round 12).
   def code(conn, params) do
-    case check(params, challenge: :text, code: :code) do
-      :ok -> reply(conn, SignIn.code(params["challenge"], params["code"]))
+    with :ok <- check(params, challenge: :text, code: :code),
+         :ok <- limit(conn) do
+      reply(conn, SignIn.code(params["challenge"], params["code"]))
+    else
       {:error, problem} -> Problem.send(conn, problem)
     end
   end
 
   def resend(conn, params) do
-    case check(params, challenge: :text) do
-      :ok -> reply(conn, SignIn.resend(params["challenge"]))
+    with :ok <- check(params, challenge: :text),
+         :ok <- limit(conn) do
+      reply(conn, SignIn.resend(params["challenge"]))
+    else
       {:error, problem} -> Problem.send(conn, problem)
     end
   end

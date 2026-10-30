@@ -121,4 +121,22 @@ defmodule Sms.Switch.Pipeline.HlrHttpTest do
     :gen_tcp.close(listen)
     assert {:error, _} = Http.request(provider(closed), "491")
   end
+
+  # Security audit (team trial round 12): outside the tests only public addresses are asked.
+  test "loopback, private, link-local and non-http addresses are refused" do
+    for url <- [
+          "http://127.0.0.1:8123/?query={DNID}",
+          "http://10.0.0.5/x?n={DNID}",
+          "http://192.168.1.10/x",
+          "http://169.254.169.254/latest",
+          "http://localhost/x",
+          "ftp://203.0.113.9/x",
+          "not a url"
+        ] do
+      refute Http.public_target?(url, false), url
+    end
+
+    assert Http.public_target?("https://203.0.113.9/lookup?msisdn={DNID}", false)
+    assert Http.public_target?("http://127.0.0.1:1/x", true)
+  end
 end

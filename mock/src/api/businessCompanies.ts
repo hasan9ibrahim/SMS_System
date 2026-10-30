@@ -689,10 +689,19 @@ export function checkSmtp(request: FastifyRequest, reply: FastifyReply) {
     let storedPass: string | null = null;
     if (businessCompanyId != null) {
       const { rows } = await pool.query(
-        "SELECT smtp_password_enc FROM business_company_mailboxes WHERE business_company_id = $1 AND department = $2",
+        `SELECT smtp_password_enc, smtp_host, smtp_port, coalesce(smtp_username, smtp_email) AS login
+           FROM business_company_mailboxes WHERE business_company_id = $1 AND department = $2`,
         [businessCompanyId, m.department],
       );
-      storedPass = rows[0]?.smtp_password_enc ? decryptSecret(rows[0].smtp_password_enc as string) : null;
+      const r = rows[0];
+      // The stored password is only tried against the server it is stored for (security audit, team trial round 12):
+      // with another host, port or login it would be handed to whatever server the caller names.
+      const same =
+        !!r &&
+        String(r.smtp_host ?? "").trim().toLowerCase() === m.smtpHost.trim().toLowerCase() &&
+        Number(r.smtp_port) === m.smtpPort &&
+        String(r.login ?? "").trim().toLowerCase() === String(m.smtpUsername || m.smtpEmail || "").trim().toLowerCase();
+      storedPass = same && r.smtp_password_enc ? decryptSecret(r.smtp_password_enc as string) : null;
     }
     const password = m.smtpPassword ?? storedPass;
     const host = m.smtpHost.trim();

@@ -264,9 +264,19 @@ a.btn {
 .modal-backdrop.in-tab {
   position: absolute;
   z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
 }
+/* Never taller than the tab: the body scrolls, the footer (Save) stays in view. */
 .modal-backdrop.in-tab .modal {
-  max-height: calc(100% - 24px);
+  max-height: 100%;
+  min-height: 0;
+}
+.modal-backdrop.in-tab .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .panes.split .pane:not(.hidden) + .pane:not(.hidden),
 .panes.split .pane:not(.hidden) ~ .pane:not(.hidden) {

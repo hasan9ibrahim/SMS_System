@@ -40,6 +40,7 @@ import { currentViewer } from "../visibility/context.js";
 import { restricts, type Viewer } from "../visibility/policy.js";
 import { PAGES_BY_DEPARTMENT } from "../generator/teamExtras.js";
 import { currentUserId } from "./session.js";
+import { csvText } from "../csvSafe.js";
 
 const DAY = 86_400_000;
 const ACTIVE_MS = 5 * 60_000;
@@ -518,8 +519,7 @@ export function runTeamReport(request: FastifyRequest, reply: FastifyReply) {
 // ---------------------------------------------------------------- CSV
 
 const cell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 export const TEAM_COLUMNS: [string, (r: TeamMemberRow) => unknown][] = [

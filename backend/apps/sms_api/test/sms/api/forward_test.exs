@@ -97,13 +97,38 @@ defmodule Sms.Api.ForwardTest do
     assert {"x-sms-user", Integer.to_string(Process.get(:test_user))} in headers
     assert {"x-sms-session", "70"} in headers
 
-    big = signed("/api/v1/big")
+    big = signed("/api/v1/enterprises/77/docs")
     assert big.state == :chunked
     assert big.status == 200
 
-    empty = signed("/api/v1/empty")
+    empty = signed("/api/v1/enterprises/88")
     assert empty.status == 204
     assert empty.resp_body == ""
+  end
+
+  test "the operation checked goes along; unknown, encoded and dot paths are never forwarded (security audit, round 12)" do
+    conn = signed("/api/v1/enterprises/query", :post, ~s({"limit": 5}))
+    assert conn.status == 200
+    assert_received {:mock_request, "POST", "/api/v1/enterprises/query", _, headers, _}
+    assert {"x-sms-op", "queryEnterprises"} in headers
+
+    # "%75sers" is "users" once decoded: the service behind would have run updateUser unchecked.
+    for path <- [
+          "/api/v1/%75sers/1",
+          "/api/v1/%65nterprises/query",
+          "/api/%761/users/1",
+          "/api/v1/enterprises/../users/1",
+          "/api/v1/enterprises/./query",
+          "/api/v1/no-such-operation"
+        ] do
+      conn = signed(path, :put, "{}")
+      assert conn.status == 404, path
+      refute_received {:mock_request, _, _, _, _, _}
+    end
+
+    head = signed("/api/v1/enterprises/88", :head)
+    assert head.status == 405
+    refute_received {:mock_request, _, _, _, _, _}
   end
 
   test "a mock that does not answer: 503 problem" do
@@ -113,7 +138,7 @@ defmodule Sms.Api.ForwardTest do
       timeout_ms: 1_000
     )
 
-    conn = signed("/api/v1/enterprises")
+    conn = signed("/api/v1/enterprises/88")
     assert conn.status == 503
     assert ["application/problem+json" <> _] = get_resp_header(conn, "content-type")
   end

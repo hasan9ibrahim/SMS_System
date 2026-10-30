@@ -95,5 +95,5 @@ config :sms_api, Sms.Api.Endpoint,
 # Decided 2026-10-25: staff sessions end after 8 hours without activity and 24 hours after sign-in.
 config :sms_api, Sms.Api.Sessions, idle_hours: 8, max_hours: 24
 
-# Sign-in calls per client address and minute (Sms.Api.RateLimit).
-config :sms_api, Sms.Api.RateLimit, limit: 30, window_s: 60
+# Sign-in calls per client address and minute (Sms.Api.RateLimit); the tests raise it (test.exs).
+if config_env() != :test, do: config(:sms_api, Sms.Api.RateLimit, limit: 30, window_s: 60)

@@ -48,6 +48,7 @@ import { ruleTraffic } from "./routeTraffic.js";
 import { skipEgressBlocked } from "./egress.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Route rule ${id} not found`);
@@ -577,8 +578,7 @@ export function queryRouteRules(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 

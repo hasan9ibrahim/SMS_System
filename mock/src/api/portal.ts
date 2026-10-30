@@ -43,6 +43,7 @@ import { money } from "../currency.js";
 import { logEmail } from "./emailLog.js";
 import { maskEmail } from "./admin.js";
 import { beforeDetail, counter, type EdrSource } from "../reports/source.js";
+import { csvText } from "../csvSafe.js";
 
 export const PORTAL_COOKIE = "sms_portal";
 const SESSION_HOURS = 12;
@@ -633,7 +634,7 @@ export function portalQueryRates(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  const s = v == null ? "" : String(v);
+  const s = csvText(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

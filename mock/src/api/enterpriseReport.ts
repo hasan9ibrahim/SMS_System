@@ -33,6 +33,7 @@ import { listFields } from "../lists/fields.js";
 import { checkListQuery } from "../lists/validate.js";
 import { PLATFORM_TIMEZONE } from "../platform.js";
 import { sendProblem } from "../problem.js";
+import { csvText } from "../csvSafe.js";
 
 const FIELDS = listFields.enterprise_report;
 const byName = new Map(FIELDS.fields.map((f) => [f.field, f]));
@@ -556,7 +557,7 @@ export async function queryEnterpriseReport(request: FastifyRequest, reply: Fast
 }
 
 const csv = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  const s = csvText(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

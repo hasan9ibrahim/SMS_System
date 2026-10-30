@@ -42,9 +42,10 @@ defmodule Sms.Api.Test.FakeMock do
 
   defp answer(conn, "/api/v1/broken-me"), do: json(conn, 500, %{title: "boom", status: 500})
 
-  defp answer(conn, "/api/v1/empty"), do: send_resp(conn, 204, "")
+  # Contract paths (only those are forwarded since the security audit, team trial round 12).
+  defp answer(conn, "/api/v1/enterprises/88"), do: send_resp(conn, 204, "")
 
-  defp answer(conn, "/api/v1/big") do
+  defp answer(conn, "/api/v1/enterprises/77/docs") do
     conn = conn |> put_resp_content_type("text/csv") |> send_chunked(200)
 
     Enum.reduce(1..50, conn, fn i, conn ->

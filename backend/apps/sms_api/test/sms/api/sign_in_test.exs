@@ -105,7 +105,7 @@ defmodule Sms.Api.SignInTest do
     u = user(hash, otp: "off")
 
     assert %{"code" => "sign_in_required"} =
-             build_conn() |> get("/api/v1/enterprises") |> json_response(401)
+             build_conn() |> get("/api/v1/me") |> json_response(401)
 
     conn = sign_in(String.upcase(u.username))
     assert %{"status" => "signed_in", "user" => %{"id" => id}} = json_response(conn, 200)
@@ -118,12 +118,12 @@ defmodule Sms.Api.SignInTest do
       token
       |> with_cookie()
       |> put_req_header("x-sms-user", "999")
-      |> get("/api/v1/enterprises?limit=5")
+      |> get("/api/v1/me?limit=5")
 
-    assert json_response(resp, 200) == %{"echo" => true}
+    assert %{"id" => _} = json_response(resp, 200)
     assert get_resp_header(resp, "x-from-mock") == ["1"]
-    assert_received {:mock_request, "GET", "/api/v1/me", _, _, _}
-    assert_received {:mock_request, "GET", "/api/v1/enterprises", "limit=5", headers, _}
+    assert_received {:mock_request, "GET", "/api/v1/me", "", _, _}
+    assert_received {:mock_request, "GET", "/api/v1/me", "limit=5", headers, _}
     assert {"x-sms-user", Integer.to_string(u.id)} in headers
     assert {"x-sms-proxy-secret", "test-secret"} in headers
     refute Enum.any?(headers, fn {k, _} -> k == "cookie" end)
@@ -134,7 +134,7 @@ defmodule Sms.Api.SignInTest do
     assert {device, os, browser} == {"desktop", "Windows", "Chrome"}
 
     assert token |> with_cookie() |> delete("/api/v1/session") |> response(204)
-    assert token |> with_cookie() |> get("/api/v1/enterprises") |> json_response(401)
+    assert token |> with_cookie() |> get("/api/v1/me") |> json_response(401)
   end
 
   test "e-mailed code: wrong code uses a try, resend waits a minute, the right one signs in once",
@@ -224,14 +224,14 @@ defmodule Sms.Api.SignInTest do
     single = user(hash, otp: "off")
     a = sign_in(single.username) |> cookie()
     b = sign_in(single.username) |> cookie()
-    assert b |> with_cookie() |> get("/api/v1/enterprises") |> json_response(200)
-    assert a |> with_cookie() |> get("/api/v1/enterprises") |> json_response(401)
+    assert b |> with_cookie() |> get("/api/v1/me") |> json_response(200)
+    assert a |> with_cookie() |> get("/api/v1/me") |> json_response(401)
 
     multi = user(hash, otp: "off", multiple: true)
     a = sign_in(multi.username) |> cookie()
     b = sign_in(multi.username) |> cookie()
-    assert a |> with_cookie() |> get("/api/v1/enterprises") |> json_response(200)
-    assert b |> with_cookie() |> get("/api/v1/enterprises") |> json_response(200)
+    assert a |> with_cookie() |> get("/api/v1/me") |> json_response(200)
+    assert b |> with_cookie() |> get("/api/v1/me") |> json_response(200)
   end
 
   test "idle 8 hours or signed in 24 hours ago: the session has ended", %{hash: hash} do
@@ -243,7 +243,7 @@ defmodule Sms.Api.SignInTest do
       [u.id]
     )
 
-    assert token |> with_cookie() |> get("/api/v1/enterprises") |> json_response(401)
+    assert token |> with_cookie() |> get("/api/v1/me") |> json_response(401)
 
     token = sign_in(u.username) |> cookie()
 
@@ -252,7 +252,7 @@ defmodule Sms.Api.SignInTest do
       [u.id]
     )
 
-    assert token |> with_cookie() |> get("/api/v1/enterprises") |> json_response(401)
+    assert token |> with_cookie() |> get("/api/v1/me") |> json_response(401)
 
     # Activity more than a minute ago is recorded on the next call.
     token = sign_in(u.username) |> cookie()
@@ -262,7 +262,7 @@ defmodule Sms.Api.SignInTest do
       [u.id]
     )
 
-    assert token |> with_cookie() |> get("/api/v1/enterprises") |> json_response(200)
+    assert token |> with_cookie() |> get("/api/v1/me") |> json_response(200)
 
     %{rows: [[recent]]} =
       Repo.query!(
@@ -330,7 +330,8 @@ defmodule Sms.Api.SignInTest do
 
   test "too many sign-ins from one address are refused for the rest of the minute" do
     previous = Application.get_env(:sms_api, Sms.Api.RateLimit)
-    Application.put_env(:sms_api, Sms.Api.RateLimit, limit: 2, window_s: 60)
+    # A long window: an unknown user's answer takes as long as a known one's, so three calls could straddle a minute.
+    Application.put_env(:sms_api, Sms.Api.RateLimit, limit: 2, window_s: 3_600)
     on_exit(fn -> Application.put_env(:sms_api, Sms.Api.RateLimit, previous) end)
 
     conn = fn ->

@@ -16,6 +16,8 @@ import { systemUserId } from "./system.js";
 
 const SHEET = /\.(csv|txt|tsv|xlsx|xls)$/i;
 const MAX_PER_RUN = 50;
+/** An e-mail larger than this is not read (rate sheets are far smaller; security audit, team trial round 12). */
+const MAX_MAIL_BYTES = 40 * 1024 * 1024;
 
 interface Box {
   id: number;
@@ -67,19 +69,12 @@ async function readBox(pool: pg.Pool, box: Box): Promise<number> {
       let last = box.lastUid;
       for await (const msg of client.fetch({ uid: `${box.lastUid + 1}:*` }, { uid: true, source: true }, { uid: true })) {
         if (msg.uid <= box.lastUid || !msg.source) continue;
-        const mail = await simpleParser(msg.source);
-        const sheets = sheetsOf(mail.attachments ?? []);
-        if (sheets.length) {
-          const intake: RnIntake = {
-            source: "email",
-            mailbox: box.email,
-            fromAddress: mail.from?.value?.[0]?.address ?? null,
-            subject: (mail.subject ?? "").slice(0, 500) || null,
-            body: (mail.text ?? "").slice(0, 20_000) || null,
-            attachments: sheets,
-          };
-          await intakeMail(pool, intake, await systemUserId(pool), null);
-          taken++;
+        // One e-mail that cannot be read never holds up the mailbox: it is skipped and logged, and the next run starts
+        // after it (security audit, team trial round 12: it was read again every 2 minutes).
+        try {
+          taken += await takeMessage(pool, box.email, msg.source);
+        } catch (err) {
+          console.warn(`rate mailbox ${box.email}: e-mail ${msg.uid} skipped (${(err as Error).message})`);
         }
         last = Math.max(last, msg.uid);
         await pool.query("UPDATE business_company_mailboxes SET imap_last_uid = $2 WHERE id = $1", [box.id, last]);
@@ -92,6 +87,24 @@ async function readBox(pool: pg.Pool, box: Box): Promise<number> {
     await client.logout().catch(() => undefined);
   }
   return taken;
+}
+
+/** One e-mail of a Rates mailbox: its rate sheets become an incoming RN; 1 when taken in, else 0. */
+async function takeMessage(pool: pg.Pool, mailbox: string, source: Buffer): Promise<number> {
+  if (source.length > MAX_MAIL_BYTES) throw new Error(`larger than ${MAX_MAIL_BYTES / 1024 / 1024} MB`);
+  const mail = await simpleParser(source);
+  const sheets = sheetsOf(mail.attachments ?? []);
+  if (!sheets.length) return 0;
+  const intake: RnIntake = {
+    source: "email",
+    mailbox,
+    fromAddress: mail.from?.value?.[0]?.address ?? null,
+    subject: (mail.subject ?? "").slice(0, 500) || null,
+    body: (mail.text ?? "").slice(0, 20_000) || null,
+    attachments: sheets,
+  };
+  await intakeMail(pool, intake, await systemUserId(pool), null);
+  return 1;
 }
 
 /** One round over every Rates mailbox with an IMAP host; returns the e-mails taken in. */

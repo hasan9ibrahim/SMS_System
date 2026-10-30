@@ -438,7 +438,7 @@
   "operationId": "checkSmtp",
   "tag": "admin",
   "module": "business-companies",
-  "action": null,
+  "action": "edit",
   "readChecked": true,
   "admin": true,
   "alsoOn": []

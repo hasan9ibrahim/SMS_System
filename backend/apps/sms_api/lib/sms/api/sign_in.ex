@@ -55,8 +55,26 @@ defmodule Sms.Api.SignIn do
       )
 
     case rows do
-      [] -> {:error, wrong()}
-      [row] -> check_user(row, password, client)
+      [] ->
+        # As long as a known user's check (security audit, team trial round 12): the answer's time does not tell
+        # which usernames exist.
+        _ = Password.verify?(password, dummy_hash())
+        {:error, wrong()}
+
+      [row] ->
+        check_user(row, password, client)
+    end
+  end
+
+  defp dummy_hash do
+    case :persistent_term.get({__MODULE__, :dummy_hash}, nil) do
+      nil ->
+        hash = Password.hash(Base.encode64(:crypto.strong_rand_bytes(18)))
+        :persistent_term.put({__MODULE__, :dummy_hash}, hash)
+        hash
+
+      hash ->
+        hash
     end
   end
 
@@ -160,6 +178,10 @@ defmodule Sms.Api.SignIn do
           {:signed_in, c.user_id}
         else
           _ = Repo.query!("UPDATE sign_in_challenges SET tries = tries + 1 WHERE id = $1", [c.id])
+
+          # Wrong codes count toward the user's lockout like wrong passwords (security audit, team trial round 12):
+          # signing in again with the password no longer buys fresh tries without end.
+          _ = failed_code(c.user_id)
           left = @code_tries - c.tries - 1
 
           {:error,
@@ -174,6 +196,11 @@ defmodule Sms.Api.SignIn do
            )}
         end
     end
+  end
+
+  defp failed_code(user_id) do
+    %{rows: [[failed]]} = Repo.query!("SELECT failed_logins FROM users WHERE id = $1", [user_id])
+    failed_password(user_id, failed)
   end
 
   defp code_ok?(%{method: "authenticator", totp_secret: secret}, code),
@@ -220,7 +247,7 @@ defmodule Sms.Api.SignIn do
                coalesce(c.sent_at > now() - make_interval(secs => $3), false), u.totp_secret
           FROM sign_in_challenges c JOIN users u ON u.id = c.user_id
          WHERE c.token_hash = $1 AND c.used_at IS NULL AND c.expires_at > now() AND c.tries < $2
-           AND u.status = 'active' AND u.deleted_at IS NULL
+           AND u.status = 'active' AND u.deleted_at IS NULL AND (u.locked_until IS NULL OR u.locked_until <= now())
         """,
         [Sessions.hash(token), @code_tries, @resend_gap_s]
       )
@@ -252,7 +279,8 @@ defmodule Sms.Api.SignIn do
 
     _ =
       Repo.query!(
-        "UPDATE sign_in_challenges SET code_hash = $2, sent_at = now(), tries = 0 WHERE id = $1",
+        # A new code keeps the tries used so far: resending is no way to more guesses (security audit, round 12).
+        "UPDATE sign_in_challenges SET code_hash = $2, sent_at = now() WHERE id = $1",
         [challenge_id, code_hash(challenge_id, code)]
       )
 

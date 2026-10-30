@@ -311,6 +311,14 @@
     border-radius: 0;
     border: 0;
   }
+  /* A tab's own dialog fills the tab, not the screen: its footer stays above the bottom edge (round 12). */
+  .modal-backdrop.in-tab {
+    padding: 0;
+  }
+  .modal-backdrop.in-tab .modal {
+    height: 100%;
+    max-height: 100%;
+  }
   .modal-head,
   .modal-foot {
     padding: 12px 14px;

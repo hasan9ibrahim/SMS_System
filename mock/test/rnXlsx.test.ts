@@ -78,3 +78,9 @@ test("all-networks codes both ways", () => {
   assert.equal(fromCountryCode("262", "MCC99"), "26299");
   assert.equal(fromCountryCode("26201", "MCC99"), "26201");
 });
+
+test("a workbook part that unpacks to more than 64 MB is refused, not unpacked (security audit, round 12)", () => {
+  const bomb = zip({ "xl/workbook.xml": `<workbook>${" ".repeat(70 * 1024 * 1024)}</workbook>` });
+  assert.ok(bomb.length < 1024 * 1024, "a small file");
+  assert.throws(() => readXlsx(bomb), (e: unknown) => e instanceof SheetFileError && /more than 64 MB/.test(e.message));
+});

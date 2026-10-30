@@ -48,6 +48,7 @@ import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { currentViewer } from "../visibility/context.js";
 import { resolveSql } from "../visibility/sql.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
@@ -115,8 +116,7 @@ export async function setArchived(
 // ---------------------------------------------------------------- CSV
 
 export const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",;\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 

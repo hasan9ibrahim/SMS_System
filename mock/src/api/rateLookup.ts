@@ -33,6 +33,7 @@ import { windowEnd } from "./routeTraffic.js";
 import { currentUserId, getCurrentUser } from "./session.js";
 import { inputProblem, inTransaction, writeShares } from "./views.js";
 import { production } from "../mode.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 /** Converted figures and margins are in the platform currency (decided 2026-10-16: EUR by default). */
@@ -1032,7 +1033,7 @@ export function rateLookupMatrix(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csv = (v: unknown) => {
-  const s = v === null || v === undefined ? "" : String(v);
+  const s = csvText(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 

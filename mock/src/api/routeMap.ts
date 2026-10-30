@@ -14,6 +14,7 @@ import { checkListQuery } from "../lists/validate.js";
 import { sendProblem } from "../problem.js";
 import { PLATFORM_CURRENCY } from "../currency.js";
 import { clientLines, routedVendors, type ClientLine, type Dest, type RouteOutcome } from "./rateLookup.js";
+import { csvText } from "../csvSafe.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -249,8 +250,7 @@ export function queryRouteMap(request: FastifyRequest, reply: FastifyReply) {
 }
 
 const csvCell = (v: unknown) => {
-  if (v == null) return "";
-  const s = String(v);
+  const s = csvText(v);
   return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
 };
 

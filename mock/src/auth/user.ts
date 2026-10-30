@@ -53,6 +53,14 @@ export function cookieToken(request: FastifyRequest, name = SESSION_COOKIE): str
   return null;
 }
 
+/**
+ * The operation the Elixir API checked before forwarding (X-Sms-Op), or null when the call was not forwarded with the
+ * shared secret. A forwarded call whose route is another operation is refused (security audit, team trial round 12).
+ */
+export function forwardedOperation(request: FastifyRequest): { op: string | null } | null {
+  return forwarded(request) ? { op: header(request, "x-sms-op") ?? null } : null;
+}
+
 function forwarded(request: FastifyRequest): RequestUser | null {
   const secret = process.env.MOCK_PROXY_SECRET;
   const given = header(request, "x-sms-proxy-secret");

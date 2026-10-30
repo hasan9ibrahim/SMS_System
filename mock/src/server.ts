@@ -11,7 +11,7 @@ import { clearVisibilityCache, restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
 import { db } from "./db.js";
-import { DEFAULT_USER_ID, requestUser, runAsRequestUser } from "./auth/user.js";
+import { DEFAULT_USER_ID, forwardedOperation, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
@@ -128,6 +128,17 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
             // The signed-in user: forwarded by the Elixir API, from the session cookie, or the default user
             // (src/auth/user.ts).
             const user = await requestUser(request, db);
+            // Defence in depth (security audit, team trial round 12): a call the API forwards names the operation
+            // it checked the user's access for; in production it must be this route's (the public ones excepted).
+            const fwd = forwardedOperation(request);
+            if (
+              fwd &&
+              !PUBLIC_OPS.has(op.operationId) &&
+              (fwd.op ? fwd.op !== op.operationId : production)
+            )
+              return sendProblem(reply, 403, "This call was not checked for this operation", {
+                code: "operation_mismatch",
+              });
             if (!user && !PUBLIC_OPS.has(op.operationId))
               return sendProblem(reply, 401, "Sign in to continue", { code: "sign_in_required" });
             const who = user ?? { userId: DEFAULT_USER_ID, sessionId: null };

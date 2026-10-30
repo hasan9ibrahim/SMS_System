@@ -30,11 +30,19 @@ defmodule Sms.Api.Forward do
   @impl true
   def init(opts), do: opts
 
+  # Only the methods the contract uses go on (HEAD and the rest matched no operation and were forwarded unchecked).
+  @methods ~w(GET POST PUT PATCH DELETE)
+
   @impl true
   def call(conn, _opts) do
     session = conn.assigns[:session]
 
     cond do
+      # Security audit (team trial round 12): the operation is found on the path as sent, while the service behind
+      # decodes it; "/api/v1/%75sers/1" matched no operation here but reached /users/1 there with the access checks
+      # skipped. No contract path needs an encoded character, a dot segment or a backslash.
+      unsafe_path?(conn.request_path) -> Problem.send(conn, not_found(conn))
+      conn.method not in @methods -> Problem.send(conn, Problem.new(405, "Method not allowed"))
       portal?(conn) -> forward(conn, nil)
       {conn.method, conn.request_path} in @public -> forward(conn, session)
       session == nil -> Problem.send(conn, Problem.sign_in_required())
@@ -51,16 +59,26 @@ defmodule Sms.Api.Forward do
          :ok <- PasswordGate.check(session.user_id, op.operation_id),
          :ok <- Access.check(session.user_id, op),
          :ok <- lookup_check(conn, session, op) do
-      conn = forward(conn, session)
+      conn = forward(conn, session, op.operation_id)
       forget_cached(conn, op)
       :ok = ConfigPush.after_call(conn.method, conn.request_path, conn.status || 0)
       conn
     else
-      # No such operation: the mock answers 404 as the contract does.
-      false -> forward(conn, session)
+      # No such operation: answered here, never forwarded unchecked (security audit, team trial round 12).
+      false -> Problem.send(conn, not_found(conn))
       {:error, problem} -> Problem.send(conn, problem)
     end
   end
+
+  @doc "Whether a request path holds what no contract path has: an encoded character, a dot segment, a backslash."
+  @spec unsafe_path?(String.t()) :: boolean()
+  def unsafe_path?(path) do
+    String.contains?(path, ["%", "\\", "//"]) or
+      Enum.any?(String.split(path, "/"), &(&1 in [".", ".."]))
+  end
+
+  defp not_found(conn),
+    do: Problem.new(404, "No contract operation for #{conn.method} #{conn.request_path}")
 
   # Names-only picks of another page's records (backend step 10): the user needs a page that picks from the list.
   defp lookup_check(conn, session, %{operation_id: "queryLookup"}) do
@@ -83,10 +101,15 @@ defmodule Sms.Api.Forward do
     end
   end
 
-  defp forward(conn, session) do
+  defp forward(conn, session, operation_id \\ nil) do
     {:ok, body, conn} = read_all(conn, [])
     url = config(:url, "http://127.0.0.1:4010") <> conn.request_path <> query(conn.query_string)
-    headers = request_headers(conn, session)
+
+    # The operation checked here goes along: the service refuses a forwarded call whose route is another one.
+    headers =
+      request_headers(conn, session) ++
+        if(operation_id, do: [{"x-sms-op", operation_id}], else: [])
+
     request = Finch.build(conn.method, url, headers, body)
 
     case Finch.stream(request, Sms.Api.Finch, conn, &relay/2,
@@ -119,11 +142,15 @@ defmodule Sms.Api.Forward do
   @doc "GET of a JSON answer from the mock as `session`'s user (e.g. GET /me after signing in)."
   @spec get_json(String.t(), Auth.session()) :: {:ok, term()} | {:error, term()}
   def get_json(path, session) do
+    op = Operations.find("GET", String.replace_prefix(path, "/api/v1", ""))
+
     request =
       Finch.build(
         :get,
         config(:url, "http://127.0.0.1:4010") <> path,
-        identity(session) ++ [{"accept", "application/json"}]
+        identity(session) ++
+          [{"accept", "application/json"}] ++
+          if(op, do: [{"x-sms-op", op.operation_id}], else: [])
       )
 
     case Finch.request(request, Sms.Api.Finch, receive_timeout: config(:timeout_ms, 120_000)) do

@@ -204,6 +204,8 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const create = useSaveRouteRule();
   const discard = useDiscardRouteRule();
   const started = useRef(false);
+  const idRef = useRef<number | null>(null);
+  const settled = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -215,9 +217,20 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
           ? toInput(from, { name: copyName(from.name), status: "inactive" })
           : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
       })
-      .then((r) => setId(r.record.id))
+      .then((r) => {
+        idRef.current = r.record.id;
+        setId(r.record.id);
+      })
       .catch((e) => setCreateError(problemText(e)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // The window can go without × or Save, now that it lives in its tab (team trial round 12): its tab closed, or
+  // the page reloaded. The draft goes with it, as × would.
+  useEffect(
+    () => () => {
+      if (!settled.current && idRef.current !== null) void discard.mutateAsync(idRef.current).catch(() => undefined);
+    },
+    [], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const rule = useRouteRule(id);
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -229,6 +242,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const [busy, setBusy] = useState(false);
   const close = async () => {
     setBusy(true);
+    settled.current = true;
     if (id !== null) await discard.mutateAsync(id).catch((e) => toast({ tone: "error", message: problemText(e) }));
     done(null);
   };
@@ -245,6 +259,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
     const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive" });
     setBusy(false);
     if (err) return setError(err);
+    settled.current = true;
     done(id);
   };
   return (
