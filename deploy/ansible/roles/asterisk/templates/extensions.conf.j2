@@ -1,0 +1,11 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). SMS to voice (docs/SMS_TO_VOICE.md): the only dialplan.
+; Ubuntu's sample contexts are gone; a call from outside matches no context here and is refused.
+[general]
+static = yes
+writeprotect = yes
+autofallthrough = yes
+clearglobalvars = no
+
+[globals]
+
+#include extensions_sms_voice.conf

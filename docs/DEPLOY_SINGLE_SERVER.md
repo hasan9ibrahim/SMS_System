@@ -245,6 +245,7 @@ srv-a: {ansible_host: 203.0.113.11, private_ip: 203.0.113.11, node_id: 1, ansibl
 | `web_domain` | `sms.example.net` |
 | `web_letsencrypt`, `letsencrypt_email` | `true`, and an address for Let's Encrypt's expiry notices |
 | `smtp_from` | The sender address your SMTP account may send from, e.g. `noreply@example.net` |
+| `sms_voice_enabled`, `voice_switch_cidrs` | Leave `false` and `[]` until SMS to voice is used; then `true` and your voice switch's addresses, plus `vault_asterisk_ami_secret` in the secrets (`deploy/ansible/README.md` "SMS to voice (Asterisk)") |
 
 ### 6.3 Secrets
 

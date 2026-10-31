@@ -28,6 +28,11 @@
   serial: 1
   roles: [service, web]
 
+- name: SMS to voice, Asterisk on the servers (only with sms_voice_enabled; one at a time, as a change may restart it)
+  hosts: servers
+  serial: 1
+  roles: [asterisk]
+
 - name: Monitoring (every machine; Prometheus, Alertmanager and Grafana on the witness)
   hosts: all
   roles: [monitoring]
