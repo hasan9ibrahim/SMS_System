@@ -300,11 +300,15 @@ defmodule Sms.Switch.Pipeline.Intake do
     :ok
   end
 
+  # Only a trunk with a duplicate window claimed the fingerprint.
   defp confirm_fingerprint(_msg, nil), do: :ok
 
   defp confirm_fingerprint(msg, fingerprint) do
     _ =
-      Store.confirm_fingerprint(msg.trunk.id, fingerprint, msg.id, msg.trunk[:duplicate_window_s])
+      case msg.trunk[:duplicate_window_s] || 0 do
+        0 -> :ok
+        window -> Store.confirm_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+      end
 
     :ok
   end
