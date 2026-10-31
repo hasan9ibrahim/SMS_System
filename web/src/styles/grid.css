@@ -129,7 +129,8 @@
   justify-content: space-between;
   gap: 4px;
   height: 30px;
-  min-width: 56px;
+  /* Never wider than its column, so it cannot cover the next filter (design QA round 13). */
+  min-width: min(56px, 100%);
   max-width: 100%;
   padding: 0 10px;
   border: var(--border-width) solid var(--color-border);
@@ -137,6 +138,9 @@
   background: var(--color-panel);
   font-size: 13px;
   cursor: pointer;
+}
+.gf-select svg {
+  flex: none;
 }
 .gf-select span {
   overflow: hidden;
