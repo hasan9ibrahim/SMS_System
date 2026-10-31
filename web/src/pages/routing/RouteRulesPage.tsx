@@ -242,10 +242,11 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
     create
       .mutateAsync({
         id: null,
-        // Clone (team trial round 6): the draft starts as a full copy of the rule, named "… (copy)".
+        // Clone (team trial round 6): the draft starts as a full copy of the rule, named "… (copy)". The server knows
+        // it as a draft until Save, and removes one left behind after 24 hours (§6.3, §13.10).
         input: from
-          ? toInput(from, { name: copyName(from.name), status: "inactive" })
-          : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static" },
+          ? toInput(from, { name: copyName(from.name), status: "inactive", draft: true })
+          : { name: "New rule", priority: DEFAULT_PRIORITY, status: "inactive", routeType: "static", draft: true },
       })
       .then((r) => {
         idRef.current = r.record.id;
@@ -322,7 +323,8 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
     const merged: Partial<RouteRuleInput> = Object.assign({}, ...patches);
     const run = manual ?? (r ? readyToRun({ ...r, ...merged } as RouteRuleDetail) : false);
     setBusy(true);
-    const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive" });
+    // draft: false keeps the rule (§6.3, §13.10), also when nothing in it changed.
+    const err = await submitGeneral.current({ ...merged, status: run ? "active" : "inactive", draft: false });
     setBusy(false);
     if (err) return setError(err);
     settled.current = true;

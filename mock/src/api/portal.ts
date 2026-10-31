@@ -326,7 +326,12 @@ export function portalSignInCode(request: FastifyRequest, reply: FastifyReply) {
         ? sendProblem(reply, 401, "The code does not match", { detail: `${left} tries left.`, code: "wrong_code" })
         : sendProblem(reply, 401, "Too many wrong codes. Sign in again.", { code: "challenge_expired" });
     }
-    await pool.query("UPDATE sign_in_challenges SET used_at = now() WHERE id = $1", [c.id]);
+    // The e-mailed code works once (§13.28): of two parallel requests with it only one gets the challenge.
+    const { rows: used } = await pool.query(
+      "UPDATE sign_in_challenges SET used_at = now() WHERE id = $1 AND used_at IS NULL RETURNING id",
+      [c.id],
+    );
+    if (!used[0]) return challengeExpired(reply);
     return openSession(pool, request, reply, Number(c.portal_user_id));
   });
 }

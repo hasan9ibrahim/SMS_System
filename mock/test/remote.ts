@@ -15,10 +15,15 @@ interface InjectOptions {
 
 /**
  * A session on the remote server as the seeded administrator (user 1, the mock's default user): password, then the
- * authenticator code. Calls without their own cookie use it.
+ * authenticator code, which `withCode` supplies (a code works once, §13.28: test/totp.ts withFreshTotp). Calls
+ * without their own cookie use it.
  */
 let remoteCookie: Promise<string> | null = null;
-export function remoteSession(username: string, password: string, code: () => string): Promise<string> {
+export function remoteSession(
+  username: string,
+  password: string,
+  withCode: (use: (code: string) => Promise<Response>) => Promise<Response>,
+): Promise<string> {
   remoteCookie ??= (async () => {
     const post = (path: string, body: object) =>
       fetch(`${API_URL}/api/v1${path}`, {
@@ -29,7 +34,8 @@ export function remoteSession(username: string, password: string, code: () => st
     const first = await post("/session", { username, password });
     let res = first;
     const body = (await first.clone().json()) as { status: string; challenge?: string };
-    if (body.status === "code_required") res = await post("/session/code", { challenge: body.challenge, code: code() });
+    if (body.status === "code_required")
+      res = await withCode((code) => post("/session/code", { challenge: body.challenge, code }));
     if (!res.ok) throw new Error(`remote sign-in failed: ${res.status} ${await res.text()}`);
     return res.headers.getSetCookie()[0]!.split(";")[0]!;
   })();

@@ -218,6 +218,84 @@ defmodule Sms.Api.SignInTest do
     assert id == u.id
   end
 
+  defp challenge_of(username) do
+    %{"method" => "authenticator", "challenge" => challenge} =
+      sign_in(username) |> json_response(200)
+
+    challenge
+  end
+
+  defp send_code(challenge, code),
+    do: post_json(build_conn(), "/api/v1/session/code", %{challenge: challenge, code: code})
+
+  test "an authenticator code works once; the next step's code still signs in (§13.28)", %{
+    hash: hash
+  } do
+    u = user(hash, otp: "authenticator", totp: @secret)
+    t0 = System.os_time(:second)
+    code = Totp.code_at(@secret, t0)
+
+    assert %{"status" => "signed_in"} =
+             challenge_of(u.username) |> send_code(code) |> json_response(200)
+
+    # Same code, a new sign-in with the password: refused without using one of the challenge's tries.
+    challenge = challenge_of(u.username)
+
+    assert %{
+             "code" => "code_used",
+             "title" => "This code was already used. Wait for the next one."
+           } =
+             challenge |> send_code(code) |> json_response(401)
+
+    %{rows: [[tries, last_step]]} =
+      Repo.query!(
+        """
+        SELECT c.tries, u.totp_last_step FROM sign_in_challenges c JOIN users u ON u.id = c.user_id
+         WHERE c.user_id = $1 ORDER BY c.id DESC LIMIT 1
+        """,
+        [u.id]
+      )
+
+    assert tries == 0
+    assert last_step == div(t0, 30)
+
+    # The next 30-second step's code (inside the clock-drift window) is a new code.
+    assert %{"status" => "signed_in"} =
+             challenge |> send_code(Totp.code_at(@secret, t0 + 30)) |> json_response(200)
+  end
+
+  test "the same authenticator code sent twice at once signs in only once (§13.28)", %{
+    hash: hash
+  } do
+    u = user(hash, otp: "authenticator", totp: @secret, multiple: true)
+    [a, b] = [challenge_of(u.username), challenge_of(u.username)]
+    code = Totp.code_at(@secret)
+
+    answers =
+      [a, b]
+      |> Enum.map(fn challenge -> Task.async(fn -> send_code(challenge, code) end) end)
+      |> Task.await_many(10_000)
+
+    assert answers |> Enum.map(& &1.status) |> Enum.sort() == [200, 401]
+    refused = Enum.find(answers, &(&1.status == 401))
+    assert %{"code" => "code_used"} = json_response(refused, 401)
+  end
+
+  test "the same e-mailed code sent twice at once signs in only once (§13.28)", %{hash: hash} do
+    u = user(hash)
+    %{"challenge" => challenge} = sign_in(u.username) |> json_response(200)
+    code = last_code(u.id)
+
+    answers =
+      [1, 2]
+      |> Enum.map(fn _ -> Task.async(fn -> send_code(challenge, code) end) end)
+      |> Task.await_many(10_000)
+
+    assert answers |> Enum.map(& &1.status) |> Enum.sort() == [200, 401]
+    refused = Enum.find(answers, &(&1.status == 401))
+    assert %{"code" => "challenge_expired"} = json_response(refused, 401)
+  end
+
   test "without Allow Multiple Login a new sign-in ends the other session; with it both stay", %{
     hash: hash
   } do

@@ -9,6 +9,9 @@ import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { refreshRouteTraffic } from "../src/api/routeTraffic.js";
+import { removeNeverAdded } from "../src/api/routeRules.js";
+import { inTransaction } from "../src/api/views.js";
+import { sweepRouteRuleDrafts } from "../src/jobs/routeRuleDrafts.js";
 import { deleteTestRouteRules } from "./testRules.js";
 
 const app = await buildServer({ socket: false });
@@ -401,6 +404,66 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     assert.equal(refused.statusCode, 409);
     check("discardRouteRule", refused);
     await ok("archiveRouteRule", call("POST", `/route-rules/${live.id}/archive`, {}));
+  });
+
+  test("New rule drafts never saved are removed after 24 hours, with their history (§6.3, §13.10)", async () => {
+    const f = await fixtures();
+    const made: number[] = [];
+    const add = async (body: object) => {
+      const { record } = await ok("createRouteRule", call("POST", "/route-rules", body), 201);
+      made.push(record.id);
+      return record.id as number;
+    };
+    const block = (name: string, over: object = {}) => ({
+      name: `${name} ${run}`,
+      priority: 90,
+      status: "inactive",
+      routeType: "block",
+      ...over,
+    });
+    const draftOf = async (id: number) =>
+      (await db().query("SELECT draft FROM route_rules WHERE id = $1", [id])).rows[0]?.draft as boolean | undefined;
+    try {
+      // Left behind: a draft with vendors, a whitelist and an edit made inside the window, never saved.
+      const left = await add(ruleInput(f, { name: `Left ${run}`, status: "inactive", draft: true }));
+      await ok(
+        "updateRouteRule",
+        call("PUT", `/route-rules/${left}`, ruleInput(f, { name: `Left ${run} b`, status: "inactive" })),
+      );
+      assert.equal(await draftOf(left), true, "an edit inside the window leaves it a draft");
+      // A fresh draft: still in its window.
+      const fresh = await add(block("Fresh", { draft: true }));
+      // Saved with nothing changed: Save keeps it all the same.
+      const saved = await add(block("Saved", { draft: true }));
+      const kept = await ok("updateRouteRule", call("PUT", `/route-rules/${saved}`, block("Saved", { draft: false })));
+      assert.equal(kept.change, null);
+      assert.equal(await draftOf(saved), false);
+      // Added outside New rule, and a draft turned on once (from the grid): neither is a draft that may go.
+      const plain = await add(block("Plain"));
+      const wasOn = await add(block("Was on", { draft: true }));
+      await ok("updateRouteRule", call("PUT", `/route-rules/${wasOn}`, block("Was on", { status: "active" })));
+      await ok("updateRouteRule", call("PUT", `/route-rules/${wasOn}`, block("Was on")));
+      await db().query("UPDATE route_rules SET inserted_at = now() - interval '25 hours' WHERE id = ANY($1)", [
+        [left, saved, plain, wasOn],
+      ]);
+
+      const gone = await sweepRouteRuleDrafts(db());
+      assert.ok(gone.includes(left), `swept ${gone.join(",")}`);
+      for (const id of [fresh, saved, plain, wasOn]) assert.ok(!gone.includes(id), `rule ${id} is kept`);
+      assert.equal((await call("GET", `/route-rules/${left}`)).statusCode, 404);
+      for (const id of [fresh, saved, plain, wasOn]) await ok("getRouteRule", call("GET", `/route-rules/${id}`));
+      const { rows } = await db().query(
+        `SELECT (SELECT count(*) FROM changes WHERE entity_type = 'route_rule' AND $1 = ANY(entity_ids))::int
+                  AS changes,
+                (SELECT count(*) FROM route_rule_vendors WHERE route_rule_id = $1)::int AS vendors,
+                (SELECT count(*) FROM route_rule_whitelists WHERE route_rule_id = $1)::int AS whitelists`,
+        [left],
+      );
+      assert.deepEqual(rows[0], { changes: 0, vendors: 0, whitelists: 0 }, "nothing of the draft is left");
+    } finally {
+      for (const id of made)
+        await inTransaction(db(), (c) => removeNeverAdded(c, id)).catch(() => undefined);
+    }
   });
 
   test("DLR target: the rule's own, else its destinations' lowest; block rules have none", async () => {

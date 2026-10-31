@@ -635,7 +635,7 @@ export function getRouteRule(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
-  const input = request.body as RouteRuleInput;
+  const { draft, ...input } = request.body as RouteRuleInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const rule = complete(input, null);
@@ -644,6 +644,8 @@ export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
     if (errors.length) return badInput(reply, errors);
     const { id, change } = await inTransaction(pool, async (c) => {
       const id = await insertRule(c, rule, me.id);
+      // The New rule window's rule: a draft until its Save (§6.3, §13.10; jobs/routeRuleDrafts.ts sweeps those left).
+      if (draft) await c.query("UPDATE route_rules SET draft = true WHERE id = $1", [id]);
       const change = await recordChange(c, {
         entityType: "route_rule",
         entityIds: [id],
@@ -660,7 +662,10 @@ export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
 
 export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
-  const input = request.body as RouteRuleInput;
+  const { draft, ...input } = request.body as RouteRuleInput;
+  // The New rule window's Save keeps its draft (§6.3, §13.10), also when no field changed; a kept rule stays kept.
+  const keep = (c: Db) =>
+    draft === false ? c.query("UPDATE route_rules SET draft = false WHERE id = $1 AND draft", [id]) : null;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const before = await loadRule(pool, id, { resets: false });
@@ -672,8 +677,12 @@ export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
       errors.push(adminOnly(after.priority));
     if (errors.length) return badInput(reply, errors);
     const diff = diffPaths(id, before, after, FIELD_PATHS);
-    if (diff.length === 0) return { record: before, change: null };
+    if (diff.length === 0) {
+      await keep(pool);
+      return { record: before, change: null };
+    }
     const change = await inTransaction(pool, async (c) => {
+      await keep(c);
       for (const d of diff) await applyRouteRuleField(c, id, d.field, d.after, me.id);
       await c.query("UPDATE route_rules SET updated_by_id = $2, updated_at = now() WHERE id = $1", [id, me.id]);
       const onlyStatus = diff.length === 1 && diff[0]!.field === "status";
@@ -780,6 +789,39 @@ export function archiveRouteRule(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /**
+ * Whether rule `id` (a qualified SQL expression, e.g. `r.id`: inside, a bare `id` would be the change's) was ever
+ * turned on: an enable, or the status set to active, in its change history. Such a rule is never discarded, by its
+ * author or by the draft sweep (jobs/routeRuleDrafts.ts).
+ */
+export const everTurnedOnSql = (id: string) =>
+  `EXISTS (SELECT 1 FROM changes WHERE entity_type = 'route_rule' AND entity_ids && ARRAY[${id}]::bigint[]
+             AND (change_type = 'enable' OR diff @> '[{"field": "status", "after": "active"}]'::jsonb))`;
+
+/**
+ * Attempts the rules ever carried, by rule id: the long-term totals outlive the detailed EDRs (docs/BACKEND_PLAN.md
+ * §3.7). Null when the EDR store does not answer.
+ */
+export async function ruleAttempts(ids: number[]): Promise<Map<number, number> | null> {
+  if (!ids.length) return new Map();
+  const rows = await chRows<{ id: string; n: string }>(
+    `SELECT route_rule_id AS id, sum(rows) AS n FROM edr_totals
+      WHERE route_rule_id IN (${ids.map(Number).join(",")}) AND kind = 'attempt' GROUP BY route_rule_id`,
+  );
+  return rows && new Map(rows.map((r) => [Number(r.id), Number(r.n)]));
+}
+
+/**
+ * Removes a rule as if it was never added (§6.3, §13.10): its vendors, whitelists, traffic rows and change history,
+ * then the rule. A discarded draft leaves no history (discard, the draft sweep).
+ */
+export async function removeNeverAdded(c: pg.PoolClient, id: number) {
+  for (const t of ["route_rule_vendors", "route_rule_whitelists", "route_rule_traffic"])
+    await c.query(`DELETE FROM ${t} WHERE route_rule_id = $1`, [id]);
+  await c.query("DELETE FROM changes WHERE entity_type = 'route_rule' AND entity_ids = ARRAY[$1]::bigint[]", [id]);
+  await c.query("DELETE FROM route_rules WHERE id = $1", [id]);
+}
+
+/**
  * Discards a draft from New rule (team trial round 3): the rule, its vendors, whitelists, traffic rows and change
  * history go, as if it was never added. Only its author, within 24 hours, never turned on, no traffic.
  */
@@ -788,38 +830,26 @@ export function discardRouteRule(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const { rows } = await pool.query(
-      "SELECT created_by_id, inserted_at > now() - interval '24 hours' AS recent FROM route_rules WHERE id = $1",
+      `SELECT r.created_by_id, r.status, r.inserted_at > now() - interval '24 hours' AS recent,
+              ${everTurnedOnSql("r.id")} AS on
+         FROM route_rules r WHERE r.id = $1`,
       [id],
     );
     if (!rows[0]) return notFound(reply, id);
-    const { rows: on } = await pool.query(
-      `SELECT 1 FROM changes WHERE entity_type = 'route_rule' AND entity_ids && ARRAY[$1]::bigint[]
-          AND (change_type = 'enable' OR diff @> '[{"field": "status", "after": "active"}]'::jsonb) LIMIT 1`,
-      [id],
-    );
-    const { rows: now } = await pool.query("SELECT status FROM route_rules WHERE id = $1", [id]);
-    // Ever: the long-term totals outlive the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
-    const traffic = await chRows<{ n: string }>(
-      `SELECT sum(rows) AS n FROM edr_totals WHERE route_rule_id = ${Number(id)} AND kind = 'attempt'`,
-    );
+    const traffic = await ruleAttempts([Number(id)]);
     if (
       Number(rows[0].created_by_id) !== me.id ||
       !rows[0].recent ||
-      on[0] ||
-      now[0].status === "active" ||
-      Number(traffic?.[0]?.n ?? 0) > 0
+      rows[0].on ||
+      rows[0].status === "active" ||
+      (traffic?.get(Number(id)) ?? 0) > 0
     )
       return sendProblem(
         reply,
         409,
         "Only a new rule you added today that was never turned on can be discarded; use Delete",
       );
-    await inTransaction(pool, async (c) => {
-      for (const t of ["route_rule_vendors", "route_rule_whitelists", "route_rule_traffic"])
-        await c.query(`DELETE FROM ${t} WHERE route_rule_id = $1`, [id]);
-      await c.query("DELETE FROM changes WHERE entity_type = 'route_rule' AND entity_ids = ARRAY[$1]::bigint[]", [id]);
-      await c.query("DELETE FROM route_rules WHERE id = $1", [id]);
-    });
+    await inTransaction(pool, (c) => removeNeverAdded(c, id));
     return reply.code(204).send();
   });
 }

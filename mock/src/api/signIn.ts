@@ -9,7 +9,7 @@ import type pg from "pg";
 import type { SignInChallengeRef, SignInCodeInput, SignInInput, SignInResult } from "@sms/contract";
 import { withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
-import { totpSecretOf, verifyNoUser, verifyPassword, verifyTotp } from "../admin/passwords.js";
+import { acceptTotp, TOTP_USED, totpSecretOf, verifyNoUser, verifyPassword } from "../admin/passwords.js";
 import { cookieToken, MAX_HOURS, SESSION_COOKIE, sha } from "../auth/user.js";
 import { device } from "./portal.js";
 import { maskEmail } from "./admin.js";
@@ -161,10 +161,12 @@ export function signInCode(request: FastifyRequest, reply: FastifyReply) {
     auditAs(request, Number(c.user_id));
     let ok: boolean;
     if (c.method === "authenticator") {
-      const secret = totpSecretOf(c.totp_secret);
-      ok = Boolean(secret) && verifyTotp(secret!, b.code);
-    }
-    else {
+      // An authenticator code works once (§13.28): a code already used, here or in a parallel request, is refused
+      // without using a try - it is no guess, and the next code signs in.
+      const refused = await acceptTotp(pool, Number(c.user_id), totpSecretOf(c.totp_secret), b.code);
+      if (refused === "used") return sendProblem(reply, 401, TOTP_USED, { code: "code_used" });
+      ok = refused === null;
+    } else {
       const want = Buffer.from(String(c.code_hash ?? ""), "hex");
       const got = Buffer.from(codeHash(Number(c.id), b.code), "hex");
       ok = want.length === got.length && timingSafeEqual(want, got);
@@ -176,7 +178,12 @@ export function signInCode(request: FastifyRequest, reply: FastifyReply) {
         ? sendProblem(reply, 401, "The code does not match", { detail: `${left} tries left.`, code: "wrong_code" })
         : sendProblem(reply, 401, "Too many wrong codes. Sign in again.", { code: "challenge_expired" });
     }
-    await pool.query("UPDATE sign_in_challenges SET used_at = now() WHERE id = $1", [c.id]);
+    // A challenge (and with it an e-mailed code) is used once: of two parallel requests only one gets the row.
+    const { rows: used } = await pool.query(
+      "UPDATE sign_in_challenges SET used_at = now() WHERE id = $1 AND used_at IS NULL RETURNING id",
+      [c.id],
+    );
+    if (!used[0]) return sendProblem(reply, 401, "The sign-in expired. Sign in again.", { code: "challenge_expired" });
     return openSession(pool, request, reply, Number(c.user_id));
   });
 }
