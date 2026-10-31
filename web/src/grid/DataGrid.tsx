@@ -2,6 +2,7 @@
 // the server through POST /{list}/query; rows are virtualised and the next page loads in the
 // background as the user scrolls, so every matching row is on one scrollable page (§13.25).
 import {
+  isValidElement,
   memo,
   useCallback,
   useEffect,
@@ -128,9 +129,21 @@ function fitText(f: FieldDescriptor, value: unknown, seconds: boolean): string {
   return String(value);
 }
 
-/** Values that are never cut when the columns are fitted: figures, dates, IDs and list values (design QA round 13). */
-const isAtomic = (f: FieldDescriptor) =>
-  isNumeric(f) || isTime(f) || isChoice(f) || f.field === "id" || f.field === "status";
+/** The text in a column's render (a time with "UTC", a rate to 6 places, "↑ +13.2%"); empty for a component. */
+function nodeText(n: ReactNode): string {
+  if (n === null || n === undefined || typeof n === "boolean") return "";
+  if (typeof n === "string" || typeof n === "number") return String(n);
+  if (Array.isArray(n)) return n.map(nodeText).join("");
+  if (isValidElement(n)) return nodeText((n.props as { children?: ReactNode }).children);
+  return "";
+}
+
+/**
+ * Values that are never cut when the columns are fitted: figures, dates, IDs, and list values shown as they are (a
+ * page's own render of a list value can be free text, e.g. "All but DIRECT, PROMO") (design QA round 13).
+ */
+const isAtomic = (f: FieldDescriptor, rendered: boolean) =>
+  isNumeric(f) || isTime(f) || f.field === "id" || (!rendered && (isChoice(f) || f.field === "status"));
 
 /**
  * Each column's label and widest loaded value in px, padding included: the header in its bold weight, the cells in
@@ -141,6 +154,7 @@ function measureFields(
   fields: FieldDescriptor[],
   rows: object[],
   labels: (f: FieldDescriptor) => string,
+  renders: (f: FieldDescriptor) => ((row: never) => ReactNode) | undefined,
   seconds: boolean,
 ): Map<string, { header: number; content: number }> {
   measureCanvas ??= document.createElement("canvas");
@@ -153,11 +167,15 @@ function measureFields(
   const sample = rows.slice(0, AUTO_FIT_ROWS) as Record<string, unknown>[];
   for (const f of fields) {
     ctx.font = `600 13px ${family}`;
-    const header = Math.ceil(ctx.measureText(labels(f)).width) + 26;
+    const header = Math.ceil(ctx.measureText(labels(f)).width) + 22;
     ctx.font = `400 ${size} ${family}`;
     let text = 0;
-    // Figures use tabular digits, as wide as "0" (the canvas measures proportional ones).
-    for (const r of sample) text = Math.max(text, ctx.measureText(fitText(f, r[f.field], seconds).replace(/\d/g, "0")).width);
+    const render = renders(f);
+    for (const r of sample) {
+      const shown = (render && nodeText(render(r as never))) || fitText(f, r[f.field], seconds);
+      // Figures use tabular digits, as wide as "0" (the canvas measures proportional ones).
+      text = Math.max(text, ctx.measureText(shown.replace(/\d/g, "0")).width);
+    }
     const extra = f.field === "status" ? 50 : 34;
     out.set(f.field, { header, content: sample.length ? Math.ceil(text) + extra : 0 });
   }
@@ -502,7 +520,15 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   // round 13).
   const fitRows = Math.min(rows.length, AUTO_FIT_ROWS);
   const measured = useMemo(
-    () => measureFields(scrollRef.current, visibleFields, rows, (f) => columns[f.field]?.label ?? f.label, autoFit),
+    () =>
+      measureFields(
+        scrollRef.current,
+        visibleFields,
+        rows,
+        (f) => columns[f.field]?.label ?? f.label,
+        (f) => columns[f.field]?.render as ((row: never) => ReactNode) | undefined,
+        autoFit,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fitRows, rows[0], visibleFields, columns, autoFit],
   );
@@ -579,7 +605,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
       const sorted = state.sort.some((s) => s.field === f.field) ? 14 : 0;
       // A text column's render often shows more than its value (a vendor split, "+N" trunks), so it keeps TEXT_MIN
       // unless it is set narrower and its values fit (a code).
-      const value = isAtomic(f) ? (m?.content ?? 0) : Math.min(TEXT_MIN, Math.max(c.width, m?.content ?? 0));
+      const value = isAtomic(f, !!c.render) ? (m?.content ?? 0) : Math.min(TEXT_MIN, Math.max(c.width, m?.content ?? 0));
       const min = Math.max(
         FIT_MIN,
         (m?.header ?? 0) + sorted,
@@ -598,7 +624,7 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
       let short = sum - space;
       width = [...base];
       for (const pass of [false, true]) {
-        const idx = naturalCells.flatMap((c, i) => (isAtomic(c.field) === pass ? [i] : []));
+        const idx = naturalCells.flatMap((c, i) => (isAtomic(c.field, !!c.render) === pass ? [i] : []));
         const slack = idx.reduce((n, i) => n + base[i]! - floor[i]!, 0);
         if (short <= 0 || slack <= 0) continue;
         const take = Math.min(short, slack);
