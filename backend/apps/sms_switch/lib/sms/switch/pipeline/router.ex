@@ -14,14 +14,15 @@ defmodule Sms.Switch.Pipeline.Router do
     5. the same for a vendor that cannot take the message as it would get it after its egress translation (§5.5
        capability filter, S-3.9, S-4.4): a data coding it does not allow (unless the text fits one it allows,
        `Sms.Switch.Message.Coding`), a source or destination TON / NPI it does not allow, a multipart message when it
-       does not support multipart, or longer than its Max Msg Len.
+       does not support multipart, or longer than its Max Msg Len; or a sender its egress translation left unfit to
+       send (S-4.7, `Sms.Switch.Message.Address`).
 
   A rule with Deny Multipart never matches a message of more than one part (§6.3, S-3.9).
 
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
   """
-  alias Sms.Switch.Message.{Coding, Text}
+  alias Sms.Switch.Message.{Address, Coding, Text}
   alias Sms.Switch.Pipeline.{Config, LiveTps, Revenue, Warmup}
   alias Sms.Switch.Rules.{Route, Translation}
   alias Sms.Switch.Vendor
@@ -213,8 +214,12 @@ defmodule Sms.Switch.Pipeline.Router do
   defp capable?(_trunk, _after, %{message: nil}), do: true
 
   defp capable?(trunk, after_, %{message: %{}} = input) do
-    allowed?(trunk[:allowed_src_ton], first([after_.sender_ton, input.sender_ton])) and
-      allowed?(trunk[:allowed_src_npi], first([after_.sender_npi, input.sender_npi])) and
+    src_ton = first([after_.sender_ton, input.sender_ton])
+    src_npi = first([after_.sender_npi, input.sender_npi])
+
+    # S-4.7: an egress translation that leaves the sender unfit to send passes the vendor over, as a block does.
+    Address.source_problem(after_.sender, src_ton, src_npi) == nil and
+      allowed?(trunk[:allowed_src_ton], src_ton) and allowed?(trunk[:allowed_src_npi], src_npi) and
       allowed?(trunk[:allowed_dst_ton], first([after_[:dest_ton], input[:dest_ton]])) and
       allowed?(trunk[:allowed_dst_npi], first([after_[:dest_npi], input[:dest_npi]])) and
       fits?(trunk, input.message, after_.text)

@@ -202,6 +202,23 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp outcome({:later, job}, {msg, route, no, tried, rows, _held}),
     do: park(msg, route, no, tried, rows, job)
 
+  # S-4.7: a message whose PDU cannot be built (an address unfit to send) fails 0x0A unless another vendor takes it.
+  defp outcome({:invalid, reason}, {msg, route, no, tried, rows, _held}) do
+    Logger.error(
+      "message #{msg.id}: its PDU for vendor trunk #{route.vendor_trunk_id} cannot be encoded (#{inspect(reason)})"
+    )
+
+    code = Status.code(:esme_rinvsrcadr)
+
+    next(
+      msg,
+      no,
+      tried,
+      rows,
+      {nil, %{status: "REJECTD", error: err(code), command_status: code}}
+    )
+  end
+
   defp outcome({:unavailable, reason}, {msg, route, no, tried, rows, _held}) do
     Logger.info(
       "message #{msg.id}: vendor trunk #{route.vendor_trunk_id} unavailable (#{inspect(reason)})"
@@ -456,8 +473,13 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp reroute(msg, tried), do: Router.route(Intake.router_input(msg), tried)
 
   # The next vendor in the rules' order; none left → the message has failed.
+  # `failed`: the attempt's row (nil when no vendor was reached) and how the message fails if no vendor is left.
   defp next(msg, no, tried, rows, failed) do
-    rows = if failed, do: [elem(failed, 0) | rows], else: rows
+    rows =
+      case failed do
+        {%{} = row, _failure} -> [row | rows]
+        _none -> rows
+      end
 
     case reroute(msg, tried) do
       {:ok, routed} ->
@@ -708,10 +730,14 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
-  # The first part finding no room: the vendor is busy (its buffer decides) or unavailable (the next vendor).
+  # The first part finding no room: the vendor is busy (its buffer decides) or unavailable (the next vendor); or it
+  # could not be encoded.
   defp part_failed({reason, detail}, _vt, %{done: []}, _message_id, _held)
-       when reason in [:busy, :unavailable],
+       when reason in [:busy, :unavailable, :invalid],
        do: {reason, detail}
+
+  defp part_failed({:invalid, _reason}, _vt, job, _message_id, _held),
+    do: {:rejected, Status.code(:esme_rinvsrcadr), job}
 
   # A later part finding no room waits for it in the vendor's queue (`:vendor_wait_ms`): the earlier parts are with the
   # vendor already. Still none there, or no connection: the whole message moves on (D2).
@@ -753,6 +779,10 @@ defmodule Sms.Switch.Pipeline.Sender do
 
       {:error, reason} when reason in [:timeout, :connection_lost] ->
         {:possibly_sent, reason}
+
+      # A PDU that cannot be encoded never left: no vendor problem, but nothing the next vendor would take either.
+      {:error, {:invalid_pdu, reason}} ->
+        {:invalid, reason}
 
       {:error, reason} ->
         {:unavailable, reason}

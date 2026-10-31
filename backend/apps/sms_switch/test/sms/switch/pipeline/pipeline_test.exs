@@ -1144,6 +1144,38 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
     end
 
+    test "an ingress translation leaving the sender unfit to send: refused 0x0A, nothing sent (S-4.7)" do
+      config = [
+        translation_rules: [
+          %{id: 22, sender_conversion: "append", sender_conversion_value: "Promotions"}
+        ],
+        translation_targets: [PipelineConfig.target(22, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "too long a sender"})
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "command_status" => 0x0A}] = edr("edr.attempt")
+    end
+
+    test "a vendor whose egress translation leaves the sender unfit to send is passed over (S-4.7)" do
+      config =
+        two_vendors(
+          translation_rules: [
+            %{id: 23, sender_conversion: "append", sender_conversion_value: "Promotions"}
+          ],
+          translation_targets: [PipelineConfig.target(23, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.source_addr == "FakeBank"
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+
     test "egress blocked on the only vendor, or a blocking rule: refused 0x45 (Q15)" do
       %{client: client} =
         start_all(
@@ -1196,8 +1228,22 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
         {"no sender (S-2.10)", %{short_message: "a", source_addr: ""}, [], 0x0A},
         {"alphanumeric sender over 11 (S-2.10)",
          %{short_message: "a", source_addr: "ABCDEFGHIJKL", source_addr_ton: 5}, [], 0x0A},
+        {"alphanumeric sender over 11 whatever its TON (S-2.10)",
+         %{short_message: "a", source_addr: "FakeBank Info", source_addr_ton: 0}, [], 0x0A},
         {"no customer rate for the destination (S-6.2)",
-         %{short_message: "a", destination_addr: "4917012345678"}, [], 0x0B}
+         %{short_message: "a", destination_addr: "4917012345678"}, [], 0x0B},
+        # SMPP 3.4 §5.2.5–§5.2.17: values no vendor would take.
+        {"source TON outside SMPP", %{short_message: "a", source_addr_ton: 7}, [], 0x48},
+        {"source NPI outside SMPP", %{short_message: "a", source_addr_npi: 2}, [], 0x49},
+        {"destination TON outside SMPP", %{short_message: "a", dest_addr_ton: 9}, [], 0x50},
+        {"destination NPI outside SMPP", %{short_message: "a", dest_addr_npi: 5}, [], 0x51},
+        {"priority_flag over 3", %{short_message: "a", priority_flag: 4}, [], 0x06},
+        {"registered_delivery reserved bits", %{short_message: "a", registered_delivery: 0x21},
+         [], 0x07},
+        {"registered_delivery reserved receipt value 3",
+         %{short_message: "a", registered_delivery: 3}, [], 0x07},
+        {"esm_class message type a submit cannot have (SMSC receipt)",
+         %{short_message: "a", esm_class: 0x04}, [], 0x43}
       ]
 
       cases
@@ -1214,6 +1260,22 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                edr("edr.attempt"),
                &(&1["attempt_no"] == 0 and &1["c_msg_status"] == "REJECTD")
              )
+    end
+
+    test "a data_sm numeric sender over 20 digits is refused 0x0A, not sent to fail at every vendor (S-2.10)" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {_, resp} =
+        submit_pdu(
+          client,
+          :data_sm,
+          %{source_addr: String.duplicate("4", 25), source_addr_ton: 1},
+          [message_payload: "hi"],
+          2
+        )
+
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
     end
 
     test "data_sm is accepted and goes to the vendor as submit_sm" do

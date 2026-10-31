@@ -26,10 +26,11 @@ defmodule Sms.Switch.Pipeline.Intake do
   """
   @behaviour Sms.Switch.Customer.Intake
   require Logger
+  import Bitwise, only: [band: 2]
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
-  alias Sms.Switch.Message.{Concat, Text}
+  alias Sms.Switch.Message.{Address, Concat, Text}
   alias Sms.Switch.Metrics
 
   alias Sms.Switch.Pipeline.{
@@ -372,21 +373,47 @@ defmodule Sms.Switch.Pipeline.Intake do
      }}
   end
 
-  # S-2.10: a receiver must be a number (an optional + then digits); a sender must be there, and an alphanumeric one
-  # (TON 5) at most 11 characters.
+  # S-2.10: a receiver must be a number (an optional + then digits) with a TON and NPI SMPP defines; a sender must be
+  # there, with a TON and NPI SMPP defines, a numeric one at most 20 digits and an alphanumeric one (or TON 5) at most
+  # 11 characters (`Sms.Switch.Message.Address`). Then the flags (`flags/1`).
   defp addresses(msg) do
-    source = Map.get(msg.fields, :source_addr, "")
-    dest = Map.get(msg.fields, :destination_addr, "")
+    f = msg.fields
+    dest = Map.get(f, :destination_addr, "")
 
     cond do
       not Regex.match?(~r/\A\+?[0-9]{1,20}\z/, dest) ->
         {:reject, :esme_rinvdstadr, :invalid_destination, msg}
 
-      source == "" ->
-        {:reject, :esme_rinvsrcadr, :no_source, msg}
+      not Address.ton?(f[:dest_addr_ton] || 0) ->
+        {:reject, :esme_rinvdstton, :invalid_destination_ton, msg}
 
-      Map.get(msg.fields, :source_addr_ton) == 5 and String.length(source) > 11 ->
-        {:reject, :esme_rinvsrcadr, :sender_too_long, msg}
+      not Address.npi?(f[:dest_addr_npi] || 0) ->
+        {:reject, :esme_rinvdstnpi, :invalid_destination_npi, msg}
+
+      status = Address.source_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi]) ->
+        {:reject, status, :invalid_source, msg}
+
+      true ->
+        flags(msg)
+    end
+  end
+
+  # SMPP 3.4 §5.2.12–§5.2.17: priority_flag 0–3; registered_delivery without its reserved bits (7–5) or the reserved
+  # receipt value 3; esm_class with a message type a submit can have (default, delivery or manual / user
+  # acknowledgement; the mode bits and UDHI / reply path are free).
+  defp flags(msg) do
+    f = msg.fields
+
+    cond do
+      (f[:priority_flag] || 0) > 3 ->
+        {:reject, :esme_rinvprtflg, :invalid_priority_flag, msg}
+
+      band(f[:registered_delivery] || 0, 0xE0) != 0 or
+          band(f[:registered_delivery] || 0, 0x03) == 3 ->
+        {:reject, :esme_rinvregdlvflg, :invalid_registered_delivery, msg}
+
+      band(Map.get(f, :esm_class, 0), 0x3C) not in [0x00, 0x08, 0x10] ->
+        {:reject, :esme_rinvesmclass, :invalid_esm_class, msg}
 
       true ->
         {:ok, msg}
@@ -433,9 +460,18 @@ defmodule Sms.Switch.Pipeline.Intake do
 
     msg = %{msg | ingress: ingress}
 
-    if result.blocked,
-      do: {:reject, :esme_rsubmitfail, :blocked_by_translation, msg},
-      else: {:ok, msg}
+    cond do
+      result.blocked ->
+        {:reject, :esme_rsubmitfail, :blocked_by_translation, msg}
+
+      # S-4.7: a translation that leaves the sender unfit to send (too long, a TON or NPI SMPP does not define) fails
+      # the message here, never at the vendor. (No trunk setting asks for TON / NPI to be fixed automatically yet.)
+      status = Address.source_problem(ingress.sender, ingress.sender_ton, ingress.sender_npi) ->
+        {:reject, status, :invalid_sender_after_translation, msg}
+
+      true ->
+        {:ok, msg}
+    end
   end
 
   defp digits(receiver, original) do
