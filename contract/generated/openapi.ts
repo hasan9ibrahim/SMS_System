@@ -10675,7 +10675,7 @@ export type components = {
   schemas: {
     /**
      * Format: int64
-     * @description Numeric record ID, shown to users (e.g. "Name – Alias (ID)").
+     * @description Numeric record ID, shown to users (e.g. "Name – Alias (ID)"). At most 2^53 - 1.
      */
     Id: number;
     /**

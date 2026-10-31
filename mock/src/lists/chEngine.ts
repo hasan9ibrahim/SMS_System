@@ -446,7 +446,8 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
     rows: rows.map((r) => def.mapRow(r, names)),
     total: count ? Number(count[0]?.n ?? 0) : offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
-    nextCursor: more && last ? encodeCursor(offset + limit, { keys: terms.map((_, i) => last[`k${i}`] ?? null) }) : null,
+    nextCursor:
+      more && last ? encodeCursor(offset + limit, { keys: terms.map((_, i) => last[`k${i}`] ?? null) }) : null,
   };
 }
 

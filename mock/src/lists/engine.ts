@@ -15,6 +15,7 @@ import type {
 import type { Viewer } from "../visibility/policy.js";
 import { currentViewer } from "../visibility/context.js";
 import { modeSql, resolveSql, valueSql, type VisRule } from "../visibility/sql.js";
+import { endsInEscape } from "./validate.js";
 
 export interface ColumnSql {
   /** SQL expression, using the aliases of the list's FROM clause. */
@@ -79,6 +80,8 @@ const TIME = new Set(["date", "datetime"]);
  * neutral ID ("#123", the masked names of §13.17) is always found anywhere.
  */
 export function searchPattern(text: string, prefix = false): string {
+  // A backslash at the very end is itself: PostgreSQL and ClickHouse refuse a pattern ending in the escape.
+  if (endsInEscape(text)) text = `${text}\\`;
   return /[%_]/.test(text) ? text : prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
 }
 
@@ -102,7 +105,11 @@ export function readCursor(cursor: string | null | undefined): Cursor {
   const none: Cursor = { offset: 0, keys: null, bound: null };
   if (!cursor) return none;
   try {
-    const c = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { o?: unknown; k?: unknown; b?: unknown };
+    const c = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      o?: unknown;
+      k?: unknown;
+      b?: unknown;
+    };
     const o = c.o;
     const keys =
       Array.isArray(c.k) && c.k.every((x) => x === null || typeof x === "string") ? (c.k as (string | null)[]) : null;

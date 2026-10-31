@@ -10,7 +10,7 @@ import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } f
 import { clearVisibilityCache, restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
-import { db } from "./db.js";
+import { db, inputProblem, isInputError } from "./db.js";
 import { DEFAULT_USER_ID, forwardedOperation, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
 import { clearRoutingCostCache } from "./api/rateLookup.js";
@@ -36,6 +36,30 @@ const PUBLIC_OPS = new Set([
  */
 const ROUTING_WRITES =
   /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr)/;
+
+/**
+ * Values no handler can store (QA 2026-10-31): text with a NUL character (PostgreSQL refuses it) and whole numbers
+ * past 2^53 (JSON numbers lose their digits; an ID that large names nothing). The first one found, as a field error.
+ */
+export function unsafeInput(value: unknown, path: string): { path: string; message: string } | null {
+  const stack: [unknown, string][] = [[value, path]];
+  while (stack.length) {
+    const [v, at] = stack.pop()!;
+    if (typeof v === "string") {
+      if (v.includes("\u0000")) return { path: at || "/", message: "must not contain a NUL character" };
+    } else if (typeof v === "number") {
+      if (Number.isInteger(v) && !Number.isSafeInteger(v)) return { path: at || "/", message: "number too large" };
+    } else if (Array.isArray(v)) {
+      v.forEach((x, i) => stack.push([x, `${at}/${i}`]));
+    } else if (v && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) {
+        if (k.includes("\u0000")) return { path: at || "/", message: "must not contain a NUL character" };
+        stack.push([x, `${at}/${k}`]);
+      }
+    }
+  }
+  return null;
+}
 
 const clearRouteCaches = () => {
   clearRoutingCostCache();
@@ -70,6 +94,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   // the browser has no status text either, so the screens showed an empty message. Set before the routes, which
   // take the handler in force when they are registered.
   app.setErrorHandler((err: FastifyError, request, reply) => {
+    if (isInputError(err)) return inputProblem(reply, err);
     const status = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
     if (status >= 500) {
       request.log.error({ err }, "request failed");
@@ -125,7 +150,11 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
               }
               query[name] = value;
             }
-            if (op.validateBody && !op.validateBody(request.body ?? {})) {
+            // A missing or null body is an empty one, for the handler too (QA 2026-10-31: it got null and failed).
+            if (op.validateBody && request.body == null) request.body = {};
+            const unsafe = unsafeInput(request.body, "") ?? unsafeInput(query, "");
+            if (unsafe) return sendProblem(reply, 400, "Check the highlighted fields", { errors: [unsafe] });
+            if (op.validateBody && !op.validateBody(request.body)) {
               return sendProblem(reply, 400, "Request body does not match the contract", {
                 errors: ajvErrors(op.validateBody.errors),
               });

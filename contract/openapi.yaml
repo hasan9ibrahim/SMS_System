@@ -13,6 +13,9 @@ info:
     * All times are UTC, ISO 8601 (spec §1 "Global conventions").
     * Every record carries `updatedBy` / `updatedAt`; most carry `createdBy` / `createdAt`.
     * Errors use `application/problem+json` (RFC 9457), see `Problem`.
+    * Any request whose text holds a NUL character (U+0000), or whose whole numbers go past 2^53 - 1 (the largest a
+      JSON number holds exactly), is refused with 400. List filter dates are ISO 8601 dates that exist; a `like`
+      pattern cannot end with a single `\`.
     * **Lists are server-side** (CLAUDE.md rule 3, spec §13.25, §14.2). Every list is read
       with `POST /{list}/query` and a `ListQuery` body: the filter tree, sort, quick search,
       a page size and an opaque cursor. The server filters, sorts and pages; the browser
@@ -15883,7 +15886,9 @@ components:
       type: integer
       format: int64
       minimum: 1
-      description: Numeric record ID, shown to users (e.g. "Name – Alias (ID)").
+      # The largest integer a JSON number carries exactly (QA 2026-10-31: larger IDs answered 500).
+      maximum: 9007199254740991
+      description: Numeric record ID, shown to users (e.g. "Name – Alias (ID)"). At most 2^53 - 1.
 
     Timestamp:
       type: string
@@ -27711,6 +27716,7 @@ components:
           items:
             type: integer
             format: int64
+            maximum: 9007199254740991
             minimum: 1
     PasswordLinksResult:
       type: object
@@ -27735,6 +27741,7 @@ components:
               userId:
                 type: integer
                 format: int64
+                maximum: 9007199254740991
               username:
                 type: string
               reason:
@@ -32716,6 +32723,7 @@ components:
           items:
             type: integer
             format: int64
+            maximum: 9007199254740991
         id: *id004
         sourceSystem:
           type: string
