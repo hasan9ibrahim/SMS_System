@@ -139,7 +139,11 @@
   background: var(--accent-soft);
 }
 .gcard.archived {
-  opacity: 0.6;
+  color: var(--color-text-secondary);
+}
+.gcard.archived .gcard-title {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }
 .gcard-title {
   /* Keeps its own height: a badge in the title (Incidents, Alert rules) was squeezed to 8 px and clipped. */

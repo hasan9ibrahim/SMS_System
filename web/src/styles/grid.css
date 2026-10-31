@@ -241,9 +241,10 @@
   margin: 6px 0 0;
 }
 
-/* Archived rows, listed with "Show deleted" (§13.29) */
+/* Archived rows, listed with "Show deleted" (§13.29): secondary text and struck through; opacity took the text to
+   2.4:1 (design QA round 13). */
 .gr.archived .gc:not(.gc-check) {
-  opacity: 0.5;
+  color: var(--color-text-secondary);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }

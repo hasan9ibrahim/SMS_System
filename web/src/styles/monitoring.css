@@ -1,7 +1,9 @@
 /* Live analytics (§13.4), alert rules and incidents (§13.6). Tokens only (§15.2). */
 
-.row-muted {
-  opacity: 0.62;
+/* Dimmed with the secondary text colour, not opacity, so the text stays readable (design QA round 13). */
+.row-muted,
+.row-muted .gc {
+  color: var(--color-text-secondary);
 }
 .row-alert {
   box-shadow: inset 3px 0 0 var(--color-error);

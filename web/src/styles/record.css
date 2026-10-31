@@ -314,7 +314,7 @@
   font-variant-numeric: tabular-nums;
 }
 .rtable tr.off td {
-  opacity: 0.55;
+  color: var(--color-text-secondary);
 }
 .rtable tr:last-child td {
   border-bottom: 0;
