@@ -136,6 +136,8 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "allowedDstTon", col: "allowed_dst_ton" },
   { api: "allowedSrcNpi", col: "allowed_src_npi" },
   { api: "allowedDstNpi", col: "allowed_dst_npi" },
+  // A sender a handset cannot show goes elsewhere, unless switched off (S-2.10, S-4.7, migration 101).
+  { api: "refuseInvalidSenders", col: "refuse_invalid_senders" },
   { api: "maxMsgLen", col: "max_msg_len" },
   { api: "supportMultipart", col: "support_multipart" },
   { api: "multipartFormat", col: "multipart_format" },

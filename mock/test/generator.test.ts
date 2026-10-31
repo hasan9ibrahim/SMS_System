@@ -199,6 +199,9 @@ describe("rate history (spec §6.2, §13.32)", () => {
       const auto = modes.filter((m) => m === "auto").length;
       assert.ok(auto > 0 && auto < modes.length / 2, `${table}: ${auto} of ${modes.length} on auto`);
     }
+    // Most refuse senders a handset cannot show (the default); a few take them.
+    const takeAll = vendors.filter((v) => v.refuse_invalid_senders === "f").length;
+    assert.ok(takeAll > 0 && takeAll < vendors.length / 10, `${takeAll} of ${vendors.length} take any sender`);
   });
 });
 

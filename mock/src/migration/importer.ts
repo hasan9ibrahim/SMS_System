@@ -391,6 +391,7 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
       "product_category_id",
       "billing_type",
       "ton_npi_mode",
+      "refuse_invalid_senders",
     ],
   },
   rate_tables: { table: "rate_tables", columns: ["product_category_id"] },
@@ -680,6 +681,12 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
         p.issue(entity, line, "host", "No host in the file: the trunk cannot bind until one is set", "warning");
       v.username = r.username?.trim() || (m.action === "create" ? "not-set" : undefined);
       v.password = r.password?.trim() || (m.action === "create" ? "not-set" : undefined);
+      // On unless the file says no (S-2.10, S-4.7); left out on an update keeps the trunk's.
+      v.refuse_invalid_senders = r.refuseInvalidSenders?.trim()
+        ? r.refuseInvalidSenders.trim().toLowerCase() !== "no"
+        : m.action === "create"
+          ? true
+          : undefined;
     }
     if (m.action !== "create") {
       if (!r.port?.trim()) delete v.port;

@@ -123,7 +123,12 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   // Customer trunks carry no port (it follows the SSL type, migration 070); vendor trunks keep theirs.
   out.push({
     entity: "vendor_trunks",
-    rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "", port: t.port ?? "" })),
+    rows: vendorTrunks.map((t) => ({
+      ...trunk(t),
+      host: t.host ?? "",
+      port: t.port ?? "",
+      refuseInvalidSenders: t.refuse_invalid_senders === "f" ? "no" : t.refuse_invalid_senders === "t" ? "yes" : "",
+    })),
   });
   const sellers = new Map<string, string[]>();
   for (const l of ctrt) sellers.set(l.rate_table_id!, [...(sellers.get(l.rate_table_id!) ?? []), l.customer_trunk_id!]);

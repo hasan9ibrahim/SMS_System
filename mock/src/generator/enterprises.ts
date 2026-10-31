@@ -357,6 +357,8 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         allowed_dst_npi: v.id % 10 === 3 ? [1] : null,
         // A quarter of the vendors fix TON / NPI after their egress translation (S-4.7); by id, as above.
         ton_npi_mode: v.id % 4 === 1 ? "auto" : "as_sent",
+        // Most refuse senders a handset cannot show (the default); one in twenty takes them as they are.
+        refuse_invalid_senders: v.id % 20 !== 9,
         // Any length: the usual setting; the limit is on the whole message (backend step 7). The draw is kept so the
         // rest of the generated data stays the same.
         max_msg_len: (rng.next(), null),

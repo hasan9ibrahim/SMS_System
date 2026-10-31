@@ -180,6 +180,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     category: "DIRECT",
     billingType: "delivery",
     tonNpiMode: "auto",
+    refuseInvalidSenders: "yes",
   },
   rate_tables: {
     externalId: "RT-5001",

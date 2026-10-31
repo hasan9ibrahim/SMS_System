@@ -145,6 +145,12 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("category", "Product category", "Name of an existing category.", { required: true }),
       f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
       f("tonNpiMode", "TON / NPI", TON_NPI_HELP, { allowed: ["as_sent", "auto"] }),
+      f(
+        "refuseInvalidSenders",
+        "Refuse invalid senders",
+        "yes (default): a sender a handset cannot show is not sent to this vendor; no: it takes such senders.",
+        { allowed: ["yes", "no"] },
+      ),
     ],
   },
   {

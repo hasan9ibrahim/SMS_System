@@ -585,6 +585,17 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       tonNpiMode: "fix",
     });
     assert.equal(unknownMode.statusCode, 400, "only as_sent or auto");
+    // Refuse invalid senders: on unless switched off (S-2.10, S-4.7).
+    assert.equal(saved.record.refuseInvalidSenders, true);
+    const takesAll = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, refuseInvalidSenders: false }),
+    );
+    assert.equal(takesAll.record.refuseInvalidSenders, false);
+    assert.deepEqual(
+      takesAll.change.diff.map((d: { field: string }) => d.field),
+      ["refuseInvalidSenders"],
+    );
     const anyAgain = await ok(
       "updateVendorTrunk",
       call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, allowedDataCodings: null }),
