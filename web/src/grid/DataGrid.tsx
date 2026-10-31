@@ -34,8 +34,8 @@ const FIT_MIN = 56;
 const TEXT_MIN = 120;
 /** A column with a list filter keeps room for its "All ⌄" button. */
 const LIST_FILTER_MIN = 68;
-/** Phones (team trial round 5): below this grid width each row is a card instead of a table row. */
-const CARD_BELOW = 640;
+/** Phones (team trial round 5): up to the phone layout's width (mobile.css, 760 px) each row is a card. */
+const CARD_MAX = 760;
 const CARD_HEIGHT = 128;
 const CARD_FIELDS = 4;
 
@@ -610,8 +610,9 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
   }, [naturalCells, boxWidth, trailing?.width, autoFit, measured, state.sort, columns, sizing]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
   // Cards on a phone-sized window only (team trial round 6): a narrow pane on a desktop (Rate manager beside an open
-  // table) keeps the table and scrolls sideways.
-  const mobile = boxWidth > 0 && window.innerWidth < CARD_BELOW;
+  // table) keeps the table and scrolls sideways. The same width as the phone layout, so a large phone in landscape
+  // gets cards with the phone shell (design QA round 13).
+  const mobile = boxWidth > 0 && window.innerWidth <= CARD_MAX;
 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),

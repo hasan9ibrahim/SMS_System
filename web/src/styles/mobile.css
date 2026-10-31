@@ -99,7 +99,7 @@
   background: var(--accent-soft);
 }
 
-/* Grid cards (DataGrid below 640 px wide). */
+/* Grid cards (DataGrid in a window up to 760 px wide). */
 .grid.mobile .gh,
 .grid.mobile .gf,
 .grid.mobile .grid-selall {
