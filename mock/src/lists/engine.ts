@@ -33,6 +33,8 @@ export interface ColumnSql {
    * row that shows −4.9; sorting keeps the exact value.
    */
   round?: number;
+  /** SQL the column sorts by when it is not `sql` (e.g. a list of names that sorts by how many there are). */
+  sort?: string;
 }
 
 export interface ListDef<Row> {
@@ -260,7 +262,14 @@ export function viewDef(def: ListDef<unknown>, viewer: Viewer | null): { def: Li
         else extra.push(`${resolveSql(modeSql(col.vis, viewer)!, viewer)} AS "__v_${field}"`);
       }
     }
-    columns[field] = { ...col, sql };
+    // Custom predicates and sorts see what this viewer sees too (§13.17).
+    const where = col.where;
+    columns[field] = {
+      ...col,
+      sql,
+      ...(where ? { where: (op, c, p) => resolveSql(where(op, c, p), viewer) } : {}),
+      ...(col.sort ? { sort: resolveSql(col.sort, viewer) } : {}),
+    };
   }
   const from = def.from;
   return {
@@ -297,8 +306,10 @@ export function compileQuery(
   const sort = query.sort?.length ? query.sort : def.fields.defaultSort;
   // Text sorts case-insensitively (QA 2026-10-31): "acme" sits next to "ACME", not after every capital. Only text
   // fields: codes, prefixes and enums keep their plain order, and with it their indexes.
-  const sortSql = (field: string) =>
-    byName.get(field)?.type === "text" ? `lower((${def.columns[field]!.sql})::text)` : def.columns[field]!.sql;
+  const sortSql = (field: string) => {
+    const col = def.columns[field]!;
+    return col.sort ?? (byName.get(field)?.type === "text" ? `lower((${col.sql})::text)` : col.sql);
+  };
   const orderSql = [
     ...sort.map((s) => `${sortSql(s.field)} ${s.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
     `${def.idSql} ${sort[0]?.dir === "desc" ? "DESC" : "ASC"}`,

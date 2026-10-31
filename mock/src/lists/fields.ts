@@ -323,8 +323,9 @@ export const listFields: Record<ListId, ListFields> = {
         hidden: true,
       }),
       field({ field: "country", label: "Country", type: "text", defaultOperator: "eq", hidden: true }),
-      field({ field: "customerTrunkCount", label: "Customer trunks", type: "integer", defaultOperator: "gte" }),
-      field({ field: "vendorTrunkCount", label: "Vendor trunks", type: "integer", defaultOperator: "gte" }),
+      // The columns show the trunks' names: filters take a name (starts with), sorting goes by the count (QA 2026-10-31).
+      field({ field: "customerTrunkCount", label: "Customer trunks", type: "text", defaultOperator: "like" }),
+      field({ field: "vendorTrunkCount", label: "Vendor trunks", type: "text", defaultOperator: "like" }),
       field({ field: "updatedBy", label: "Updated By", type: "text", defaultOperator: "like", hidden: true }),
       field({ field: "updatedAt", label: "Updated Time", type: "datetime", defaultOperator: "between", hidden: true }),
       ARCHIVED,

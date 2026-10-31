@@ -79,7 +79,7 @@ import type {
 import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import { PRESETS } from "../reports/presets.js";
-import type { ListDef } from "./engine.js";
+import type { ColumnSql, ListDef } from "./engine.js";
 import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
 import { RECORDING_DAYS } from "../recording.js";
@@ -108,6 +108,41 @@ const entTrunkNames = (table: string, name: string, alias: string) =>
   `ARRAY(SELECT ${name} FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL
     ORDER BY ${alias}.name LIMIT 100)`;
 
+/**
+ * Filters on an enterprise's trunks column match its live trunks by name, as the viewer sees them (QA 2026-10-31,
+ * §5): the column shows names, so "ALDEX" finds the enterprises with a trunk whose name starts with ALDEX.
+ */
+function entTrunkWhere(table: string, alias: string, label: string): NonNullable<ColumnSql["where"]> {
+  const name = vis(trunkMask(alias, label));
+  const live = `FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL`;
+  const some = (cond: string) => `EXISTS (SELECT 1 ${live} AND ${cond})`;
+  return (op, c, p) => {
+    const lower = (vs: unknown[]) => `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
+    switch (op) {
+      case "like":
+        return some(`(${name}) ILIKE ${p(String(c.value))}`);
+      case "not_like":
+        return `NOT ${some(`(${name}) ILIKE ${p(String(c.value))}`)}`;
+      case "eq":
+        return some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`);
+      case "neq":
+        return `NOT ${some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`)}`;
+      case "in":
+        return some(`lower(${name}) = ANY(${lower(c.values ?? [])})`);
+      case "not_in":
+        return `NOT ${some(`lower(${name}) = ANY(${lower(c.values ?? [])})`)}`;
+      case "empty":
+        return `NOT EXISTS (SELECT 1 ${live})`;
+      case "not_empty":
+        return `EXISTS (SELECT 1 ${live})`;
+      case "regex":
+        return some(`(${name}) ~* ${p(String(c.value))}`);
+      default:
+        return "TRUE";
+    }
+  };
+}
+
 export const enterpriseList: ListDef<Enterprise> = {
   fields: listFields.enterprises,
   from: `enterprises e
@@ -130,8 +165,17 @@ export const enterpriseList: ListDef<Enterprise> = {
     accountManager: { sql: fullName("am") },
     accountManagerId: { sql: "e.account_manager_id" },
     country: { sql: "co.iso" },
-    customerTrunkCount: { sql: entTrunkCount("customer_trunks") },
-    vendorTrunkCount: { sql: entTrunkCount("vendor_trunks") },
+    // Filtered by trunk name, sorted by how many (QA 2026-10-31).
+    customerTrunkCount: {
+      sql: entTrunkCount("customer_trunks"),
+      sort: entTrunkCount("customer_trunks"),
+      where: entTrunkWhere("customer_trunks", "t", "Customer trunk"),
+    },
+    vendorTrunkCount: {
+      sql: entTrunkCount("vendor_trunks"),
+      sort: entTrunkCount("vendor_trunks"),
+      where: entTrunkWhere("vendor_trunks", "vt", "Vendor trunk"),
+    },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "e.updated_at" },
     archived: { sql: "(e.deleted_at IS NOT NULL)" },
