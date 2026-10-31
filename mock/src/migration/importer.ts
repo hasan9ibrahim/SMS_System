@@ -544,8 +544,7 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
   translation_rules: {
     operation: "createTranslationRule",
     // The rule form's body (translationInput); a list the file names stands in as id 1, as a record of this import.
-    body: (_v, x) =>
-      normalise(translationInput(x, (l) => (l ? 1 : null))) as unknown as Record<string, unknown>,
+    body: (_v, x) => normalise(translationInput(x, (l) => (l ? 1 : null))) as unknown as Record<string, unknown>,
     fields: {
       "/name": "name",
       "/direction": "direction",
@@ -661,9 +660,7 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
         address: { line1: v.address_line1, countryId: idOf(v.country_id) },
         vatNumber: v.vat_number ?? null,
         website: v.website ?? null,
-        contacts: Object.fromEntries(
-          CONTACT_FIELDS.map(([, type]) => [type, { emails: contacts?.[type] ?? [] }]),
-        ),
+        contacts: Object.fromEntries(CONTACT_FIELDS.map(([, type]) => [type, { emails: contacts?.[type] ?? [] }])),
       };
     },
     fields: {

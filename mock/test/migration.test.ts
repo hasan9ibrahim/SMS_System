@@ -1286,3 +1286,336 @@ describe("rows lacking what the app needs to add a record are refused (§13.22)"
     },
   );
 });
+
+// §13.22 (product owner 2026-10-31): values in the app's formats. The contract's request schemas check them as they
+// check the forms; safe normalisations go ahead with a warning, anything else refuses the row.
+describe("import values are checked against the app's formats (§13.22)", { skip }, () => {
+  /** A value as a message shows it (quoted, long ones cut). */
+  const q = (s: string) => `"${s.length > 60 ? `${s.slice(0, 57)}…` : s}"`;
+  const fixtures = async () =>
+    (
+      await db().query(
+        `SELECT (SELECT username FROM users WHERE is_account_manager AND status = 'active' AND deleted_at IS NULL
+                  ORDER BY id LIMIT 1) AS am,
+                (SELECT name FROM enterprises WHERE type IN ('customer', 'reciprocal') AND deleted_at IS NULL
+                  ORDER BY id LIMIT 1) AS customer,
+                (SELECT name FROM enterprises WHERE type IN ('vendor', 'reciprocal') AND deleted_at IS NULL
+                  ORDER BY id LIMIT 1) AS vendor,
+                (SELECT name FROM vendor_trunks WHERE deleted_at IS NULL ORDER BY id LIMIT 1) AS vtrunk,
+                (SELECT name FROM hlr_providers WHERE deleted_at IS NULL ORDER BY id LIMIT 1) AS provider`,
+      )
+    ).rows[0] as Record<string, string>;
+  const ENTERPRISE_COLUMNS = [
+    "externalId",
+    "name",
+    "type",
+    "businessCompany",
+    "accountManager",
+    "country",
+    "address",
+    "emails",
+    "technicalEmails",
+    "ratesEmails",
+    "financeEmails",
+    "website",
+  ];
+
+  test("a value in the wrong format is refused for every entity type, with its row and column; nothing is written", async () => {
+    const { am, customer, vendor, vtrunk, provider } = await fixtures();
+    const long = (n: number, c: string) => c.repeat(n);
+    const ent = (ext: string, finance: string, website: string) => [
+      ext,
+      `Fmt Ent ${ext} ${run}`,
+      "customer",
+      seededCompany,
+      am!,
+      "AE",
+      "4 Example Lane",
+      `sales.${ext}.${run}@example.com`,
+      `noc.${ext}.${run}@example.com`,
+      `rates.${ext}.${run}@example.com`,
+      finance,
+      website,
+    ];
+    const table = `Fmt table ${run}`;
+    const cases: [MigrationImportEntity, string[][], { row: number; field: string; message: string }[]][] = [
+      [
+        "departments",
+        [["name"], [long(81, "D")]],
+        [{ row: 2, field: "name", message: `Name ${q(long(81, "D"))} is longer than 80 characters` }],
+      ],
+      [
+        "product_categories",
+        [["name"], [long(41, "P")]],
+        [{ row: 2, field: "name", message: `Name ${q(long(41, "P"))} is longer than 40 characters` }],
+      ],
+      [
+        "number_lists",
+        [["name", "type", "value"], [long(101, "L"), "tag", "FMTTAG"]],
+        [{ row: 2, field: "name", message: `List name ${q(long(101, "L"))} is longer than 100 characters` }],
+      ],
+      [
+        "users",
+        [
+          ["externalId", "username", "firstName", "lastName", "email", ...NEED_FIELDS],
+          ["FU1", `fmt.${run}`, "Fmt", "User", "bob@", ...userNeeds()],
+        ],
+        [{ row: 2, field: "email", message: 'E-mail "bob@" is not an e-mail address' }],
+      ],
+      [
+        "enterprises",
+        [
+          ENTERPRISE_COLUMNS,
+          ent("FE1", "bob@", ""),
+          ent("FE2", `billing.FE2.${run}@example.com`, "ftp://partner.example"),
+          ent("FE3", `billing.FE3.${run}@example.com`, ""),
+        ],
+        [
+          { row: 2, field: "financeEmails", message: 'Finance / billing e-mails "bob@" is not an e-mail address' },
+          {
+            row: 3,
+            field: "website",
+            message: 'Website "ftp://partner.example" is not a web address, e.g. https://partner.example',
+          },
+        ],
+      ],
+      [
+        "customer_trunks",
+        [["enterprise", "name", "tps"], [customer!, `FMT_C_${run}`, "100001"]],
+        [{ row: 2, field: "tps", message: 'TPS "100001" must be 100000 or less' }],
+      ],
+      [
+        "vendor_trunks",
+        [["enterprise", "name", "tps", "category"], [vendor!, `FMT_V_${run}`, "100001", "OTP"]],
+        [{ row: 2, field: "tps", message: 'TPS "100001" must be 100000 or less' }],
+      ],
+      [
+        "rate_tables",
+        [
+          ["name", "kind", "currency", "category"],
+          [long(101, "R"), "customer", "USD", "OTP"],
+          [table, "customer", "USD", "OTP"],
+        ],
+        [{ row: 2, field: "name", message: `Name ${q(long(101, "R"))} is longer than 100 characters` }],
+      ],
+      [
+        "rate_lines",
+        [["rateTable", "mccmnc", "rate", "senderId"], [table, "424", "0.01", long(21, "S")]],
+        [{ row: 2, field: "senderId", message: `Sender ID ${q(long(21, "S"))} is longer than 20 characters` }],
+      ],
+      [
+        "route_rules",
+        [["name", "priority", "vendors"], [long(121, "N"), "50", vtrunk!]],
+        [{ row: 2, field: "name", message: `Name ${q(long(121, "N"))} is longer than 120 characters` }],
+      ],
+      [
+        "translation_rules",
+        [["externalId", "name"], ["FT1", long(101, "T")]],
+        [{ row: 2, field: "name", message: `Name ${q(long(101, "T"))} is longer than 100 characters` }],
+      ],
+      [
+        "hlr_rules",
+        [["name", "provider", "dnidPattern"], [long(101, "H"), provider!, "^44"]],
+        [{ row: 2, field: "name", message: `Name ${q(long(101, "H"))} is longer than 100 characters` }],
+      ],
+      [
+        "opening_balances",
+        [["enterprise", "side", "amount", "currency", "date"], ["FE3", "customer", "10", "USD", "2026-02-31"]],
+        [{ row: 2, field: "date", message: 'Date "2026-02-31" is not a date (YYYY-MM-DD)' }],
+      ],
+    ];
+    const dry = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: `Formats ${run}`,
+        trunksInactive: true,
+        files: cases.map(([entity, rows]) => ({ entity, fileName: `${entity}.csv`, content: toCsv(rows) })),
+      }),
+      201,
+    );
+    madeImports.push(dry.id);
+    assert.equal(dry.report.canApply, false);
+    for (const [entity, , expected] of cases)
+      for (const want of expected) {
+        const issue = dry.report.issues.find(
+          (i: { entity: string; row: number; field: string; severity: string; message: string }) =>
+            i.entity === entity &&
+            i.row === want.row &&
+            i.field === want.field &&
+            i.severity === "error" &&
+            i.message === want.message,
+        );
+        assert.ok(
+          issue,
+          `${entity} ${JSON.stringify(want)}: ${JSON.stringify(dry.report.issues.filter((i: { entity: string }) => i.entity === entity))}`,
+        );
+      }
+    // Apply stays refused while a row is, and the dry run wrote nothing.
+    await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
+    const { rows: written } = await db().query(
+      `SELECT (SELECT count(*) FROM users WHERE username = $1)
+            + (SELECT count(*) FROM enterprises WHERE name LIKE $2)
+            + (SELECT count(*) FROM customer_trunks WHERE name = $3)
+            + (SELECT count(*) FROM vendor_trunks WHERE name = $4)
+            + (SELECT count(*) FROM rate_tables WHERE name = $5) AS n`,
+      [`fmt.${run}`, `Fmt Ent % ${run}`, `FMT_C_${run}`, `FMT_V_${run}`, table],
+    );
+    assert.equal(Number(written[0].n), 0);
+  });
+
+  test("capital username, spaced e-mail and bare-domain website import with a warning; updates check what they change", async () => {
+    const { am } = await fixtures();
+    const source = `Norm ${run}`;
+    const user = `Norm.${run}`;
+    const people = (rows: string[][]) => ({
+      entity: "users" as const,
+      fileName: "people.csv",
+      content: toCsv([["externalId", "username", "firstName", "lastName", "email", ...NEED_FIELDS], ...rows]),
+    });
+    const entName = `Norm Ent ${run}`;
+    cleanup.push(async () => {
+      const { rows: e } = await db().query("SELECT id FROM enterprises WHERE name = $1", [entName]);
+      for (const { id } of e)
+        for (const sql of [
+          "DELETE FROM enterprise_contacts WHERE enterprise_id = $1",
+          "DELETE FROM enterprise_billing WHERE enterprise_id = $1",
+          "DELETE FROM enterprise_am_history WHERE enterprise_id = $1",
+          "DELETE FROM migration_refs WHERE entity = 'enterprises' AND record_id = $1",
+          "DELETE FROM enterprises WHERE id = $1",
+        ])
+          await db().query(sql, [id]);
+      const { rows: u } = await db().query("SELECT id FROM users WHERE username = ANY($1)", [
+        [user.toLowerCase(), `clean.${run}`],
+      ]);
+      for (const { id } of u) {
+        await db().query("DELETE FROM migration_refs WHERE entity = 'users' AND record_id = $1", [id]);
+        await db().query("DELETE FROM users WHERE id = $1", [id]);
+      }
+    });
+
+    const dry = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", {
+        sourceSystem: source,
+        trunksInactive: true,
+        files: [
+          people([
+            ["NU1", user, "Norma", "Fakename", ` ${user}@Example.COM `, ...userNeeds()],
+            // Already clean: imports as it did, without a warning.
+            ["NU2", `clean.${run}`, "Clean", "Fakename", `clean.${run}@example.com`, ...userNeeds()],
+          ]),
+          {
+            entity: "enterprises",
+            fileName: "partners.csv",
+            content: toCsv([
+              ENTERPRISE_COLUMNS,
+              [
+                "NE1",
+                entName,
+                "customer",
+                seededCompany,
+                am!,
+                "AE",
+                "5 Example Close",
+                `sales.ne.${run}@Example.COM`,
+                `noc.ne.${run}@example.com`,
+                `rates.ne.${run}@example.com`,
+                `billing.ne.${run}@example.com`,
+                "partner.example",
+              ],
+            ]),
+          },
+        ],
+      }),
+      201,
+    );
+    madeImports.push(dry.id);
+    assert.equal(dry.report.canApply, true, JSON.stringify(dry.report.issues));
+    const warning = (entity: string, row: number) =>
+      dry.report.issues.find(
+        (i: { entity: string; row: number; severity: string }) =>
+          i.entity === entity && i.row === row && i.severity === "warning",
+      )?.message as string | undefined;
+    assert.equal(
+      warning("users", 2),
+      `E-mail " ${user}@Example.COM " imported as "${user}@Example.COM"; ` +
+        `Username "${user}" imported as "${user.toLowerCase()}"; ` +
+        `E-mail "${user}@Example.COM" imported as "${user}@example.com"`,
+    );
+    assert.equal(warning("users", 3), undefined);
+    assert.equal(
+      warning("enterprises", 2),
+      `Website "partner.example" imported as "https://partner.example"; ` +
+        `Commercial e-mails "sales.ne.${run}@Example.COM" imported as "sales.ne.${run}@example.com"`,
+    );
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+    await runningApplies.get(dry.id);
+    const applied = await ok("getMigrationImport", call("GET", `/migration/imports/${dry.id}`));
+    assert.equal(applied.status, "applied", applied.applyError);
+    const stored = async () =>
+      (
+        await db().query("SELECT username, email, first_name, address1 FROM users WHERE username = $1", [
+          user.toLowerCase(),
+        ])
+      ).rows[0];
+    assert.deepEqual(await stored(), {
+      username: user.toLowerCase(),
+      email: `${user}@example.com`,
+      first_name: "Norma",
+      address1: "1 Example Street",
+    });
+    assert.equal((await db().query("SELECT 1 FROM users WHERE username = $1", [`clean.${run}`])).rows.length, 1);
+    const { rows: e } = await db().query("SELECT id, website FROM enterprises WHERE name = $1", [entName]);
+    assert.equal(e[0].website, "https://partner.example");
+    const record = await ok("getEnterprise", call("GET", `/enterprises/${e[0].id}`));
+    assert.deepEqual(record.contacts.commercial.emails, [`sales.ne.${run}@example.com`]);
+
+    // An update with a wrong cell is refused and writes nothing.
+    const asUpdate = (row: string[]) => ({
+      sourceSystem: source,
+      trunksInactive: true,
+      conflicts: { users: "update" },
+      files: [people([row])],
+    });
+    const bad = await ok(
+      "createMigrationImport",
+      call("POST", "/migration/imports", asUpdate(["NU1", user, "Renamed", "Fakename", "bad@", ...userNeeds()])),
+      201,
+    );
+    madeImports.push(bad.id);
+    assert.equal(bad.report.canApply, false);
+    assert.ok(
+      bad.report.issues.some(
+        (i: { row: number; field: string; message: string; severity: string }) =>
+          i.row === 2 &&
+          i.field === "email" &&
+          i.severity === "error" &&
+          i.message === 'E-mail "bad@" is not an e-mail address',
+      ),
+      JSON.stringify(bad.report.issues),
+    );
+    await fails("applyMigrationImport", call("POST", `/migration/imports/${bad.id}/apply`), 409);
+    assert.equal((await stored()).first_name, "Norma");
+    // A valid update writes its change; an empty cell (address) keeps the stored value.
+    const [dept, group, company] = userNeeds();
+    const good = await ok(
+      "createMigrationImport",
+      call(
+        "POST",
+        "/migration/imports",
+        asUpdate(["NU1", user, "Renamed", "Fakename", `${user}@example.com`, dept!, group!, company!, "", "AE"]),
+      ),
+      201,
+    );
+    madeImports.push(good.id);
+    assert.equal(good.report.canApply, true, JSON.stringify(good.report.issues));
+    await ok("applyMigrationImport", call("POST", `/migration/imports/${good.id}/apply`), 202);
+    await runningApplies.get(good.id);
+    assert.deepEqual(await stored(), {
+      username: user.toLowerCase(),
+      email: `${user}@example.com`,
+      first_name: "Renamed",
+      address1: "1 Example Street",
+    });
+  });
+});
