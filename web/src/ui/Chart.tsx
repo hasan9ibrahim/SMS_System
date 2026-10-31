@@ -38,6 +38,9 @@ function readColors(): ChartColors {
   };
 }
 
+/** The bundled Inter first, as in --font-family; canvas text needs the stack spelled out. */
+const FONT_FAMILY = '"Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
 /** Token colours, updated when data-theme changes on <html>. */
 export function useChartColors(): ChartColors {
   const [colors, setColors] = useState(readColors);
@@ -80,7 +83,9 @@ export function Chart({
     };
   }, []);
   useEffect(() => {
-    chart.current?.setOption(option, merge ? { lazyUpdate: true } : { notMerge: true });
+    // Chart text in the app font (§15), unless the chart sets its own.
+    const textStyle = { fontFamily: FONT_FAMILY, ...(option.textStyle as object | undefined) };
+    chart.current?.setOption({ ...option, textStyle }, merge ? { lazyUpdate: true } : { notMerge: true });
   }, [option, merge]);
   const clickRef = useRef(onClick);
   useEffect(() => {

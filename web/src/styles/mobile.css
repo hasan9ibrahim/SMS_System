@@ -40,7 +40,7 @@
   background: none;
   color: var(--color-text);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 500;
   text-align: left;
 }
@@ -62,7 +62,7 @@
   background: none;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-base);
   text-align: left;
 }
 .mnav-page.current {
@@ -117,7 +117,7 @@
   flex: none;
   line-height: 22px;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: var(--text-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -135,14 +135,14 @@
   min-width: 0;
 }
 .gcard-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .gcard-value {
-  font-size: 13.5px;
+  font-size: var(--text-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -171,7 +171,7 @@
   input,
   select,
   textarea {
-    font-size: 16px; /* no zoom-in on focus in mobile Safari */
+    font-size: var(--text-touch-input); /* no zoom-in on focus in mobile Safari */
   }
 
   /* ---------- top bar: menu button, logo mark, search, TPS, bell, avatar */
@@ -237,7 +237,7 @@
     row-gap: 8px;
   }
   .page-header h1 {
-    font-size: 17px;
+    font-size: var(--text-lg);
   }
   .page-header-top .page-actions,
   .page-actions {
@@ -476,7 +476,7 @@
   }
   .la-grid td.num,
   .la-grid td.la-name {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .la-body {
     flex-direction: column;

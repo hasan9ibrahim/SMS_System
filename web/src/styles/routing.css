@@ -247,7 +247,7 @@ span.w-num {
 .mini-table th {
   text-align: left;
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   padding: 4px 8px;
   border-bottom: var(--border-width) solid var(--color-border);
@@ -284,7 +284,7 @@ span.w-num {
 .vf-group legend {
   padding: 0 4px;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 .wl-row {
   display: flex;
@@ -317,7 +317,7 @@ span.w-num {
   margin: 0;
 }
 .traffic-kpis dt {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 .traffic-kpis dd {
@@ -332,10 +332,10 @@ span.w-num {
 }
 .segmented.small button {
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .traffic-aside .aside-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -442,7 +442,7 @@ span.w-num {
   padding: 1px 8px;
   border-radius: var(--radius-sm);
   border: var(--border-width) solid currentColor;
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 18px;
   white-space: nowrap;
 }
@@ -461,7 +461,7 @@ span.w-num {
 }
 .rr-h {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 .rr-summary {
@@ -478,7 +478,7 @@ span.w-num {
 .rr-summary th {
   color: var(--color-text-secondary);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .rr-summary .r {
   text-align: right;
@@ -521,7 +521,7 @@ span.w-num {
   margin-top: -2px;
   margin-bottom: 8px;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .cond-field .match-case {
   margin-bottom: 10px;
@@ -725,11 +725,11 @@ span.w-num {
 }
 textarea.mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .section-label {
   margin: 14px 0 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
   text-transform: uppercase;
@@ -777,7 +777,7 @@ textarea.mono {
 }
 .soa-statement-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 .soa-side {
   margin-top: 14px;
@@ -789,7 +789,7 @@ textarea.mono {
 }
 .soa-side h3 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .soa-lines {
   width: 100%;
@@ -805,7 +805,7 @@ textarea.mono {
   display: inline-block;
   padding: 0 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   border: var(--border-width) solid var(--color-border);
 }
 .chip-tag.manual {
@@ -817,7 +817,7 @@ textarea.mono {
 }
 .soa-section summary {
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -981,7 +981,7 @@ textarea.mono {
 .mail-preview pre.mono-pre,
 .terminal {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   white-space: pre;
   overflow: auto;
 }
@@ -1088,7 +1088,7 @@ textarea.mono {
 }
 .rs-form .segmented button {
   padding: 1px 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .rs-trunk,
 .rs-text {
@@ -1130,7 +1130,7 @@ textarea.mono {
   border-color: var(--color-good);
 }
 .rs-test {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 .rs-cards {
@@ -1140,7 +1140,7 @@ textarea.mono {
 }
 .rs-cards h3 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .rs-wide {
   grid-column: 1 / -1;
@@ -1150,7 +1150,7 @@ textarea.mono {
   padding-left: 22px;
   max-height: 240px;
   overflow: auto;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .diag-form {
   display: flex;
@@ -1377,7 +1377,7 @@ textarea.mono {
 .hover-list-more {
   padding: 2px 12px;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* Vendors skipped on an egress block (§6.4, decided 2026-10-18). */
@@ -1561,7 +1561,7 @@ textarea.mono {
   outline-offset: 2px;
 }
 .mini-switch-text {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 /* Route simulator in one column (team trial round 12): Route (trunk, numbers, destinations, vendor) and Message
@@ -1584,7 +1584,7 @@ textarea.mono {
   align-items: center;
   gap: 10px;
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: var(--text-base);
   font-weight: 650;
 }
 .sim-num {
@@ -1595,7 +1595,7 @@ textarea.mono {
   border-radius: 50%;
   background: color-mix(in srgb, var(--color-accent) 12%, var(--color-panel));
   color: var(--color-accent);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 .sim-hint {
@@ -1727,7 +1727,7 @@ svg.flip {
   align-items: center;
 }
 .match-grid .mg-head {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -1739,7 +1739,7 @@ svg.flip {
 }
 .match-grid .mg-label .match-case {
   font-weight: 400;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .match-grid .mg-cell {
   display: flex;
@@ -1760,7 +1760,7 @@ svg.flip {
 /* Sender ID / receiver value rows under their condition (team trial round 8). */
 .match-grid .mg-sub {
   font-weight: 400;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   align-self: start;
   padding-top: 4px;
@@ -1843,7 +1843,7 @@ svg.flip {
   background: var(--color-panel);
   color: var(--color-text);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
@@ -1887,7 +1887,7 @@ svg.flip {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.25;
   text-align: left;
 }

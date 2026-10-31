@@ -28,9 +28,27 @@
   --chart-3: #7c3aed;
   --chart-4: #0e8fa8;
 
-  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-size-body: 14px;
-  --font-size-title: 28px;
+  /* Inter is bundled with the app (@fontsource-variable/inter, served from our own origin, weights 100-900);
+     the installed "Inter" and the system fonts are only a fallback while it loads. */
+  --font-family: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Type scale (§15): six sizes, each with its line height (as a ratio, so it inherits safely). No text under 11 px.
+     xs 11/16 captions, badges, uppercase labels · sm 12/16 secondary text, hints, chips, status bar ·
+     md 13/18 grid headers and filters, menus, compact controls · base 14/20 body, grid cells, inputs ·
+     lg 17/24 page titles on phones, large figures · xl 22/28 page titles, headline figures. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --leading-xs: 1.4545;
+  --leading-sm: 1.3333;
+  --leading-md: 1.3846;
+  --leading-base: 1.4286;
+  --leading-lg: 1.4118;
+  --leading-xl: 1.2727;
+  /* Inputs on phones stay at 16 px so mobile Safari does not zoom in on focus. */
+  --text-touch-input: 16px;
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 16px;
