@@ -26,7 +26,7 @@ const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits:
 /**
  * The open main-menu dropdown. The mouse opens a section by hovering it, no click needed (team trial round 8); moving
  * to another section swaps the dropdown at once, leaving both the button and its dropdown closes it after a moment.
- * Clicks and touch still open and close it.
+ * A mouse click only opens it; touch and the keyboard open and close it.
  */
 const useOpenSection = create<{ open: SectionKey | null; set: (s: SectionKey | null) => void }>((set) => ({
   open: null,
@@ -90,7 +90,9 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         className={`menu-top${current ? " current" : ""}${shown ? " open" : ""}`}
         aria-haspopup="menu"
         aria-expanded={shown}
-        onClick={() => setShown((v) => !v)}
+        // A mouse has opened it by hovering, so its click only opens: toggling shut what the hover just opened made
+        // the dropdown flash and vanish (design QA round 13). Touch and the keyboard still open and close it.
+        onClick={(e) => setShown((v) => ((e.nativeEvent as PointerEvent).pointerType === "mouse" ? true : !v))}
         onPointerEnter={(e) => isMouse(e) && setShown(true)}
         onPointerLeave={(e) => isMouse(e) && closeSoon(section)}
       >
@@ -126,7 +128,6 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
             >
               <Icon name={pg.icon} size={14} />
               <span>{pg.label}</span>
-              {pg.step !== "3" && <span className="menu-step">{pg.step === "5" ? "later" : `step ${pg.step}`}</span>}
             </button>
           ))}
         </div>

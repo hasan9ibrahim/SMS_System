@@ -600,14 +600,8 @@ a.btn {
 .menu-item.danger {
   color: var(--color-error);
 }
-.menu-item kbd,
-.menu-item .menu-step {
+.menu-item kbd {
   margin-left: auto;
-}
-.menu-step {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  padding-left: 16px;
 }
 .menu-icon-space {
   width: 14px;
