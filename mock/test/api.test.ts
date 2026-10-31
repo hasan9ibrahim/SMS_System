@@ -169,6 +169,29 @@ describe("lists (§13.25)", { skip }, () => {
     assert.ok(mid.some((r) => r.name === first.name));
   });
 
+  test("part of a name with _ finds the names it starts (QA 2026-10-31, §13.25)", async () => {
+    const { rows } = await db().query(
+      `SELECT id, name FROM customer_trunks WHERE deleted_at IS NULL AND name LIKE '%\\_%' AND length(name) > 8
+        ORDER BY id LIMIT 1`,
+    );
+    if (!rows[0]) return;
+    const { id, name } = rows[0] as { id: number; name: string };
+    const part = name.slice(0, name.indexOf("_") + 2);
+    for (const url of ["/customer-trunks/query", "/lookups/customer_trunks/query"]) {
+      const res = await call("POST", url, { search: part, limit: 500 });
+      assert.equal(res.statusCode, 200, res.body);
+      assert.ok(
+        (res.json().rows as { id: number }[]).some((r) => r.id === id),
+        `${url}: "${part}" finds ${name}`,
+      );
+    }
+    const hits = (await call("GET", `/search?q=${encodeURIComponent(part)}&limit=50`)).json().hits as {
+      id: number;
+      kind: string;
+    }[];
+    assert.ok(hits.some((h) => h.id === id && h.kind === "customer_trunk"), `Ctrl K "${part}" finds ${name}`);
+  });
+
   test("users and change history", async () => {
     const users = await call("POST", "/users/query", { search: "a", limit: 10 });
     assert.equal(users.statusCode, 200);

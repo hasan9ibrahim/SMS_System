@@ -81,14 +81,19 @@ const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const TIME = new Set(["date", "datetime"]);
 
 /**
- * `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25), or "starts with" on prefix lists. A
- * neutral ID ("#123", the masked names of §13.17) is always found anywhere.
+ * `%` / `_` wildcards are used as typed, and the text is the start of a value unless it ends in `%` itself, so
+ * "ALDEX_C" finds "ALDEX_CUST" (QA 2026-10-31); plain text means "contains" (§13.25), or "starts with" on prefix
+ * lists. A neutral ID ("#123", the masked names of §13.17) is always found anywhere.
  */
 export function searchPattern(text: string, prefix = false): string {
   // A backslash at the very end is itself: PostgreSQL and ClickHouse refuse a pattern ending in the escape.
   if (endsInEscape(text)) text = `${text}\\`;
-  return /[%_]/.test(text) ? text : prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
+  if (/[%_]/.test(text)) return endsInWildcard(text) ? text : `${text}%`;
+  return prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
 }
+
+/** Ends in a `%` that is a wildcard, not an escaped `\%`. */
+export const endsInWildcard = (s: string) => /(^|[^\\])(\\\\)*%$/.test(s);
 
 /**
  * Cursor = position in the sorted result, plus what keeps later pages in place while rows arrive (QA 2026-10-31,
