@@ -222,11 +222,14 @@ defmodule Sms.Switch.Pipeline.Router do
 
       price ->
         case incapable(Config.vendor_trunk(vendor_trunk_id) || %{}, egress.after, input) do
-          nil -> if bound?(vendor_trunk_id), do: {:ok, price}, else: :unbound
+          nil -> connected(vendor_trunk_id, price)
           reason -> reason
         end
     end
   end
+
+  defp connected(vendor_trunk_id, price),
+    do: if(bound?(vendor_trunk_id), do: {:ok, price}, else: :unbound)
 
   # §5.5, S-3.9, S-4.4: why the vendor cannot take the message as it would get it after its egress translation (nil
   # lists allow any), or nil when it can. Without the message (the Route Simulator's tests), every vendor can.
