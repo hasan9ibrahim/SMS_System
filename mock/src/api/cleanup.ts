@@ -699,7 +699,17 @@ export const cleanupFindingList: ListDef<CleanupFinding> = {
     messages30d: { sql: "f.messages_30d" },
     state: { sql: "f.state" },
     entityType: { sql: "f.entity_type" },
-    entityId: { sql: "NULL", where: (_op, c, p) => `${p(Number(c.value))}::bigint = ANY(f.entity_ids)` },
+    // A finding names one or more records (QA 2026-10-31: every operator used to mean eq).
+    entityId: {
+      sql: "NULL",
+      where: (op, c, p) => {
+        if (op === "empty") return "cardinality(f.entity_ids) = 0";
+        if (op === "not_empty") return "cardinality(f.entity_ids) > 0";
+        const ids = op === "in" || op === "not_in" ? (c.values ?? []).map(Number) : [Number(c.value)];
+        const any = `(f.entity_ids && ${p(ids)}::bigint[])`;
+        return op === "neq" || op === "not_in" ? `NOT ${any}` : any;
+      },
+    },
     detectedAt: { sql: "f.detected_at" },
     appliedAt: { sql: "f.applied_at" },
     appliedBy: { sql: "ab.username" },

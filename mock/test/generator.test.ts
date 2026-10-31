@@ -149,6 +149,36 @@ describe("rate history (spec §6.2, §13.32)", () => {
     for (const r of backDated) assert.ok(Date.parse(r.stated_valid_from!) < Date.parse(r.valid_from!));
   });
 
+  test("a live customer trunk is priced by a live rate table (QA 2026-10-31, §5.4, §13.29)", async () => {
+    // A table made for an archived trunk is archived with it; it must not be shared with a live trunk. Enough
+    // enterprises for archived trunks to own tables (the shared world above has too few).
+    const dir = mkdtempSync(join(tmpdir(), "gen-live-"));
+    try {
+      const sink = new TableSink(dir);
+      await generateWorld({ seed: "test", profile: { ...profile, enterprises: 120 }, anchor: ANCHOR, sink });
+      await sink.close();
+      const archived = new Set(
+        readCsv(dir, "rate_tables")
+          .filter((r) => r.deleted_at !== "")
+          .map((r) => r.id),
+      );
+      assert.ok(archived.size > 0, "some tables are archived");
+      const byTrunk = new Map<string, string[]>();
+      for (const r of readCsv(dir, "customer_trunk_rate_tables"))
+        byTrunk.set(r.customer_trunk_id!, [...(byTrunk.get(r.customer_trunk_id!) ?? []), r.rate_table_id!]);
+      for (const t of readCsv(dir, "customer_trunks")) {
+        const tables = byTrunk.get(t.id!) ?? [];
+        if (t.deleted_at !== "" || !tables.length) continue;
+        assert.ok(
+          tables.some((id) => !archived.has(id)),
+          `live trunk ${t.name} has only archived tables ${tables}`,
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("every vendor trunk has exactly one vendor table", () => {
     for (const v of world.vendorTrunks) assert.equal(world.rateTableById.get(v.rateTableId)?.vendorTrunkId, v.id);
   });
@@ -294,6 +324,25 @@ describe("EDRs (spec §9.1, §13.29, §13.30)", () => {
       const e = world.enterpriseById.get(Number(cell(r, "c_enterprise_id")))!;
       assert.equal(Number(cell(r, "c_am_user_id")), amAt(e, time(cell(r, "start_time"))));
     }
+  });
+
+  test("the attempt that re-sends after a failed receipt is the DLR re-route, as the switch writes it (S-5.11)", () => {
+    // Attempts of one message share the customer's message ID and follow each other by attempt number.
+    const byMsg = new Map<string, string[][]>();
+    for (const r of edrs) byMsg.set(cell(r, "c_message_id"), [...(byMsg.get(cell(r, "c_message_id")) ?? []), r]);
+    let reroutes = 0;
+    for (const rows of byMsg.values()) {
+      rows.sort((a, b) => Number(cell(a, "attempt_no")) - Number(cell(b, "attempt_no")));
+      for (const [i, r] of rows.entries()) {
+        if (cell(r, "dlr_reroute") !== "1") continue;
+        reroutes++;
+        const before = rows[i - 1];
+        assert.ok(before, "never the first attempt");
+        assert.equal(cell(before, "is_submit_success"), "1", "the attempt before was taken by its vendor");
+        assert.notEqual(cell(before, "msg_status"), "DELIVRD", "and got a failed receipt");
+      }
+    }
+    assert.ok(reroutes > 0, "some messages are re-routed on a failed receipt");
   });
 
   test("look realistic: most messages deliver, some are re-routed", () => {

@@ -8,6 +8,7 @@ import type { AlertRuleRow } from "@sms/contract";
 import { closeDb, dbReady } from "../src/db.js";
 import { chQuery, chRows } from "../src/edr.js";
 import { dimensionEntity } from "../src/alerts/engine.js";
+import { deleteTestEdrs } from "./testEdrs.js";
 
 const ready = await dbReady();
 const store = ready && (await chRows<{ n: string }>("SELECT count() FROM edr_all LIMIT 1")) !== null;
@@ -16,10 +17,8 @@ const ent = 5_000_000 + Math.floor(Math.random() * 900_000);
 const ISO = "XQ";
 
 after(async () => {
-  if (store)
-    // edr and the long-term totals that took their copy on insert (ClickHouse 008).
-    for (const t of ["edr", "edr_totals", "edr_sender_daily"])
-      await chQuery(`ALTER TABLE ${t} DELETE WHERE c_enterprise_id = ${ent} SETTINGS mutations_sync = 1`);
+  // The EDRs with the hourly figures and long-term totals their views took (QA 2026-10-31: edr_hourly was left).
+  if (store) await deleteTestEdrs(`c_enterprise_id = ${ent}`);
   await closeDb();
 });
 

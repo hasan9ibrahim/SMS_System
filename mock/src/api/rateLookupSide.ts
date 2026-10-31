@@ -16,13 +16,14 @@ import type {
 } from "@sms/contract";
 import { PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
 import { withDb } from "../db.js";
+import { endsInWildcard } from "../lists/engine.js";
 
 const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
 
-/** `%` and `_` wildcards (§13.25); plain text matches anywhere. */
+/** `%` and `_` wildcards (§13.25), from the start unless the text ends in `%` (QA 2026-10-31); plain text anywhere. */
 export function searchPattern(q: string): string {
   const t = q.trim();
-  return /[%_]/.test(t) ? t : `%${t}%`;
+  return /[%_]/.test(t) ? (endsInWildcard(t) ? t : `${t}%`) : `%${t}%`;
 }
 
 /**

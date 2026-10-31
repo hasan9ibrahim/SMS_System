@@ -357,6 +357,44 @@ describe("invoices and invoice requests (§7, §12.3)", { skip }, () => {
     assert.equal(noRegen.statusCode, 409);
   });
 
+  test("a run without a zone takes the customer billing's; the balance cut-off is the invoice's own (§7, §13.31)", async () => {
+    // A customer whose billing zone is not its enterprise billing time zone, with no invoice in the test period.
+    const { rows } = await db().query(
+      `SELECT e.id, cb.timezone FROM enterprises e
+         JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
+        WHERE e.deleted_at IS NULL AND cb.timezone <> e.billing_timezone
+          AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.enterprise_id = e.id AND i.deleted_at IS NULL
+                AND i.usage_end >= $1)
+        ORDER BY e.id LIMIT 1`,
+      [period.start],
+    );
+    const enterpriseId = Number(rows[0].id);
+    const billingZone = String(rows[0].timezone);
+    const pro = await ok(
+      "createInvoiceRequest",
+      call("POST", "/invoice-requests", request({ enterpriseIds: [enterpriseId], kind: "proforma", amount: 1, volume: 1 })),
+      202,
+    );
+    assert.equal(pro.requests[0].timezone, billingZone, "as auto invoicing (enterprise_billing.timezone)");
+    await waitRequest(pro.requests[0].id);
+
+    // A run in a third zone: uninvoiced traffic starts at midnight after its usage end in that zone.
+    const zone = billingZone === "Asia/Tokyo" ? "America/Sao_Paulo" : "Asia/Tokyo";
+    const made = await ok(
+      "createInvoiceRequest",
+      call("POST", "/invoice-requests", request({ enterpriseIds: [enterpriseId], timezone: zone })),
+      202,
+    );
+    const done = await waitRequest(made.requests[0].id);
+    assert.equal(done.status, "completed", done.error);
+    const { rows: ledger } = await db().query(
+      "SELECT cutoff FROM balance_ledger WHERE enterprise_id = $1 AND side = 'customer'",
+      [enterpriseId],
+    );
+    const next = isoDay(utcDay(new Date(`${period.end}T00:00:00Z`), 1));
+    assert.equal(new Date(ledger[0].cutoff).toISOString(), zonedMidnight(next, zone).toISOString());
+  });
+
   test("a run stopped by a restart carries on with the invoice it made (round 12 audit)", async () => {
     const enterpriseId = await customer();
     const made = await ok(

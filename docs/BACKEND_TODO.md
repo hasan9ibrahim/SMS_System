@@ -785,7 +785,7 @@ What the Phoenix backend must match so the screens need no change:
   - Decided 2026-10-24 (all of D1–D11): D1 incomplete group fails (REJECTD, not billed); D2 temporary error → retry the part on the same vendor, submit rejection → all parts via the next vendor, failed receipt → all parts via the next vendor only if no part was delivered and the failed part is not vendor-billable, else the message fails; D3 translation growing the part count is blocked, not billed; D4 vendor submit timeout → automatic re-route, first attempt marked *timeout, possibly sent*, late OK flags *possible duplicate*; D5 late receipt corrects the EDR only; D7 every esm_class mode handled as store-and-forward; D8 query_sm yes, cancel_sm while queued, replace_sm no; D9 no shift tables in v1 (pass through); D10 empty messages rejected unless the trunk allows; D6 duplicate filter per customer trunk, 60 s, shared with Loop Detection; D11 Delayed Submit as the spec (resp waits for the vendor, 0x45 on vendor timeout).
 
 - **Invoice and balance amounts (team trial round 3).** Answered 2026-10-24: calculated at 6 decimals, invoice amounts
-  rounded to 4 decimals (Q20 in `docs/BACKEND_PLAN.md`). The mock and schema still use cents; to change.
+  rounded to 4 decimals (Q20 in `docs/BACKEND_PLAN.md`). Done: migration 078 keeps money at 4 decimals (numeric(16,4)).
 
 - *Found while writing the help center (2026-10-18), where the screens and the spec differ:*
   - Answered 2026-10-24 (R1–R5): destination list and pattern - whichever is set, only the list when both; number lists get Match / Not match; Continue routing YES / STOP only act when the matched rule has no usable vendor; route rule groups and NEXT removed; express margin is a % per message.

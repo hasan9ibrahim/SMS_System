@@ -144,5 +144,6 @@ SELECT
     toUInt8(0)           AS hlr_is_ported,
     toUInt8(0)           AS hlr_is_accomplished,
     toDecimal64(0, 6)    AS hlr_cost_sys
-FROM edr_receipt
-WHERE kind = 'outcome';
+FROM edr_receipt AS r
+-- the table's kind: a bare `kind` here is this branch's own 'outcome' alias, true for every receipt (009)
+WHERE r.kind = 'outcome';

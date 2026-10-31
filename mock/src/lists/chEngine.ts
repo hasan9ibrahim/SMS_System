@@ -15,7 +15,7 @@ import type pg from "pg";
 import { chQuery } from "../edr.js";
 import type { VisItem } from "../visibility/policy.js";
 import { viewChDef } from "../visibility/edr.js";
-import { decodeCursor, encodeCursor, runList, searchPattern, type ListDef, type ListPage } from "./engine.js";
+import { encodeCursor, readCursor, runList, searchPattern, type ListDef, type ListPage } from "./engine.js";
 
 /** A ClickHouse string literal. */
 export const lit = (s: string) => `'${String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
@@ -76,6 +76,9 @@ export interface ChListDef<Row> {
 }
 
 export type NameMaps = Map<string, Map<number, string>>;
+
+/** How long a list query may run in ClickHouse (it stops it then too); longer answers 503. */
+const LIST_TIMEOUT_MS = 30_000;
 
 const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const NEGATED: Partial<Record<FilterOperator, FilterOperator>> = { neq: "eq", not_like: "like", not_in: "in" };
@@ -323,10 +326,15 @@ export async function chWhere(pool: pg.Pool, def: ChListDef<unknown>, query: Pic
   return where.length ? where.join(" AND ") : "1";
 }
 
-/** ORDER BY clause; a name column sorts by its names via transform(). */
-export async function chOrder(pool: pg.Pool, def: ChListDef<unknown>, query: Pick<ListQuery, "sort">) {
+interface OrderTerm {
+  expr: string;
+  desc: boolean;
+}
+
+/** The sort terms; a name column sorts by its names via transform(); the ID last, in the first term's direction. */
+async function chOrderTerms(pool: pg.Pool, def: ChListDef<unknown>, query: Pick<ListQuery, "sort">) {
   const sort = query.sort?.length ? query.sort : def.fields.defaultSort;
-  const parts: string[] = [];
+  const terms: OrderTerm[] = [];
   for (const s of sort) {
     const col = def.columns[s.field]!;
     let expr = col.sql;
@@ -336,10 +344,30 @@ export async function chOrder(pool: pg.Pool, def: ChListDef<unknown>, query: Pic
         names.map(([, n]) => lit(n)).join(",") || "''"
       }], '')`;
     }
-    parts.push(`${expr} ${s.dir === "desc" ? "DESC" : "ASC"}`);
+    terms.push({ expr, desc: s.dir === "desc" });
   }
-  parts.push(`${def.idSql} ${sort[0]?.dir === "desc" ? "DESC" : "ASC"}`);
-  return parts.join(", ");
+  terms.push({ expr: def.idSql, desc: sort[0]?.dir === "desc" });
+  return terms;
+}
+
+/** ORDER BY clause; a name column sorts by its names via transform(). */
+export async function chOrder(pool: pg.Pool, def: ChListDef<unknown>, query: Pick<ListQuery, "sort">) {
+  return (await chOrderTerms(pool, def, query)).map((t) => `${t.expr} ${t.desc ? "DESC" : "ASC"}`).join(", ");
+}
+
+/**
+ * Keyset paging (QA 2026-10-31, §13.25): the rows after the previous page's last row in the sort order, `_k<i>` being
+ * the sort terms and `keys` that row's values as text. EDRs arrive all the time, and an offset repeated or skipped rows
+ * once new ones sorted before it. ClickHouse puts NULLs last both ways.
+ */
+function afterKeys(terms: OrderTerm[], keys: (string | null)[]): string {
+  const typed = (i: number) => `CAST(${lit(keys[i]!)}, toTypeName(_k${i}))`;
+  const ors = terms.map((t, i) => {
+    const same = terms.slice(0, i).map((_, j) => (keys[j] === null ? `isNull(_k${j})` : `_k${j} = ${typed(j)}`));
+    const after = keys[i] === null ? "0" : `(_k${i} ${t.desc ? "<" : ">"} ${typed(i)} OR isNull(_k${i}))`;
+    return `(${[...same, after].join(" AND ")})`;
+  });
+  return `(${ors.join(" OR ")})`;
 }
 
 /** Every name map a list's rows need. */
@@ -369,24 +397,34 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
   // As the viewer sees it (§13.17): masked names, withheld values, others' traffic left out.
   def = await viewChDef(def);
   const d = def as ChListDef<unknown>;
-  const [whereSql, orderSql, names] = await Promise.all([
+  const [whereSql, terms, names] = await Promise.all([
     chWhere(pool, d, query),
-    chOrder(pool, d, query),
+    chOrderTerms(pool, d, query),
     nameMaps(pool, d),
   ]);
   const limit = query.limit ?? 100;
-  const offset = decodeCursor(query.cursor);
+  const { offset, keys } = readCursor(query.cursor);
+  // The page after the last row of the previous one; an offset only for a cursor without its keys.
+  const keyed = keys !== null && keys.length === terms.length;
   const [ids, count] = await Promise.all([
-    chQuery<{ id: string; t: string }>(
-      `SELECT toString(${def.idSql}) AS id, toString(start_time) AS t FROM ${def.table} WHERE ${whereSql}
-        ORDER BY ${orderSql} LIMIT ${limit + 1} OFFSET ${offset}`,
+    chQuery<Record<string, string | null> & { id: string; t: string }>(
+      `WITH ${terms.map((t, i) => `${t.expr} AS _k${i}`).join(", ")}
+       SELECT toString(${def.idSql}) AS id, toString(start_time) AS t, ${terms.map((_, i) => `toString(_k${i}) AS k${i}`).join(", ")}
+         FROM ${def.table} WHERE ${whereSql}${keyed ? ` AND ${afterKeys(terms, keys)}` : ""}
+        ORDER BY ${terms.map((t, i) => `_k${i} ${t.desc ? "DESC" : "ASC"}`).join(", ")}
+        LIMIT ${limit + 1}${keyed ? "" : ` OFFSET ${offset}`}`,
+      LIST_TIMEOUT_MS,
+      { read: true },
     ),
     query.withTotal === false
       ? null
-      : chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${whereSql}`),
+      : chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${whereSql}`, LIST_TIMEOUT_MS, {
+          read: true,
+        }),
   ]);
   const more = ids.length > limit;
   const pageIds = ids.slice(0, limit);
+  const last = pageIds[pageIds.length - 1];
   let rows: Record<string, unknown>[] = [];
   if (pageIds.length) {
     const times = pageIds.map((r) => r.t).sort();
@@ -397,6 +435,8 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
       `SELECT ${chSelect(d)}, toString(${def.idSql}) AS _id FROM ${def.table}
         PREWHERE ${def.idSql} IN (${pageIds.map((r) => lit(r.id)).join(",")})
         WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}`,
+      LIST_TIMEOUT_MS,
+      { read: true },
     );
     const byId = new Map(full.map((r) => [String(r._id), r]));
     rows = pageIds.map((r) => byId.get(r.id)).filter((r): r is Record<string, unknown> => !!r);
@@ -406,7 +446,8 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
     rows: rows.map((r) => def.mapRow(r, names)),
     total: count ? Number(count[0]?.n ?? 0) : offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
-    nextCursor: more ? encodeCursor(offset + limit) : null,
+    nextCursor:
+      more && last ? encodeCursor(offset + limit, { keys: terms.map((_, i) => last[`k${i}`] ?? null) }) : null,
   };
 }
 
@@ -436,6 +477,8 @@ export async function withOutcomes(
       PREWHERE edr_id IN (${rows.map((r) => lit(String(r._id ?? r.id))).join(",")})
       WHERE kind = 'outcome' AND start_time BETWEEN ${lit(from)} AND ${lit(to)}
       GROUP BY edr_id`,
+    LIST_TIMEOUT_MS,
+    { read: true },
   );
   const byId = new Map(out.map((r) => [String(r._id), r]));
   for (const r of rows) {

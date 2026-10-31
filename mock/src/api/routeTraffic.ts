@@ -7,6 +7,7 @@ import { db } from "../db.js";
 import { sysToPlatformFactor } from "../currency.js";
 import { chRows } from "../edr.js";
 import { production } from "../mode.js";
+import { counter } from "../reports/source.js";
 
 export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: number }> = {
   "15m": { sql: "INTERVAL 15 MINUTE", bucket: "toStartOfMinute", ms: 15 * 60_000 },
@@ -19,10 +20,30 @@ export const WINDOWS: Record<TrafficWindow, { sql: string; bucket: string; ms: n
 /** Margin in the platform currency: each EDR's *_sys amounts are in its company's base currency. */
 const marginSql = (factor: string) => `round(sum((revenue_sys - cost_sys) * ${factor}), 2)`;
 
+/**
+ * Where a window's figures come from (QA 2026-10-31): the 15-minute and hour windows from edr_all, the day ones from
+ * the 15-minute totals (ClickHouse 008), which hold the same figures; a 30-day GROUP BY over edr_all missed the
+ * refresh's 1.5 s at production volume and left the grid stale. A message is sent within days of arriving, so the
+ * totals are read from three days before the window by arrival (partition pruning).
+ */
+function source(w: TrafficWindow, end: string) {
+  const totals = w === "7d" || w === "30d";
+  const from = `toDateTime64('${end}', 3) - ${WINDOWS[w].sql}`;
+  return {
+    table: totals ? "edr_totals" : "edr_all",
+    count: counter(totals ? "edr_totals" : "edr_all"),
+    // The totals hold quarter hours: the window starts on one.
+    period: totals
+      ? `start_time > toStartOfFifteenMinutes(${from}) - INTERVAL 3 DAY
+         AND submit_time > toStartOfFifteenMinutes(${from}) AND submit_time <= toDateTime64('${end}', 3)`
+      : `submit_time > ${from} AND submit_time <= toDateTime64('${end}', 3)`,
+  };
+}
+
 // Over edr_all (backend step 11b): attempts on attempt rows, deliveries and money on both.
-const figuresSql = (factor: string) => `countIf(kind = 'attempt') AS n,
-  round(countIf(is_submit_success = 1) / greatest(countIf(kind = 'attempt'), 1) * 100, 1) AS asr,
-  round(countIf(msg_status = 'DELIVRD') / greatest(countIf(is_submit_success = 1), 1) * 100, 1) AS dlr,
+const figuresSql = (factor: string, count: ReturnType<typeof counter>) => `${count("kind = 'attempt'")} AS n,
+  round(${count("is_submit_success = 1")} / greatest(${count("kind = 'attempt'")}, 1) * 100, 1) AS asr,
+  round(${count("msg_status = 'DELIVRD'")} / greatest(${count("is_submit_success = 1")}, 1) * 100, 1) AS dlr,
   ${marginSql(factor)} AS margin`;
 
 /** End of the traffic windows: now, or the latest EDR when the fake data ends earlier (never in production). */
@@ -42,17 +63,19 @@ export async function refreshRouteTraffic(): Promise<void> {
   try {
     const end = await windowEnd();
     if (!end) return;
-    const FIGURES = figuresSql(await sysToPlatformFactor());
+    const factor = await sysToPlatformFactor();
     const results = await Promise.all(
-      (Object.keys(WINDOWS) as TrafficWindow[]).map(async (w) => ({
-        w,
-        rows: await chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-          `SELECT route_rule_id AS id, ${FIGURES} FROM edr_all
-            WHERE submit_time > toDateTime64('${end}', 3) - ${WINDOWS[w].sql} AND submit_time <= toDateTime64('${end}', 3)
-              AND route_rule_id > 0
-            GROUP BY id`,
-        ),
-      })),
+      (Object.keys(WINDOWS) as TrafficWindow[]).map(async (w) => {
+        const src = source(w, end);
+        return {
+          w,
+          rows: await chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
+            `SELECT route_rule_id AS id, ${figuresSql(factor, src.count)} FROM ${src.table}
+              WHERE ${src.period} AND route_rule_id > 0
+              GROUP BY id`,
+          ),
+        };
+      }),
     );
     if (results.some((r) => !r.rows)) return;
     const c = await db().connect();
@@ -113,22 +136,25 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
   };
   if (!end) return empty;
   const factor = await sysToPlatformFactor();
-  const FIGURES = figuresSql(factor);
-  const where = `route_rule_id = ${Number(ruleId)} AND submit_time > toDateTime64('${end}', 3) - ${w.sql}
-    AND submit_time <= toDateTime64('${end}', 3)`;
+  const src = source(window, end);
+  const FIGURES = figuresSql(factor, src.count);
+  const where = `route_rule_id = ${Number(ruleId)} AND ${src.period}`;
+  // Not routed (no vendor trunk) is not a vendor: the contract's IDs start at 1 (QA 2026-10-31).
   const [total, byC, byV, series] = await Promise.all([
     chRows<{ n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT ${FIGURES} FROM edr_all WHERE ${where}`,
+      `SELECT ${FIGURES} FROM ${src.table} WHERE ${where}`,
     ),
     chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT c_trunk_id AS id, ${FIGURES} FROM edr_all WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
+      `SELECT c_trunk_id AS id, ${FIGURES} FROM ${src.table} WHERE ${where} AND c_trunk_id > 0
+        GROUP BY id ORDER BY n DESC LIMIT 50`,
     ),
     chRows<{ id: number; n: string; asr: number | null; dlr: number | null; margin: number }>(
-      `SELECT v_trunk_id AS id, ${FIGURES} FROM edr_all WHERE ${where} GROUP BY id ORDER BY n DESC LIMIT 50`,
+      `SELECT v_trunk_id AS id, ${FIGURES} FROM ${src.table} WHERE ${where} AND v_trunk_id > 0
+        GROUP BY id ORDER BY n DESC LIMIT 50`,
     ),
     chRows<{ at: string; n: string; margin: number }>(
-      `SELECT toString(${w.bucket}(submit_time)) AS at, countIf(kind = 'attempt') AS n, ${marginSql(factor)} AS margin
-         FROM edr_all WHERE ${where} GROUP BY at ORDER BY at`,
+      `SELECT toString(${w.bucket}(submit_time)) AS at, ${src.count("kind = 'attempt'")} AS n, ${marginSql(factor)} AS margin
+         FROM ${src.table} WHERE ${where} GROUP BY at ORDER BY at`,
     ),
   ]);
   if (!total || !byC || !byV || !series) return empty;
@@ -139,8 +165,8 @@ export async function ruleTraffic(ruleId: number, window: TrafficWindow): Promis
     (await chRows<{ at: string; id: number; n: string }>(
       `SELECT toString(${w.bucket}(submit_time)) AS at,
               if(v_trunk_id IN (${top.length ? top.join(",") : "0"}) OR v_trunk_id = 0, v_trunk_id, -1) AS id,
-              count() AS n
-         FROM edr WHERE ${where} GROUP BY at, id`,
+              ${src.count("kind = 'attempt'")} AS n
+         FROM ${src.table} WHERE ${where} GROUP BY at, id`,
     )) ?? [];
   const vendorsAt = new Map<string, { vendorTrunkId: number; messages: number }[]>();
   for (const r of perVendor) {

@@ -49,10 +49,22 @@ function countsText(e: RateChangeLogEntry): string {
     .join(", ");
 }
 
+/** The entry's title by what the save did (QA 2026-10-31, §13.12). */
+const OPERATION: Record<RateChangeLogEntry["operation"], string> = {
+  created: "Table created",
+  rates: "Rate change",
+  rates_added: "Rates added",
+  bulk_rating: "Bulk rating",
+  details: "Table details",
+  deleted: "Table deleted",
+  restored: "Table restored",
+  undo: "Undo",
+  cleanup: "Cleanup",
+};
+
 function Entry({ e, tz }: { e: RateChangeLogEntry; tz: string }) {
   const [open, setOpen] = useState(e.itemCount <= 10);
-  const what =
-    e.changeType === "undo" ? `Undo of #${e.undoOfId}` : e.changeType === "bulk" ? "Bulk rating" : "Rate change";
+  const what = e.operation === "undo" ? `Undo of #${e.undoOfId}` : OPERATION[e.operation];
   return (
     <li className="rlog-entry">
       <div className="rlog-head">
@@ -63,9 +75,12 @@ function Entry({ e, tz }: { e: RateChangeLogEntry; tz: string }) {
           {formatZoned(e.at, tz)} · {e.user ?? "system"}
         </span>
         <span className="fb-spacer" />
-        <span className="small">
-          {e.itemCount} rate{e.itemCount === 1 ? "" : "s"}: {countsText(e) || "no rate changed"}
-        </span>
+        {/* A save without rates (a new table, its name, delete or restore) says no "0 rates". */}
+        {(e.itemCount > 0 || ["rates", "rates_added", "bulk_rating", "undo"].includes(e.operation)) && (
+          <span className="small">
+            {e.itemCount} rate{e.itemCount === 1 ? "" : "s"}: {countsText(e) || "no rate changed"}
+          </span>
+        )}
       </div>
       {e.note && e.changeType !== "undo" && <div className="rlog-note small">“{e.note}”</div>}
       {e.itemCount > 0 && (

@@ -106,6 +106,27 @@ export function readableItems(diff: DiffEntry[], tableId: number): Item[] {
   return out.sort((x, y) => x.mccmnc.localeCompare(y.mccmnc) || (x.senderId ?? "").localeCompare(y.senderId ?? ""));
 }
 
+/**
+ * What a save did, for the entry's title (QA 2026-10-31, §13.12): adding rates read "Bulk rating" and a new table
+ * "Rate change · 0 rates". A Bulk rating job always writes a note; multi-line Rate Manager saves before then were
+ * recorded as bulk without one.
+ */
+export function operationOf(
+  changeType: string,
+  note: string | null,
+  diff: DiffEntry[],
+  items: Item[],
+): RateChangeLogEntry["operation"] {
+  if (changeType === "undo") return "undo";
+  if (changeType === "create") return "created";
+  if (changeType === "delete") return "deleted";
+  if (changeType === "cleanup") return "cleanup";
+  if (changeType === "bulk" && note !== null) return "bulk_rating";
+  if (!diff.some((d) => d.field === "line"))
+    return diff.some((d) => d.field === "archived" && d.before === true && d.after === false) ? "restored" : "details";
+  return items.length > 0 && items.every((i) => i.kind === "new") ? "rates_added" : "rates";
+}
+
 export function getRateChangeLog(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const q = request.query as { cursor?: string; limit?: number };
@@ -139,6 +160,7 @@ export function getRateChangeLog(request: FastifyRequest, reply: FastifyReply) {
         at: iso(r.inserted_at)!,
         user: r.username ?? null,
         changeType: r.change_type,
+        operation: operationOf(r.change_type, r.note ?? null, (r.diff ?? []) as DiffEntry[], items),
         note: r.note ?? null,
         undoOfId: r.undo_of_id === null ? null : Number(r.undo_of_id),
         currency: String(t[0].currency).trim(),

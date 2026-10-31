@@ -112,10 +112,14 @@ test("negative operators keep rows with empty values", () => {
 test("quick search: plain text means contains, wildcards are used as typed", () => {
   assert.equal(searchPattern("orbit"), "%orbit%");
   assert.equal(searchPattern("orb%"), "orb%");
-  assert.equal(searchPattern("o_bit"), "o_bit");
+  // Wildcard text is the start of a value unless it ends in % (QA 2026-10-31): "ALDEX_C" finds "ALDEX_CUST".
+  assert.equal(searchPattern("o_bit"), "o_bit%");
+  assert.equal(searchPattern("ALDEX_C", true), "ALDEX_C%");
+  assert.equal(searchPattern("%bit"), "%bit%");
+  assert.equal(searchPattern("50\\%"), "50\\%%", "an escaped % is not the trailing wildcard");
   // Lists of named records match the start (team trial round 3); a neutral ID anywhere.
   assert.equal(searchPattern("orbit", true), "orbit%");
-  assert.equal(searchPattern("%orbit", true), "%orbit");
+  assert.equal(searchPattern("%orbit", true), "%orbit%");
   assert.equal(searchPattern("#12", true), "%#12%");
   const { sql, values } = q({ search: "orbit" });
   assert.match(sql, /\(e\.name\)::text ILIKE \$1 OR \(e\.alias\)::text ILIKE \$1/);
@@ -123,7 +127,8 @@ test("quick search: plain text means contains, wildcards are used as typed", () 
 });
 
 test("sort uses the default, puts nulls last and ends with the ID tie-breaker", () => {
-  assert.match(q({}).sql, /ORDER BY e\.name ASC NULLS LAST, e\.id ASC/);
+  // Text sorts case-insensitively (QA 2026-10-31); other types as they are.
+  assert.match(q({}).sql, /ORDER BY lower\(\(e\.name\)::text\) ASC NULLS LAST, e\.id ASC/);
   assert.match(
     q({
       sort: [
@@ -131,7 +136,7 @@ test("sort uses the default, puts nulls last and ends with the ID tie-breaker", 
         { field: "name", dir: "asc" },
       ],
     }).sql,
-    /ORDER BY e\.updated_at DESC NULLS LAST, e\.name ASC NULLS LAST, e\.id DESC/,
+    /ORDER BY e\.updated_at DESC NULLS LAST, lower\(\(e\.name\)::text\) ASC NULLS LAST, e\.id DESC/,
   );
 });
 

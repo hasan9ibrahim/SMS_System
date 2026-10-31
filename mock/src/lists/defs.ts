@@ -79,7 +79,7 @@ import type {
 import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import { PRESETS } from "../reports/presets.js";
-import type { ListDef } from "./engine.js";
+import type { ColumnSql, ListDef } from "./engine.js";
 import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
 import { RECORDING_DAYS } from "../recording.js";
@@ -108,6 +108,41 @@ const entTrunkNames = (table: string, name: string, alias: string) =>
   `ARRAY(SELECT ${name} FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL
     ORDER BY ${alias}.name LIMIT 100)`;
 
+/**
+ * Filters on an enterprise's trunks column match its live trunks by name, as the viewer sees them (QA 2026-10-31,
+ * §5): the column shows names, so "ALDEX" finds the enterprises with a trunk whose name starts with ALDEX.
+ */
+function entTrunkWhere(table: string, alias: string, label: string): NonNullable<ColumnSql["where"]> {
+  const name = vis(trunkMask(alias, label));
+  const live = `FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL`;
+  const some = (cond: string) => `EXISTS (SELECT 1 ${live} AND ${cond})`;
+  return (op, c, p) => {
+    const lower = (vs: unknown[]) => `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
+    switch (op) {
+      case "like":
+        return some(`(${name}) ILIKE ${p(String(c.value))}`);
+      case "not_like":
+        return `NOT ${some(`(${name}) ILIKE ${p(String(c.value))}`)}`;
+      case "eq":
+        return some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`);
+      case "neq":
+        return `NOT ${some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`)}`;
+      case "in":
+        return some(`lower(${name}) = ANY(${lower(c.values ?? [])})`);
+      case "not_in":
+        return `NOT ${some(`lower(${name}) = ANY(${lower(c.values ?? [])})`)}`;
+      case "empty":
+        return `NOT EXISTS (SELECT 1 ${live})`;
+      case "not_empty":
+        return `EXISTS (SELECT 1 ${live})`;
+      case "regex":
+        return some(`(${name}) ~* ${p(String(c.value))}`);
+      default:
+        return "TRUE";
+    }
+  };
+}
+
 export const enterpriseList: ListDef<Enterprise> = {
   fields: listFields.enterprises,
   from: `enterprises e
@@ -130,8 +165,17 @@ export const enterpriseList: ListDef<Enterprise> = {
     accountManager: { sql: fullName("am") },
     accountManagerId: { sql: "e.account_manager_id" },
     country: { sql: "co.iso" },
-    customerTrunkCount: { sql: entTrunkCount("customer_trunks") },
-    vendorTrunkCount: { sql: entTrunkCount("vendor_trunks") },
+    // Filtered by trunk name, sorted by how many (QA 2026-10-31).
+    customerTrunkCount: {
+      sql: entTrunkCount("customer_trunks"),
+      sort: entTrunkCount("customer_trunks"),
+      where: entTrunkWhere("customer_trunks", "t", "Customer trunk"),
+    },
+    vendorTrunkCount: {
+      sql: entTrunkCount("vendor_trunks"),
+      sort: entTrunkCount("vendor_trunks"),
+      where: entTrunkWhere("vendor_trunks", "vt", "Vendor trunk"),
+    },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "e.updated_at" },
     archived: { sql: "(e.deleted_at IS NOT NULL)" },
@@ -473,12 +517,13 @@ export const rateLineList: ListDef<RateLineRow> = {
     mccmnc: { sql: "l.mccmnc" },
     senderId: { sql: "l.sender_id" },
     rate: visCol(rateHide("l.rate")),
-    routedCost: visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))),
+    // Filters compare what the row shows (round: decimals, QA 2026-10-31).
+    routedCost: { ...visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))), round: 6 },
     routedVendor: visCol(trunkMask("bv", "Vendor trunk")),
-    margin: visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })),
-    marginPct: visCol(hide("margin", marginPctSql, ownedTable)),
+    margin: { ...visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })), round: 6 },
+    marginPct: { ...visCol(hide("margin", marginPctSql, ownedTable)), round: 1 },
     changeType: { sql: changeTypeSql },
-    changePct: { sql: changePctSql },
+    changePct: { sql: changePctSql, round: 1 },
     validFrom: { sql: "l.valid_from" },
     validTo: { sql: "l.valid_to" },
     nextRate: visCol(rateHide("nxt.rate")),
@@ -486,7 +531,7 @@ export const rateLineList: ListDef<RateLineRow> = {
     isBlocked: { sql: "l.is_blocked" },
     negativeMargin: { sql: `(COALESCE(l.rate < ${bestBuySql}, false))` },
     dialCode: { sql: "l.dial_code" },
-    sysRate: visCol(rateHide(toPlatformSql("l.rate"))),
+    sysRate: { ...visCol(rateHide(toPlatformSql("l.rate"))), round: 6 },
     rateNote: { sql: "l.rate_note" },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "l.updated_at" },
@@ -1026,6 +1071,22 @@ const dlrTargetSql = `CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r
     SELECT min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) FROM unnest(r.mccmncs) AS c(code)
       LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)) END) END`;
 
+/**
+ * The same target for every rule in one pass (QA 2026-10-31, §13.8): filtering or sorting on the per-row subquery
+ * above ran it for every rule, 2–6 s at the seeded volume. Joined only when the list filters or sorts on the target;
+ * the page's rows keep the subquery.
+ */
+const DESTINATION_TARGETS = `LEFT JOIN (
+    SELECT x.id, min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) AS pct
+      FROM route_rules x CROSS JOIN LATERAL unnest(x.mccmncs) AS c(code)
+      LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)
+     WHERE x.mccmnc_mode = 'inclusive' AND x.dlr_target_pct IS NULL AND x.route_type <> 'block'
+     GROUP BY x.id) dt ON dt.id = r.id`;
+const dlrTargetJoinedSql = "CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r.dlr_target_pct, dt.pct) END";
+const usesDlrTarget = (query: ListQuery) =>
+  /"field":"dlr(Target|BelowTarget)"/.test(JSON.stringify(query.filter ?? {})) ||
+  (query.sort ?? []).some((s) => s.field === "dlrTarget" || s.field === "dlrBelowTarget");
+
 const ruleTrunkName = vis(trunkMask("t", "Customer trunk"));
 const ruleVendorName = vis(trunkMask("vt", "Vendor trunk"));
 /** A rule is own when it names only own clients' trunks. */
@@ -1089,7 +1150,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
   // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
   from: (query) => `route_rules r
     LEFT JOIN route_rule_traffic tr ON tr.route_rule_id = r.id AND tr.time_window = '${trafficWindow(query)}'
-    LEFT JOIN users ub ON ub.id = r.updated_by_id`,
+    LEFT JOIN users ub ON ub.id = r.updated_by_id${usesDlrTarget(query) ? `\n    ${DESTINATION_TARGETS}` : ""}`,
   baseWhere: "r.deleted_at IS NULL",
   archivedField: "archived",
   columns: {
@@ -1165,8 +1226,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
-    dlrTarget: { sql: dlrTargetSql },
-    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetSql})` },
+    dlrTarget: { sql: dlrTargetJoinedSql },
+    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetJoinedSql})` },
     margin: visCol(hide("margin", "tr.margin", ownedRule)),
     status: { sql: "r.status" },
     window: { sql: "NULL", where: () => "TRUE" },
@@ -1320,6 +1381,13 @@ export const changeList: ListDef<Change> = {
     userId: { sql: "c.user_id" },
     undoOfId: { sql: "c.undo_of_id" },
     ip: { sql: "host(c.ip)" },
+    // Entry changes of one number list (QA 2026-10-31, §6.4): entries are archived, never deleted, so every change
+    // still finds its list.
+    numberListId: {
+      sql: "NULL",
+      where: (_op, c, p) => `(c.entity_type = 'number_list_entry' AND c.entity_ids && ARRAY(
+        SELECT ne.id FROM number_list_entries ne WHERE ne.number_list_id = ${p(Number(c.value))}::bigint))`,
+    },
   },
   search: ["note", "userName", "entityType"],
   idSql: "c.id",

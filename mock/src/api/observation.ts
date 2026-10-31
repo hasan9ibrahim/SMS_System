@@ -15,7 +15,7 @@ import type {
   TroubleTicketPreviewInput,
 } from "@sms/contract";
 import { withDb } from "../db.js";
-import { chQuery, ChError, ChUnavailable } from "../edr.js";
+import { chQuery, ChError, ChTimeout, ChUnavailable } from "../edr.js";
 import { chSelect, lit, nameMaps, runChList, withOutcomes, type ChListDef } from "../lists/chEngine.js";
 import {
   EDR_TEMPLATE_FROM,
@@ -43,8 +43,10 @@ import { PastDetailError } from "../reports/source.js";
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
 
-/** EDR store errors: unreachable = 503; a query ClickHouse rejects (e.g. a bad regex) = 400. */
+/** EDR store errors: unreachable or too slow = 503; a query ClickHouse rejects (e.g. a bad regex) = 400. */
 export function chProblem(reply: FastifyReply, err: unknown) {
+  if (err instanceof ChTimeout)
+    return sendProblem(reply, 503, "The EDR store did not finish in time; choose a shorter period or narrower filters");
   if (err instanceof ChUnavailable) return sendProblem(reply, 503, "The EDR store is not answering; try again shortly");
   // Detail asked for a period older than the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
   if (err instanceof PastDetailError)
@@ -56,11 +58,26 @@ export function chProblem(reply: FastifyReply, err: unknown) {
   throw err;
 }
 
+/**
+ * A Start Time period at the filter's top level (QA 2026-10-31, §9.1, §9.2): `between`, or a lower and an upper bound.
+ * Without one a list read every EDR kept (a year) and sorted them.
+ */
+export function hasPeriod(query: ListQuery): boolean {
+  const f = query.filter;
+  if (!f || (f.logic === "or" && f.conditions.length > 1)) return false;
+  const ops = f.conditions.flatMap((c) => ("field" in c && c.field === "startTime" ? [c.op] : []));
+  return ops.includes("between") || (ops.some((o) => o === "gt" || o === "gte") && ops.some((o) => o === "lt" || o === "lte"));
+}
+
 function queryCh<Row>(fields: ListFields, def: ChListDef<Row>) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const query = request.body as ListQuery;
     const errors = checkListQuery(query, fields);
     if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
+    if (!hasPeriod(query)) {
+      const message = "Choose a period: a Start Time from and to";
+      return sendProblem(reply, 400, message, { errors: [{ path: "/filter", message }] });
+    }
     try {
       return await withDb(reply, (pool) => runChList(pool, def, query));
     } catch (err) {

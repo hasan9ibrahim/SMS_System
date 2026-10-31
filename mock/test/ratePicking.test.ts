@@ -99,6 +99,8 @@ after(async () => {
   if (ready) {
     await db().query("DELETE FROM rate_lines WHERE id = ANY($1)", [lines]);
     await db().query("DELETE FROM customer_trunk_rate_tables WHERE rate_table_id = ANY($1)", [tables]);
+    // The list figures a refresh may have written for them meanwhile (QA 2026-10-31: the delete failed on them).
+    await db().query("DELETE FROM rate_table_stats WHERE rate_table_id = ANY($1)", [tables]);
     await db().query("DELETE FROM rate_tables WHERE id = ANY($1)", [tables]);
   }
   await app.close();

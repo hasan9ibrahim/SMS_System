@@ -75,7 +75,18 @@ describe("Team report (§13.18)", { skip }, () => {
     assert.equal(r.totals.messages, msgs);
     assert.ok(msgs > 0, "account managers' clients sent traffic");
     assert.ok(r.rows.some((x: { activity: { daysActive: number } }) => x.activity.daysActive > 0));
-    assert.ok(r.rows.some((x: { noc: { alertsAcknowledged: number } }) => x.noc.alertsAcknowledged > 0));
+    // Acknowledged alerts in a window that holds the newest one: the seeded incidents stop at seed time.
+    const { rows: last } = await db().query("SELECT max(acknowledged_at) AS at FROM incidents");
+    const to = new Date(new Date(last[0].at).getTime() + 1000).toISOString();
+    const noc = await ok(
+      "runTeamReport",
+      call("POST", "/reports/team", {
+        period: "custom",
+        from: new Date(Date.parse(to) - 7 * 86_400_000).toISOString(),
+        to,
+      }),
+    );
+    assert.ok(noc.rows.some((x: { noc: { alertsAcknowledged: number } }) => x.noc.alertsAcknowledged > 0));
     assert.ok(r.rows.some((x: { rates: { routeRulesChanged: number } }) => x.rates.routeRulesChanged > 0));
     const filtered = await ok("runTeamReport", call("POST", "/reports/team", { ...Q, role: "account_manager" }));
     assert.ok(filtered.rows.every((x: { roles: string[] }) => x.roles.includes("account_manager")));
@@ -83,6 +94,17 @@ describe("Team report (§13.18)", { skip }, () => {
     assert.equal(bad.statusCode, 400);
     const csv = await ok("exportTeamReport", call("POST", "/reports/team/export", Q));
     assert.match(String(csv).split("\r\n")[0]!, /^Member,Department,Roles,Active clients/);
+  });
+
+  test("a year of the whole team answers in well under the statement timeout (QA 2026-10-31)", async () => {
+    // Per-member subqueries took 5 to 11 s and once timed out; one grouped pass per table takes a few hundred ms.
+    const to = new Date().toISOString();
+    const from = new Date(Date.parse(to) - 365 * 86_400_000).toISOString();
+    const t = Date.now();
+    const r = await ok("runTeamReport", call("POST", "/reports/team", { period: "custom", from, to, compare: true }));
+    const ms = Date.now() - t;
+    assert.ok(r.rows.length > 50);
+    assert.ok(ms < 5000, `${ms} ms`);
   });
 
   test("a department manager sees their department, an account manager themselves", async () => {
