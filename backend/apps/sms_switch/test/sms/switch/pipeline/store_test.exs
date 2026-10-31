@@ -133,7 +133,17 @@ defmodule Sms.Switch.Pipeline.StoreTest do
 
         # Only by the server whose lease is on it; by its time, not by when it was moved.
         refute Store.defer_scheduled(a, trunk, now - 3_000, now + 1, ent, [a], 600)
-        assert Store.defer_scheduled(c, trunk, now - 1_000, now + 60_000, ent, [c], 600)
+        # A query key gone already is skipped.
+        assert Store.defer_scheduled(
+                 c,
+                 trunk,
+                 now - 1_000,
+                 now + 60_000,
+                 ent,
+                 [c, "#{id}gone"],
+                 600
+               )
+
         assert Store.defer_scheduled(a, trunk, now - 3_000, now + 60_000, ent, [a], 600)
         assert Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
         refute Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
