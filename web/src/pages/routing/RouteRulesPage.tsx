@@ -365,6 +365,7 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
                   hideStatus
                   onSaved={() => undefined}
                   bindSubmit={(fn) => (submitGeneral.current = fn)}
+                  onEdit={() => setError(null)}
                 />
               </section>
               <ConfigurationSection id={r.id} expanded bind={(k, c) => blocks.current.set(k, c)} />
@@ -440,6 +441,7 @@ function EditRuleDialog({ id, done }: { id: number; done: () => void }) {
                 windowed
                 onSaved={() => undefined}
                 bindSubmit={(fn) => (submitGeneral.current = fn)}
+                onEdit={() => setError(null)}
               />
             </section>
             <ConfigurationSection id={r.id} expanded bind={(k, c) => blocks.current.set(k, c)} />

@@ -52,6 +52,7 @@ export function RuleGeneralForm({
   draftName,
   bindSubmit,
   windowed = false,
+  onEdit,
 }: {
   rule: RouteRuleDetail | null;
   onSaved: (id: number) => void;
@@ -70,6 +71,8 @@ export function RuleGeneralForm({
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
   /** In the Edit window (team trial round 8): no button of its own, the window's Save calls `bindSubmit`. */
   windowed?: boolean;
+  /** A field changed: the window clears the error it shows from the last Save. */
+  onEdit?: () => void;
 }) {
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
@@ -97,7 +100,12 @@ export function RuleGeneralForm({
         },
   );
   const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<General>) => setG((x) => ({ ...x, ...patch }));
+  // An edit clears the last Save's error ("Enter the rule name." stayed after a name was typed, functional QA round 13).
+  const set = (patch: Partial<General>) => {
+    setG((x) => ({ ...x, ...patch }));
+    setError(null);
+    onEdit?.();
+  };
   // Saves the fields (plus `patch`, e.g. Rule on from New rule's footer); resolves with an error text or null.
   const submitAsync = async (patch: Partial<RouteRuleInput> = {}): Promise<string | null> => {
     const fail = (m: string) => (setError(m), m);
