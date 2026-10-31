@@ -11,6 +11,11 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     envDir: "..",
+    build: {
+      // Fonts are always files, never inlined as data: URIs (Vite inlines files under 4 KB, e.g. small Roboto
+      // subsets), so the Content-Security-Policy keeps font-src 'self' (§14, deploy/ansible README).
+      assetsInlineLimit: (file: string) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
+    },
     server: {
       port: 5173,
       proxy: {

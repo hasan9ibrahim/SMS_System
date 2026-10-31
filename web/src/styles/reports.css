@@ -95,7 +95,7 @@
   border-top: var(--border-width) solid var(--color-border);
 }
 .rp-delta {
-  font-size: 11px;
+  font-size: var(--text-xs);
   margin-left: 4px;
   white-space: nowrap;
 }
@@ -133,7 +133,7 @@
 }
 .sales-card h3 {
   margin: 0 0 6px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .noc-cards {
   grid-template-columns: 1fr 1fr 2fr;

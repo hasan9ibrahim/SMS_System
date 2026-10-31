@@ -53,7 +53,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "customize",
-    name: "Customize (§10 /report/1)",
+    name: "Customize", // old platform /report/1 (§10)
     description: "Three grouping levels: date, customer, vendor.",
     department: null,
     settings: {
@@ -65,7 +65,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "enterprise",
-    name: "Enterprise (§10 /report/2)",
+    name: "Enterprise", // /report/2 (§10)
     description: "Per customer enterprise and trunk; the Enterprise report page adds billing time zones.",
     department: null,
     settings: {
@@ -77,7 +77,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "master_grouping",
-    name: "Master Grouping (§10 /report/10)",
+    name: "Master Grouping", // /report/10 (§10)
     description: "Date, customer and trunk, vendor and trunk.",
     department: null,
     settings: {
@@ -89,7 +89,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "usage_enterprise",
-    name: "Usage Enterprise (§10 /report/11)",
+    name: "Usage Enterprise", // /report/11 (§10)
     description: "Billable usage per customer and destination for billing reconciliation.",
     department: null,
     settings: {
@@ -101,7 +101,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "negative_margin",
-    name: "Negative Margin (§10 /report/12)",
+    name: "Negative Margin", // /report/12 (§10)
     description: "Traffic sold below cost: date, customer, destination, trunks and category, margin under 0.",
     department: null,
     settings: {
@@ -114,7 +114,7 @@ export const PRESETS: Preset[] = [
   },
   {
     key: "bilateral",
-    name: "Bilateral (§10 /bilateral)",
+    name: "Bilateral", // /bilateral (§10)
     description: "Traffic each way with bilateral partners: add a filter on the partner as customer or vendor.",
     department: null,
     settings: {

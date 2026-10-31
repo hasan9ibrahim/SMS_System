@@ -16,6 +16,7 @@ import { production } from "./mode.js";
 import { clearRoutingCostCache } from "./api/rateLookup.js";
 import { clearRouteMaps } from "./api/routeMap.js";
 import { invalidateLiveRoutes } from "./live/routing.js";
+import { CSP_REPORT_MAX_BYTES, registerCspReportParser } from "./api/cspReports.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
 export const PUBLIC_OPS = new Set([
@@ -27,6 +28,8 @@ export const PUBLIC_OPS = new Set([
   // A set-password link is its own proof (team trial round 11).
   "checkPasswordSetup",
   "completePasswordSetup",
+  // Browsers post Content-Security-Policy reports on their own (§14); size- and rate-limited.
+  "reportCspViolation",
 ]);
 
 
@@ -104,6 +107,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
   if (options.socket !== false) await registerSocket(app);
+  registerCspReportParser(app);
 
   // Every error answers as a problem with a title (R9): Fastify's own body has none, and over HTTP/2 (nginx with TLS)
   // the browser has no status text either, so the screens showed an empty message. Set before the routes, which
@@ -127,6 +131,8 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
           method: op.method,
           url: op.routePath,
           config: { op },
+          // The unauthenticated report endpoint takes 64 KB at most, whatever the content type (§14).
+          ...(op.operationId === "reportCspViolation" ? { bodyLimit: CSP_REPORT_MAX_BYTES } : {}),
           handler: async (request, reply) => {
             // Path parameters arrive as strings; numeric ones are checked as numbers.
             const params = (request.params ?? {}) as Record<string, unknown>;

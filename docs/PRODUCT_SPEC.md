@@ -1478,62 +1478,86 @@ Decided in team trial round 1 (2026-10-19).
 
 ## 15. Adopted GUI design
 
-Every page uses one window layout: a top menu bar, a row of page tabs, a page header, a data grid with a filter under each column, a detail panel and a status bar, in a light and a dark theme. This section fixes the look and layout only. Page fields, columns and behaviour come from the earlier sections; the names and numbers in the screenshots are placeholders.
+Every page uses one window layout: a top bar with the main menu, a row of page tabs, a page header, a filter card, a data grid with a filter under each column, a detail panel and a status bar, in a light, a dark and a blue-grey theme. This section fixes the look and layout only. Page fields, columns and behaviour come from the earlier sections.
 
-![Adopted design, light theme](design/gui_light.png)
+The screenshots below are the original reference. The team's design decisions since then (BACKEND_TODO: design refresh of 2026-10-22, 2026-10-24, team trial rounds 3, 6, 7 and 13, and the design pass of 2026-10-31) changed the palette, the top bar, the type and the place of the detail panel. Where the screenshots and this text differ, this text describes what is built. The names and numbers in the screenshots are placeholders.
 
-![Adopted design, dark theme](design/gui_dark.png)
+![Original design, light theme](design/gui_light.png)
+
+![Original design, dark theme](design/gui_dark.png)
 
 ### 15.1 Window layout, top to bottom
 
 | Zone | Look and behaviour |
 | --- | --- |
-| Top menu bar | Dark bar, 46 px. Logo left, then the main menu (Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin); sections with sub-pages open a dropdown. Right side: search / jump-to (Ctrl K), live TPS pill, alert bell with count, user avatar |
-| Page tab strip | 40 px, directly under the menu. Each open page is a tab (icon, title, close ✕), like browser tabs; pinned Home tab; red dot on tabs with an alert; "+" for a new tab; right side Split view and an open-tabs list. Ctrl-click or middle-click opens a page in a new tab; dragging a tab out of the strip opens it in its own window, dragging it back re-docks it (§13.5) |
-| Page header | Page title, then the sibling pages of the same section as small links (the current one highlighted), then actions on the right: Undo, History, Export, plus the main action as the one filled button |
-| Active-filter row | Chips for every active filter with ✕ to remove, Clear all, Save as view; selection summary and Bulk edit on the right |
-| Data grid | Column headers, then a filter row with one filter per column: text box for text columns, "starts with" for prefixes, ≥/≤ boxes for numbers, dropdowns for fixed values. A filter in use turns accent-coloured. Rows 38 px, checkbox first, numbers right-aligned, status as small coloured dots, warnings in amber, losses in red; a selected row is tinted; the cell being edited has an accent outline |
-| Detail panel | Under the grid, for the selected row: section list on the left, content in the middle, small trend chart and key figures on the right |
-| Status bar | 26 px at the bottom: row counts, keyboard shortcuts, autosave state, server time (UTC) |
+| Top bar | One row, 50 px, in the theme's header colour (white in the light theme). The Xpert logo on the left (the X alone when the bar is narrow), then the main menu: Dashboard, Live, Enterprises, Finance, Rates, Routing, Switch, Monitoring, Reports, Admin and Help. The current section is underlined in the accent colour. Sections with sub-pages open a dropdown on hover or click; a middle click on an entry opens it in a new tab behind and keeps the dropdown open. On the right: search / jump-to (Ctrl K; icon only below 1750 px), the live TPS pill, the server clock (UTC), the alert bell with its count and the user menu (theme, password, sign out). Up to 1180 px wide the main menu moves into a drawer behind a menu button. |
+| Page tab strip | 36 px, under the top bar. Each open page is a tab (icon, title, close ✕), like browser tabs, with a pinned Home tab, "+" for a new tab, tab groups in colours the user picks, a red dot on tabs with an alert and a green or red light for the live connection. On the right: Split view and the list of open tabs. Ctrl-click or middle-click opens a page in a new tab; dragging a tab out of the strip opens it in its own window, and dragging it back docks it (§13.5). |
+| Page header | Back, the page title, Help (?) and Reload. On the right the page actions: Undo, History, Export and the page's own actions, with the main action as the one filled accent button. Record actions (for example Clone, Delete, Edit, More) are one joined group that acts on the highlighted row or on the ticked rows. There are no sibling-page links (the menu lists them) and no subtitle. |
+| Filter card | One card under the header: quick search with field pills ("Quick search, or click to filter by a field…": pick a field, type a value; "Any of (OR)…" opens the AND/OR builder, §13.25), then the page's switches (for example Show deleted, Customer / Vendor, a period), Views (saved views) and Columns on the right. The header boxes, the pills and the switches are three separate filters, and all of them apply. With rows ticked, the selection summary shows here (for example "2 selected · 817 msgs", Clear selection). |
+| Data grid | A card. Column headers are bold and left-aligned on a light accent tint, with a filter under each: "=" for IDs, "starts with" or "contains" for text, ≥ ≤ for numbers, from..to for dates, a list with Select all for fixed values. A filter in use is accent-coloured. Rows are 42 px with a checkbox first; values read from the left (Live analytics excepted) in tabular figures. Columns fit the window but never cut a figure, a code or a date: the grid scrolls sideways instead. Chips, pills and links in cells end in an ellipsis. Status is a small dot with its word (Active has a green dot). Archived rows are struck through in the secondary text colour. A selected row is tinted. Under the grid: "Showing N of M records · scroll for more". Rows load page by page as the grid scrolls (virtualised, §13.25). |
+| Detail panel | On the right of the grid, resizable. It opens on a click, or on a double-click, Enter or E where the page says so (Route rules). It has its own tabs and its own Save; while it shows a Save, the header's main button is outlined, so one button is filled. Records with many fields (enterprises, trunks, rate tables) open as a record page instead: breadcrumbs, title, tags and tabs, with the fields in form cards. |
+| Status bar | 28 px at the bottom: row counts, the page's keyboard shortcuts, the live state, autosave and the server time (UTC). |
+| Phones and tablets | No page scrolls sideways at any width. Up to 760 px wide: the menu is in the drawer, grids show cards with a Sort picker (a tap selects, a double-tap opens), detail panels and dialogs open full screen, multi-column forms stack, wide tables scroll inside their card, touch targets are at least 36 px and inputs use 16 px text (no zoom on focus). Tablets keep the desktop pages with the drawer menu. |
 
 ### 15.2 Themes
 
-Users switch between Light and Dark in their profile; both are low-contrast and calm for long shifts (no pure white or pure black backgrounds).
+Users pick Light (the default), Dark or Blue-grey in the user menu; the choice is saved in their preferences. The colours are CSS variables in `web/src/styles/tokens.css`; no page uses a colour outside them, apart from the content of e-mails and QR codes. Text and filled controls meet WCAG AA contrast (4.5:1).
 
-| Token | Light | Dark |
-| --- | --- | --- |
-| Page background | #EEF1F5 | #1B2029 |
-| Panels / grid | #F9FAFB | #222833 |
-| Main text | #273142 | #DFE4EC |
-| Secondary text | #5B6577 | #A3ACBB |
-| Lines / borders | #DDE2EA | #323A47 |
-| Accent (buttons, active filter, selected tab) | #4A6FA5 | #7EA2D8 |
-| Good / OK | #3F8F6B | #74C29A |
-| Warning | #B7832F | #DBB26B |
-| Error / loss | #C0565B | #E08A8F |
-| Top menu bar | #2B3445 | #151920 |
+| Token | Light | Dark | Blue-grey |
+| --- | --- | --- | --- |
+| Page background | #F6F7F9 | #0F141A | #E9ECF0 |
+| Cards, panels, grid | #FFFFFF | #171C24 | #FFFFFF |
+| Main text | #1F2937 | #E6E9EF | #1D2633 |
+| Secondary text | #6B7280 | #9AA3B2 | #5D6878 |
+| Lines and borders | #E4E7EC | #29303B | #D6DBE2 |
+| Accent (selection, links, focus, current menu section) | #2563EB | #5B8DEF | #2B63C6 |
+| Accent text (selected items on their soft accent fill) | #1D4ED8 | #7AA5F5 | #2B63C6 |
+| Accent fill (the filled button, under white text) | #2563EB | #3B6FD8 | #2B63C6 |
+| Good (dots, bars, icons) | #16A34A | #4CC38A | #16A34A |
+| Good text (figures) | #157A3B | #4CC38A | #157A3B |
+| Warning | #B45309 | #E9B25F | #B45309 |
+| Problem / loss | #DC2626 | #F07178 | #DC2626 |
+| Problem fill (under white text) | #DC2626 | #C9454D | #DC2626 |
+| Top bar | #FFFFFF | #141921 | #1F3350 (navy, with the status bar) |
+| Dark surfaces (toasts, the bulk bar, terminals) | #1F2937 | #0B0F14 | #1F3350 |
+| Chart series 2–4 (series 1 is the accent) | #C2417D, #7C3AED, #0E8FA8 | #D0538F, #8F6CF0, #1A9FB3 | as light |
+
+Table and card headers use a light shade of the accent (7 %, 6 % in dark). Tab groups use the colours the user picks for them (Chrome's palette), so they carry the user's own meaning.
 
 ### 15.3 Common styling rules
 
-- Font: Inter (or the system sans-serif), 13 px body, 17 px page titles, tabular numbers in grids.
-- Corners 7–10 px; thin 1 px borders; no heavy shadows.
-- One filled accent button per page (the main action); all others outlined or plain.
-- Colour only carries meaning: green good, amber warning, red problem; everything else neutral.
-- Every list page in the system (enterprises, trunks, rate tables, route rules, invoices, EDR search, reports and so on) uses this same grid with per-column filters.
+- **Type.** Inter, bundled with the app (no font CDN), on every page; tabular figures in grids and wherever figures line up. Six sizes, each a token with its line height:
+
+  | Token | Size / line | Used for |
+  | --- | --- | --- |
+  | `--text-xs` | 11 / 16 px | captions, badges, uppercase labels |
+  | `--text-sm` | 12 / 16 px | secondary text, hints, chips, the status bar |
+  | `--text-md` | 13 / 18 px | grid headers and filters, menus, compact controls |
+  | `--text-base` | 14 / 20 px | body text, grid cells, inputs |
+  | `--text-lg` | 17 / 24 px | page titles on phones, large figures |
+  | `--text-xl` | 22 / 28 px | page titles (one size on every page), headline figures |
+
+  No text is smaller than 11 px; inputs on phones are 16 px. Card titles are 14 px semibold. Names and emphasis use weight 500–600, titles and column headers 700. Live analytics keeps its Roboto figures (team request).
+- **Shape.** Cards have 14 px corners, buttons and inputs 8–10 px; borders are 1 px; cards have a faint shadow in the light themes and none in the dark theme.
+- **One filled accent button per page** (the main action); all others are outlined or plain. While a panel shows its own Save, the header's main button is outlined.
+- **Colour only carries meaning:** green good, amber warning, red problem; everything else is neutral, or the accent for selection, links and the current place. Categories (enterprise type, trunk side, contact role, tier, product category) are neutral tags. Series on one chart that only need telling apart use the chart palette (blue, magenta, violet, cyan), never green, amber or red. ASR and DLR are plain from 80 %, amber from 60 to 80 % and red below 60 %; a negative margin is red and a positive one green where margins are compared (Live analytics, rule traffic, rate tables).
+  - **Exception, Live analytics (team request):** its column bands keep their colours (Traffic blue, Quality green, Billing amber, Network violet), and amber and red figures sit in filled chips.
+- **A quiet interface.** Nothing users see names a spec section, a build step or a trial round. Notes stay only where they prevent a mistake (a format, what a destructive action does); longer explanations live in the Help center (§11).
+- Every list page in the system (enterprises, trunks, rate tables, route rules, invoices, EDR search, reports and so on) uses this same grid with per-column filters, quick-search pills, Views and Columns (§13.25).
 
 ### 15.4 Route Rules page: layout and form as in the screenshots
 
-Unlike other pages, the Route Rules page follows the screenshots above in layout and form as well as look: the same columns, detail panel and condition editor. Names and numbers are still placeholders, and every field from §6.3 and §13.8–§13.11, §13.24 and §13.27 must be reachable from it.
+Unlike other pages, the Route Rules page follows the screenshots in layout and form as well as look: the same columns, detail panel and condition editor, with the changes the team decided (no sibling links, the quick-search pills instead of the chip row, the detail panel on the right, the default columns of round 7). Names and numbers are still placeholders, and every field from §6.3 and §13.8–§13.11, §13.24 and §13.27 must be reachable from it.
 
-**Page header:** title Route rules; sibling links Route rules, Route map, LCR, Re-rating, Rate lookup, Simulator; actions Undo, History, Export, Simulate and the filled New rule button.
+**Page header:** title Route rules; actions Undo, History, Export, Cleanup (with the number of rules it suggests), Simulate and the filled New rule button; the record actions Clone, Delete, Edit and More act on the highlighted rule or on the ticked rules (§13.11, §13.29).
 
-**Filter row:** active filter chips, Clear all, Save as view; on the right the selection summary ("2 selected · 28.2k msgs") and Bulk edit (§13.11).
+**Filter card:** quick search with field pills, Show deleted, Views and Columns. With rules ticked, the selection summary ("2 selected · 817 msgs") and Clear selection.
 
 **Grid columns, with the filter under each header:**
 
 | Column | Content | Filter |
 | --- | --- | --- |
-| Checkbox | Row selection for bulk edit | Select all |
+| Checkbox | Row selection for the record actions | Select all |
 | ID | Rule ID | equals |
 | Rule | Rule name | contains / wildcard |
 | Pri | Priority | ≥ ≤ range |
@@ -1541,23 +1565,26 @@ Unlike other pages, the Route Rules page follows the screenshots above in layout
 | Category | Customer category, for example Direct, Promo, OTP, WHS, All | list |
 | Customer trunks | First trunks plus "+N"; hover lists all | contains |
 | Destination | Country · Network (MCCMNC) names, a whole country as "Country (whole country)"; the 3-digit All networks code is only the country default entry, not the whole country (decided in team trial round 1); uses the destination picker (§13.21) | starts with |
-| Vendors | Vendor split, for example "Kite\_DIR 60 · Orbit\_DIR 40", or "LCR · 6 vendors"; editable in place | vendor |
-| 24h | Volume; hover shows the per-customer breakdown with selectable time frame (§13.27) | ≥ |
-| ASR | Delivery-attempt success % | ≥ |
-| DLR | Delivered % ; amber when below threshold | ≤ |
-| Margin | Margin in base currency; red when negative | < 0 and ranges |
+| Vendors | Every vendor level: one level as "Kite\_DIR 60 · Orbit\_DIR 40" (percentage), "a / b" (round robin) or "a › b" (top down), several as "L1 … \| L2 …"; edited in the Vendors window | vendor |
+| 24h | Volume; hover shows the per-customer breakdown with a selectable time frame from 15 minutes to 30 days (§13.27) | ≥ |
+| Updated Time, Updated By | When and by whom the rule was last saved | date range, text |
 | On | Enabled dot (filled) or disabled (hollow) | list |
 
-**Detail panel (selected rule), left section list:**
+ASR, DLR (amber below the threshold), Margin (red when negative), DLR target and the traffic window are hidden by default and added with Columns.
 
-- **Conditions:** rule title, "all must match" (switchable to any), + Add condition. Each condition is a chip of field, operator and value, for example Trunk in …, Destination in …, Sender not ^(TEST|DEMO), TPS 5s > 50 · release 45 (§13.8), Revenue/msg ≥ 0.040 (§13.9), Time always, plus the HLR action per client (§13.24).
-- **Vendors:** split, hunt policy and priority, number whitelist and warm-up threshold (§13.27), revenue and cost limits (§13.26).
-- **Traffic:** volume, ASR, DLR and margin over time, per customer and vendor.
+**Detail panel (on the right):** a click only highlights a rule; a double-click, Enter or E opens it. Title "#16 NAME all must match". Tabs:
+
+- **Edit:** name, priority, what happens when no vendor can take the message (STOP / YES), comment, Rule on, and Save.
+- **Configuration:** category, customer trunks, destination and vendors (the Vendors window: split, levels, warm-up threshold and Reset, number whitelist, revenue and cost limits, §13.26, §13.27).
+- **Conditions:** "all must match" (switchable to any), + Add condition. Each condition is a chip of field, operator and value, for example Trunk in …, Destination in …, Sender not ^(TEST|DEMO), TPS 5s > 50 · release 45 (§13.8), Revenue/msg ≥ 0.040 (§13.9), Time always, plus the HLR action per client (§13.24).
+- **Traffic:** volume, ASR, DLR and margin over time, per customer and per vendor (the tables stack in a narrow panel).
 - **History:** every save by user with Undo (§13.10).
-- **Test:** run a sample number through the rule (Route Simulator).
-- Right side: Traffic 24h trend line, Messages and Margin for the rule.
+- **Test:** runs a sample number through the rule, as the Route Simulator does.
+- Under the Edit form: the Traffic 24h trend line, Messages and Margin for the rule.
 
-**Status bar:** row counts ("9 rows · 24 total"), shortcuts ↑↓ move, Space select, E edit, D duplicate, Ctrl+Z undo; Autosave on; server time UTC.
+**New rule** opens one window with General, Configuration and Other conditions; the rule exists as a switched-off draft while the window is open and is discarded with × (§6.3, §13.10).
+
+**Status bar:** row counts ("3,147 rows · 200 loaded"), shortcuts ↑↓ move, Space select, E edit, D duplicate, Ctrl+Z undo; Live; Autosave on; server time UTC.
 
 ## 16. SMPP field mapping, glossary and rebuild notes
 

@@ -189,7 +189,7 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
         <div className="palette-results" role="listbox">
           {items.length === 0 && (
             <p className="muted pad">
-              {records.isError ? "Record search needs the mock server and seeded database." : "No matches."}
+              {records.isError ? "Record search is not available right now." : "No matches."}
             </p>
           )}
           {items.map((item, i) => (

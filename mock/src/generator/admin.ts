@@ -54,7 +54,7 @@ export const ACCESS_GROUPS: {
   },
   {
     name: "Account Manager",
-    description: "Own enterprises, rates and reports (§13.17 masking applies)",
+    description: "Own enterprises, rates and reports (masking applies)",
     permissions: {
       dashboard: ["view"],
       enterprises: ["view", "edit"],

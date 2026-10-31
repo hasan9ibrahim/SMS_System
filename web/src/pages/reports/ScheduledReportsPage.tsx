@@ -155,7 +155,7 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
         options={[
           { value: "preset", label: "Ready-made report" },
           { value: "view", label: "Saved Master Report view" },
-          { value: "team", label: "Team report (§13.18)" },
+          { value: "team", label: "Team report" },
         ]}
       />
       {v.templateKind === "team" ? (

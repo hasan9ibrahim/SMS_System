@@ -70,8 +70,8 @@ function EnterpriseEmails({ id }: { id: number }) {
     </dl>
   );
 }
+// The type is a category, so its tag stays neutral (§15.3: colour only carries meaning).
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
-const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
 
 /** The trunks by name, one after another (team trial round 7); pointing at the cell lists them all. */
 function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[] }) {
@@ -173,7 +173,7 @@ export function EnterprisesPage() {
             content: (
               <div className="ent-card">
                 <div className="record-chips">
-                  <span className={`chip-tag ${TYPE_TONE[r.type]}`}>{TYPE_LABEL[r.type]}</span>
+                  <span className="chip-tag">{TYPE_LABEL[r.type]}</span>
                   <span className="chip-tag">{r.tier.replace("tier", "Tier ")}</span>
                   <StatusPill active={r.status === "active"} />
                   {r.archivedAt && <span className="chip-tag amber">Deleted {r.archivedAt.slice(0, 10)}</span>}

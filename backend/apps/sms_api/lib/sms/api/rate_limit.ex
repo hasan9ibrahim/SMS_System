@@ -4,6 +4,8 @@ defmodule Sms.Api.RateLimit do
   `:limit` sign-in calls (password, code and resend together) per address in a window of `:window_s` seconds; more
   are answered 429 until the window ends. The per-user lockout (5 wrong passwords, 15 minutes) is separate.
 
+  `hit/3` counts other calls under their own key (Content-Security-Policy reports, §14).
+
   Counted in ETS on each node; each server counts its own share.
   """
   use GenServer
@@ -16,10 +18,16 @@ defmodule Sms.Api.RateLimit do
   @spec hit(String.t()) :: :ok | {:error, pos_integer()}
   def hit(ip) do
     {limit, window} = settings()
+    hit(ip, limit, window)
+  end
+
+  @doc "Counts one call under `key`, at most `limit` in `window` seconds; same answers as `hit/1`."
+  @spec hit(term(), pos_integer(), pos_integer()) :: :ok | {:error, pos_integer()}
+  def hit(key, limit, window) do
     # Monotonic time can be negative: floor division and modulo keep the windows aligned.
     now = System.monotonic_time(:second)
     slot = Integer.floor_div(now, window)
-    count = :ets.update_counter(@table, {ip, slot}, 1, {{ip, slot}, 0})
+    count = :ets.update_counter(@table, {key, slot}, 1, {{key, slot}, 0})
     if count > limit, do: {:error, max(window - Integer.mod(now, window), 1)}, else: :ok
   end
 

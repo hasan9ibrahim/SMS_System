@@ -68,7 +68,7 @@ export async function unwrap<T>(call: Promise<{ data?: T; error?: unknown; respo
   try {
     result = await call;
   } catch {
-    throw new ApiError(0, { title: "Mock server not reachable (npm run dev:mock)", status: 0 });
+    throw new ApiError(0, { title: "The server is not reachable. Check the connection and try again.", status: 0 });
   }
   if (result.error !== undefined || !result.response.ok) {
     const problem = (result.error ?? {}) as Partial<Problem> & Record<string, unknown>;

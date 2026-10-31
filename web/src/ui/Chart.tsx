@@ -1,4 +1,4 @@
-// ECharts wrapper (§14). Colours come from the §15.2 tokens, read from CSS variables, and
+// ECharts wrapper (§14). Colours come from the tokens (§15.2), read from CSS variables, and
 // the chart redraws when the theme switches, so charts follow light and dark themes.
 import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts/core";
@@ -18,6 +18,8 @@ export interface ChartColors {
   warning: string;
   error: string;
   panel: string;
+  /** Series colours that only tell things apart (--chart-1…4, §15.3), in a fixed order. */
+  series: string[];
 }
 
 function readColors(): ChartColors {
@@ -32,8 +34,12 @@ function readColors(): ChartColors {
     warning: v("--color-warning"),
     error: v("--color-error"),
     panel: v("--color-panel"),
+    series: [v("--chart-1"), v("--chart-2"), v("--chart-3"), v("--chart-4")],
   };
 }
+
+/** The bundled Inter first, as in --font-family; canvas text needs the stack spelled out. */
+const FONT_FAMILY = '"Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 /** Token colours, updated when data-theme changes on <html>. */
 export function useChartColors(): ChartColors {
@@ -77,7 +83,9 @@ export function Chart({
     };
   }, []);
   useEffect(() => {
-    chart.current?.setOption(option, merge ? { lazyUpdate: true } : { notMerge: true });
+    // Chart text in the app font (§15), unless the chart sets its own.
+    const textStyle = { fontFamily: FONT_FAMILY, ...(option.textStyle as object | undefined) };
+    chart.current?.setOption({ ...option, textStyle }, merge ? { lazyUpdate: true } : { notMerge: true });
   }, [option, merge]);
   const clickRef = useRef(onClick);
   useEffect(() => {

@@ -379,7 +379,7 @@ async function userDeps(c: Db, id: number) {
       label: "Account manager of live enterprises",
       count: r.ams,
       blocking: true,
-      detail: "Hand them to another AM first (§13.30)",
+      detail: "Hand them to another AM first",
     },
     { key: "team", label: "Users reporting to this user", count: r.reports, blocking: false, detail: null },
     {
@@ -656,7 +656,7 @@ function sendCode(reply: FastifyReply, purpose: keyof typeof CODE_MAIL) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     if (purpose === "credentials" && !me.permissions.includes("*"))
-      return sendProblem(reply, 403, "Credentials can be exported and imported by admins only (§13.22)");
+      return sendProblem(reply, 403, "Credentials can be exported and imported by admins only");
     const { rows } = await pool.query(
       `SELECT first_name, email, totp_enabled, password_code_sent_at > now() - make_interval(secs => $2) AS too_soon
          FROM users WHERE id = $1 AND deleted_at IS NULL`,
@@ -1056,7 +1056,7 @@ const PLACEHOLDERS: Record<string, [string, string, string][]> = {
     ["ips", "Allowed IPs", "192.0.2.10, 192.0.2.11"],
     ["tps", "TPS", "100"],
     ["connections", "Connections", "4"],
-    ["password", "SMPP password (plain text, team trial round 1)", "fake-pass-123"],
+    ["password", "SMPP password (plain text)", "fake-pass-123"],
     [
       "trunks",
       "Every trunk's connection details, one block each (Notifications on the enterprise)",

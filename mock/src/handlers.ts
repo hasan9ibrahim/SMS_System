@@ -593,6 +593,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 import { downloadEmailAsset, listEmailAssets, uploadEmailAsset } from "./api/emailAssets.js";
+import { reportCspViolation } from "./api/cspReports.js";
 
 const VERSION = "0.32.0";
 MIGRATION_VERSION.value = VERSION;
@@ -605,6 +606,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
     serverTime: new Date().toISOString(),
     backend: "mock",
   }),
+  reportCspViolation,
 
   getCurrentUser: () => getCurrentUser(),
   signIn,

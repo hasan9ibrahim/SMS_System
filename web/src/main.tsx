@@ -3,8 +3,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
+// Inter, bundled and served from our own origin (§15; no font CDN, so the Content-Security-Policy keeps font-src
+// 'self'). Roboto is only for the Live analytics figures (team request, §13.7): regular and bold.
+import "@fontsource-variable/inter/wght.css";
 import "@fontsource/roboto/400.css";
-import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 import "./styles/base.css";
 import "./styles/shell.css";

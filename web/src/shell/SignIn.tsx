@@ -6,6 +6,7 @@ import type { SignInResult } from "@sms/contract";
 import { api, ApiError, SIGN_IN_REQUIRED_EVENT, unwrap } from "../api/client";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Button } from "../ui/primitives";
+import { UsernameHint } from "../ui/UsernameHint";
 
 /** True once any call answered 401 sign_in_required (no session, or it ended: idle 8 h, 24 h, signed out elsewhere). */
 export function useSignInRequired(): boolean {
@@ -87,12 +88,23 @@ export function SignInScreen() {
           <h1>Sign in</h1>
           <label className="signin-field">
             <span>Username</span>
-            <input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input
+              autoFocus
+              id="username"
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
           </label>
           <label className="signin-field">
             <span>Password</span>
             <input
               type="password"
+              id="current-password"
+              name="current-password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -110,6 +122,8 @@ export function SignInScreen() {
         </form>
       ) : (
         <form className="pw-gate-card signin-card" onSubmit={submitCode}>
+          {/* The password is saved with this username, not with the code typed below (§13.28). */}
+          <UsernameHint username={username} />
           <BrandLogo height={36} className="pw-gate-brand" />
           <h1>Enter your code</h1>
           <p className="muted">
@@ -121,6 +135,8 @@ export function SignInScreen() {
             <span>Code</span>
             <input
               autoFocus
+              id="one-time-code"
+              name="one-time-code"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={6}

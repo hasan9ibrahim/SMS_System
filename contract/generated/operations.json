@@ -698,6 +698,17 @@
  },
  {
   "method": "POST",
+  "path": "/csp-reports",
+  "operationId": "reportCspViolation",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/currencies",
   "operationId": "createCurrency",
   "tag": "finance",

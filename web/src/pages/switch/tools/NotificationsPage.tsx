@@ -170,7 +170,7 @@ function TechInfoDialog({ ids, done, oneEmail = false }: { ids: number[]; done: 
         )}
       </div>
       <p className="muted small">
-        The e-mail includes the SMPP password in plain text (team decision); check the recipients before sending.
+        The e-mail includes the SMPP password in plain text; check the recipients before sending.
       </p>
     </Modal>
   );

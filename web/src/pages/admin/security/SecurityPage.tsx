@@ -191,7 +191,7 @@ function PolicyCard() {
         </div>
         <div className="sec-locked small">
           <Icon name="lock" size={13} /> Not the username or name · not on the known-leaked list (
-          {int(s.leakedListSize)} entries in the mock)
+          {int(s.leakedListSize)} entries)
         </div>
         <div className="sec-locked small">
           <Icon name="lock" size={13} /> A password change signs the user out of every other session

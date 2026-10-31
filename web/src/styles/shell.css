@@ -42,7 +42,7 @@ button:focus-visible,
 }
 kbd {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 5px;
   border: var(--border-width) solid var(--color-border);
   border-radius: 4px;
@@ -50,7 +50,7 @@ kbd {
 }
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   background: var(--hover);
   padding: 0 4px;
   border-radius: 4px;
@@ -59,7 +59,7 @@ code {
   color: var(--color-text-secondary);
 }
 .small {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .pad {
   padding: 10px 14px;
@@ -147,7 +147,7 @@ a.btn {
 .btn-sm {
   height: 30px;
   padding: 0 11px;
-  font-size: 13px;
+  font-size: var(--text-md);
   gap: 6px;
 }
 .icon-btn {
@@ -239,7 +239,7 @@ a.btn {
   padding: 2px 9px;
   border-radius: 999px;
   background: var(--hover);
-  font-size: 12px;
+  font-size: var(--text-sm);
   /* A shade darker than secondary text: on the grey fill that was 4.3:1 (design QA round 13). */
   color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
 }
@@ -307,7 +307,7 @@ a.btn {
   padding: 4px 12px;
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-page-bg);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .split-bar.focused {
   box-shadow: inset 0 2px 0 var(--color-accent);
@@ -356,7 +356,7 @@ a.btn {
   white-space: nowrap;
   flex: none;
   font-weight: 700;
-  font-size: 17px;
+  font-size: var(--text-lg);
   background: none;
   border: 0;
   cursor: pointer;
@@ -385,7 +385,7 @@ a.btn {
   border: 0;
   background: transparent;
   color: color-mix(in srgb, var(--color-text) 78%, var(--color-header));
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 450;
   cursor: pointer;
   white-space: nowrap;
@@ -473,7 +473,7 @@ a.btn {
 .top-clock-tz {
   color: var(--color-text-secondary);
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .top-clock.offline .num {
   color: var(--color-text-secondary);
@@ -538,7 +538,7 @@ a.btn {
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -556,7 +556,7 @@ a.btn {
   background: var(--accent-soft);
   color: var(--color-accent-text);
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .avatar-head {
@@ -623,7 +623,7 @@ a.btn {
 }
 .menu-label {
   padding: 8px 10px 4px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -851,7 +851,7 @@ a.btn {
 .page-subtitle {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 14.5px;
+  font-size: var(--text-base);
 }
 .page-header-top .page-actions {
   align-self: center;
@@ -868,9 +868,11 @@ a.btn {
   opacity: 0.35;
   cursor: default;
 }
+/* One page-title size on every page, list and record alike (§15). */
 .page-header h1 {
   margin: 0;
-  font-size: var(--font-size-title);
+  font-size: var(--text-xl);
+  line-height: var(--leading-xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -918,7 +920,7 @@ a.btn {
   background: none;
   color: var(--color-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--text-md);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1020,7 +1022,7 @@ a.btn {
 .filter-card .quick-search input {
   width: 100%;
   height: 30px;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 .btn-add-filter {
   height: 34px;
@@ -1051,7 +1053,7 @@ a.btn {
 }
 .records-head h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 .count-badge {
@@ -1059,7 +1061,7 @@ a.btn {
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
   color: var(--color-text-secondary);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1078,7 +1080,7 @@ a.btn {
   min-height: 48px;
   padding: 0 20px;
   border-top: var(--border-width) solid var(--color-border);
-  font-size: 13.5px;
+  font-size: var(--text-md);
 }
 .detail {
   flex: 0 0 34%;
@@ -1168,7 +1170,7 @@ a.btn {
   align-items: center;
   gap: 24px;
   padding: 0 14px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   border-top: var(--border-width) solid var(--color-border);
   background: var(--color-header);
@@ -1227,7 +1229,7 @@ a.btn {
 .modal-head h2,
 .drawer-head h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: 700;
   letter-spacing: -0.01em;
   flex: 1;
@@ -1250,7 +1252,7 @@ a.btn {
 }
 .field > span {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-md);
   color: color-mix(in srgb, var(--color-text) 85%, var(--color-panel));
 }
 .drawer {
@@ -1291,7 +1293,7 @@ a.btn {
   top: 0;
   z-index: 1;
   padding: 8px 14px 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
   background: var(--color-head-tint);
@@ -1448,7 +1450,7 @@ a.btn {
 }
 .incident-sev {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1476,7 +1478,7 @@ a.btn {
   margin: 8px 0 10px;
 }
 .incident-title strong {
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 .incident-facts {
   display: grid;
@@ -1485,7 +1487,7 @@ a.btn {
   margin: 0 0 10px;
   background: var(--color-border);
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .incident-facts > div {
@@ -1493,7 +1495,7 @@ a.btn {
   background: var(--color-panel);
 }
 .incident-facts dt {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 .incident-facts dd {
@@ -1504,7 +1506,7 @@ a.btn {
   font-weight: 600;
 }
 .incident-facts .incident-value {
-  font-size: 16px;
+  font-size: var(--text-lg);
 }
 .incident-value.sev-critical {
   color: var(--color-error);
@@ -1592,7 +1594,7 @@ a.btn {
   flex: 1;
   border: 0;
   background: transparent;
-  font-size: 15px;
+  font-size: var(--text-base);
   padding: 4px 0;
 }
 .palette-input input:focus-visible {
@@ -1605,7 +1607,7 @@ a.btn {
 }
 .palette-group {
   padding: 8px 10px 4px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1687,7 +1689,7 @@ a.btn {
 }
 .placeholder h2 {
   margin: 10px 0 6px;
-  font-size: 17px;
+  font-size: var(--text-lg);
 }
 .card {
   background: var(--color-panel);
@@ -1697,7 +1699,7 @@ a.btn {
 }
 .card h2 {
   margin: 0 0 10px;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 .home-body {
   display: grid;
@@ -1768,7 +1770,7 @@ a.btn {
 }
 .home-sub {
   margin: 12px 0 4px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 650;
   color: var(--color-text-secondary);
   text-transform: uppercase;
@@ -2210,7 +2212,7 @@ select.chip-select {
   width: 36px;
 }
 .tabstrip {
-  height: 36px;
+  height: var(--tab-strip-height);
 }
 .tab {
   margin-top: 4px;
@@ -2229,14 +2231,11 @@ select.chip-select {
 .page-header:has(> .page-header-top) {
   gap: 8px;
 }
-.page-header h1 {
-  font-size: 21px;
-}
 .page-heading {
   gap: 1px;
 }
 .page-subtitle {
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .page-header-top .page-back {
   margin-top: 0;
@@ -2246,7 +2245,7 @@ select.chip-select {
 }
 .siblings a {
   padding: 3px 12px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .page .btn {
   height: 34px;
@@ -2277,17 +2276,17 @@ select.chip-select {
   padding: 6px 12px 6px 16px;
 }
 .records-head h2 {
-  font-size: 15px;
+  font-size: var(--text-base);
 }
 .records-foot {
   min-height: 34px;
   padding: 0 16px;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 
 /* ---------- one top bar (team trial round 3): logo, main menu, search and status in a single row ---------- */
 .topbar-main {
-  height: 50px;
+  height: var(--menu-bar-height);
   gap: 18px;
   padding: 0 18px;
   border-bottom: 0;
@@ -2300,7 +2299,7 @@ select.chip-select {
 }
 .menu-top {
   padding: 0 11px;
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 .topbar-right {
   flex: none;
@@ -2333,7 +2332,7 @@ select.chip-select {
 @media (max-width: 1250px) {
   .menu-top {
     padding: 0 7px;
-    font-size: 13.5px;
+    font-size: var(--text-md);
   }
   .logo > .logo-full,
   .top-clock-tz {
@@ -2351,7 +2350,7 @@ select.chip-select {
 }
 .page-actions .btn {
   padding: 0 10px;
-  font-size: 13px;
+  font-size: var(--text-md);
   gap: 5px;
 }
 .page-actions .icon-btn {
@@ -2360,14 +2359,11 @@ select.chip-select {
 .page-actions .seg > button {
   height: 24px;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .page-actions .range-chip {
   height: 30px;
-  font-size: 13px;
-}
-.page-header h1 {
-  font-size: 20px;
+  font-size: var(--text-md);
 }
 /* The records bar keeps its buttons only; the count is in the footer. */
 .records-head {
@@ -2432,7 +2428,7 @@ select.chip-select {
 }
 .detail-nav button {
   padding: 4px 10px;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .detail-main {
   flex: 1;
@@ -2506,7 +2502,7 @@ select.chip-select {
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--color-accent-text);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   cursor: default;
 }
 .pill-label {
@@ -2526,7 +2522,7 @@ select.chip-select {
   border-radius: 6px;
   background: var(--color-panel);
   color: var(--color-text);
-  font-size: 12.5px;
+  font-size: var(--text-md);
 }
 .pill-x {
   display: grid;
@@ -2583,7 +2579,7 @@ select.chip-select {
 }
 .pill-group-title {
   padding: 2px 6px 4px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2596,7 +2592,7 @@ select.chip-select {
   background: none;
   color: var(--color-text);
   text-align: left;
-  font-size: 13px;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 .pill-field:hover {
@@ -2718,7 +2714,7 @@ select.chip-select {
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
@@ -2734,7 +2730,7 @@ select.chip-select {
   gap: 6px;
   padding: 2px 10px 2px 8px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
@@ -2834,7 +2830,7 @@ body.resizing-split-h {
   background: var(--tg);
   color: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
   flex: none;
@@ -2908,7 +2904,7 @@ body.resizing-split-h {
 .theme-picker-current {
   margin-left: auto;
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .theme-picker-option {
   padding-left: 22px;
@@ -2923,7 +2919,7 @@ body.resizing-split-h {
   padding: 8px 10px;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 .sim-ingress.blocked {
   border-color: var(--color-error);

@@ -9,6 +9,9 @@ type Schemas = components["schemas"];
 
 export type Problem = Schemas["Problem"];
 export type Health = Schemas["Health"];
+export type CspViolation = Schemas["CspViolation"];
+export type CspReportBody = Schemas["CspReportBody"];
+export type CspReportList = Schemas["CspReportList"];
 export type CurrentUser = Schemas["CurrentUser"];
 export type ListId = Schemas["ListId"];
 export type ListQuery = Schemas["ListQuery"];

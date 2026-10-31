@@ -337,7 +337,7 @@ function ApplyDialog({
       }
     >
       <p>
-        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change (§13.10).
+        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change.
       </p>
       <label className="field">
         <span>Note (optional, shown in History)</span>

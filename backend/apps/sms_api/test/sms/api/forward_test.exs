@@ -87,6 +87,40 @@ defmodule Sms.Api.ForwardTest do
     end
   end
 
+  test "Content-Security-Policy reports go through without a session, as nobody, size- and rate-limited (§14)" do
+    report = ~s({"csp-report": {"effective-directive": "img-src", "blocked-uri": "data"}})
+    ip = "198.51.100.#{rem(System.unique_integer([:positive]), 200)}"
+
+    # Browsers always say how long a report is.
+    post_report = fn body, addr ->
+      %{build_conn() | remote_ip: addr}
+      |> put_req_header("content-type", "application/csp-report")
+      |> put_req_header("content-length", Integer.to_string(byte_size(body)))
+      |> post("/api/v1/csp-reports", body)
+    end
+
+    {:ok, addr} = :inet.parse_address(String.to_charlist(ip))
+    conn = post_report.(report, addr)
+    assert conn.status == 200
+    assert_received {:mock_request, "POST", "/api/v1/csp-reports", _, headers, ^report}
+    refute Enum.any?(headers, fn {k, _} -> k == "x-sms-user" end)
+
+    big = ~s({"csp-report": {"script-sample": "#{String.duplicate("x", 70_000)}"}})
+    assert post_report.(big, addr).status == 413
+    refute_received {:mock_request, "POST", "/api/v1/csp-reports", _, _, ^big}
+
+    unsized =
+      %{build_conn() | remote_ip: addr}
+      |> put_req_header("content-type", "application/csp-report")
+      |> post("/api/v1/csp-reports", report)
+
+    assert unsized.status == 413
+
+    # 60 a minute per address: the first one above counted, so 59 more go through and the next is refused.
+    for _ <- 1..59, do: assert(post_report.(report, addr).status == 200)
+    assert %{"title" => "Too many reports"} = post_report.(report, addr) |> json_response(429)
+  end
+
   test "bodies go through; large answers are streamed; empty answers stay empty" do
     conn = signed("/api/v1/enterprises/query", :post, ~s({"limit": 5}))
     assert conn.status == 200

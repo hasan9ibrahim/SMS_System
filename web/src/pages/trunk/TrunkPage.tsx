@@ -305,7 +305,7 @@ export function TrunkPage({ kind }: { kind: TrunkKind }) {
         meta={
           t && (
             <>
-              <span className={`chip-tag ${kind === "vendor" ? "amber" : "blue"}`}>{LABEL[kind]}</span>
+              <span className="chip-tag">{LABEL[kind]}</span>
               {connection && (
                 <span
                   className={`chip-tag ${connection === "up" ? "green" : connection === "reconnecting" ? "amber" : ""}`}

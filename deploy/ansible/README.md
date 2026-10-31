@@ -168,6 +168,25 @@ into one pcapng), and Extract Recording (`tshark` cuts the window's files with t
 and write to `/var/lib/sms-pcap/captures`, kept 30 days unless kept on the screen. Network Diagnosis uses `ping`,
 `traceroute`, `mtr` and a TCP connect on the server that has the chosen source address.
 
+## Content-Security-Policy
+
+nginx sends a Content-Security-Policy with every page (`roles/web/templates/sms.conf.j2`, policy in
+`roles/web/defaults/main.yml` as `web_csp_policy`). It allows only what the screens use: scripts, fonts and styles
+from the site itself (fonts are bundled, nothing comes from a CDN), images from the site plus `data:` / `blob:`
+(QR codes, downloads), the API and the live WebSocket on the same name, no frames from anywhere (the e-mail previews
+are sandboxed `srcdoc` frames, which need none) and no embedding by other sites. Inline styles stay allowed because
+the e-mail previews and the e-mail designer show e-mails as they are written, styled inline.
+
+It starts **report-only** (`web_csp_enforce: false`, header `Content-Security-Policy-Report-Only`): the browser
+blocks nothing and reports what the policy would block to `POST /api/v1/csp-reports` (no sign-in; at most 64 KB and
+60 a minute per address in nginx, the API and the service). The TypeScript service logs one line per violation,
+e.g. `csp report: img-src blocked https://cdn.example/x.png on https://sms.example/admin/email-templates`; read them
+with `journalctl -u sms-service | grep "csp "`. When a week of normal use logs
+none, set `web_csp_enforce: true` in the inventory (`group_vars/all.yml` or the host) and run `site.yml`: the same
+policy is then sent as `Content-Security-Policy` and enforced. Set it back to `false` to return to report-only.
+Changing the policy: edit `web_csp_policy` (production) and `deploy/nginx.conf` (the docker-compose trial instance,
+always report-only), then check the screens again.
+
 ## Firewall
 
 Only listed traffic is accepted (`roles/base/templates/nftables.conf.j2`): SSH and the monitoring pages from

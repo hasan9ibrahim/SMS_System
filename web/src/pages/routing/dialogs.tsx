@@ -310,7 +310,7 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
       )}
       {kind === "set_lcr_profile" && (
         <div className="field">
-          <span>LCR profile (§13.23)</span>
+          <span>LCR profile</span>
           <ListLookup<{ id: number; name: string; vendorCount: number }>
             list="lcr_profiles"
             value={profile}

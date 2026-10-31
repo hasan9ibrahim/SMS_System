@@ -201,10 +201,10 @@
 }
 @media (max-width: 1500px) {
   .la-grid td {
-    font-size: 11.5px;
+    font-size: var(--text-sm);
   }
   .la-grid th {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .la-grid td,
   .la-grid th {
@@ -223,17 +223,17 @@
 .la-grid td.num:not(.la-strong),
 .la-grid td.la-name {
   font-family: "Roboto", var(--font-family);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   letter-spacing: 0.01em;
 }
 .la-grid td.num.la-strong {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 /* Every figure the same size and font (team trial round 5); ASR, DLRs and margin are bold. */
 .la-grid td.num.la-strong,
 .la-grid td.num.la-strong .la-pill {
   font-family: "Roboto", var(--font-family);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 /* Names in the first column (customer, trunk, vendor, destination…) are plain, not bold. */
@@ -247,7 +247,7 @@
 }
 /* Column titles a touch smaller so they fit on one line next to the smaller figures. */
 .la-grid thead tr:not(.la-bands) th {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   padding-left: 2px;
   padding-right: 2px;
 }
@@ -325,7 +325,7 @@ table th.num,
 .la-grid td.num:not(.la-strong),
 .la-grid td.num.la-strong,
 .la-grid td.num.la-strong .la-pill {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 /* Live analytics columns (team trial round 6): the name column takes about the first third, so the figures start
