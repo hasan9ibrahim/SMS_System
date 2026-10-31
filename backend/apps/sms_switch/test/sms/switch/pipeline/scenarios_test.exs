@@ -39,8 +39,17 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
     start_vendor([vendor], receipts: Pipeline.Receipts)
     await_bound(1, 1)
     [conn] = FakeSmsc.connections(smsc)
-    customer = Keyword.get(opts, :customer, CustomerCase.trunk())
-    %{port: port} = CustomerCase.start_customer(trunks: [customer], intake: Pipeline.Intake)
+
+    customers = [
+      Keyword.get(opts, :customer, CustomerCase.trunk()) | Keyword.get(opts, :more_customers, [])
+    ]
+
+    %{port: port} =
+      CustomerCase.start_customer(
+        trunks: customers,
+        intake: Pipeline.Intake,
+        session: Keyword.get(opts, :session, [])
+      )
 
     {client, resp} =
       Client.bind(port, :bind_transceiver, %{system_id: "acme", password: "secret"})
@@ -171,6 +180,148 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       Pipeline.Buffers.kick("ct.42")
       # The drain stops after 5 s with nothing to do.
       assert_eventually(fn -> buffer_count("ct:42") == 0 end, 8_000)
+    end
+  end
+
+  # A message's receipt data as the forwarder keeps it (`Forwarder.core/1`), from client `ip` of trunk `trunk_id`.
+  defp held_data(id, ip, trunk_id \\ 1) do
+    %{
+      id: id,
+      ids: [id],
+      edr_id: "e-" <> id,
+      received_at: System.os_time(:millisecond),
+      origin: %{session_id: "gone-" <> id, trunk_id: trunk_id, ip: ip, bind: :trx},
+      trunk: %{id: trunk_id, enterprise_id: 11, dlr_session_affinity: :strict, dlr_hold_hours: 72},
+      source: "FakeBank",
+      source_ton: 5,
+      source_npi: 0,
+      destination: @dest,
+      destination_ton: 1,
+      destination_npi: 1,
+      registered_delivery: 1,
+      text: "hi",
+      parts: 1,
+      vendor_trunk_id: nil
+    }
+  end
+
+  defp hold(data, at) do
+    receipt = %{status: "DELIVRD", error: "000", network_error: 0, done_at: at, received_at: at}
+    entry = %{data: data, receipt: receipt, held_at: at, until: at + 3_600_000}
+    :ok = Pipeline.Store.hold(data.trunk.id, entry, at, "#{data.id}:final")
+  end
+
+  defp held_ids(trunk_id) do
+    {:ok, held} = Pipeline.Store.held(trunk_id, 100)
+    Enum.map(held, fn {_, e} -> e.data.id end)
+  end
+
+  defp receipted(%Pdu{tlvs: tlvs}), do: List.keyfind(tlvs, :receipted_message_id, 0)
+
+  describe "held receipts (§13.1, S-5.13, S-5.14)" do
+    test "a receipt for an IP with no session never blocks the trunk's other held receipts" do
+      %{client: client} = start_all()
+      now = System.os_time(:millisecond)
+      # Oldest first: one for a client IP with no session now, then one for the IP that is bound.
+      hold(held_data("other-ip", {10, 1, 2, 3}), now)
+      hold(held_data("bound-ip", {127, 0, 0, 1}), now + 1)
+
+      run = Task.async(fn -> Pipeline.Held.run(1) end)
+      assert {_, %Pdu{} = dlr} = recv_until(client, &(&1.command == :deliver_sm), 1_500)
+      assert receipted(dlr) == {:receipted_message_id, "bound-ip"}
+      Task.await(run)
+      assert held_ids(1) == ["other-ip"]
+    end
+
+    test "a receipt the customer refuses for now (0x58) is held and sent again later, once" do
+      %{client: client, conn: conn} = start_all()
+      send_submit(client, %{short_message: "hello", registered_delivery: 1}, [], 2)
+
+      {client, %Pdu{status: 0, fields: %{message_id: id}}} =
+        recv_until(client, &(&1.command == :submit_sm_resp))
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      Process.sleep(200)
+
+      text =
+        "id:1 sub:001 dlvrd:001 submit date:2610241200 done date:2610241201 stat:DELIVRD err:000 text:"
+
+      FakeSmsc.send_pdu(
+        conn,
+        Pdu.new(:deliver_sm, %{esm_class: 0x04, short_message: text}, sequence: 900)
+      )
+
+      assert {client, %Pdu{command: :deliver_sm} = dlr} = Client.recv(client, 3_000)
+      Client.send_pdu(client, Pdu.response(dlr, :esme_rthrottled))
+
+      # Held with a later try, not recorded as delivered.
+      assert_eventually(fn -> held_ids(1) == [id] end)
+      {:ok, [{member, entry}]} = Pipeline.Store.held(1, 10)
+      assert entry.tries == 1 and entry.retry_at > System.os_time(:millisecond)
+      refute Enum.any?(edr("edr.receipt"), &(&1["kind"] == "customer"))
+
+      # Not before its time; then sent, and released once answered.
+      Pipeline.Held.run(1)
+      assert Client.recv(client, 300) == {:error, :timeout}
+      :ok = Pipeline.Store.update_held(1, member, %{entry | retry_at: 0})
+      run = Task.async(fn -> Pipeline.Held.run(1) end)
+      assert {client, %Pdu{command: :deliver_sm} = again} = Client.recv(client, 2_000)
+      assert receipted(again) == {:receipted_message_id, id}
+      Client.send_pdu(client, Pdu.response(again, :esme_rok, %{message_id: ""}))
+      Task.await(run)
+      assert held_ids(1) == []
+
+      assert_eventually(fn ->
+        Enum.count(edr("edr.receipt"), &(&1["kind"] == "customer")) == 1
+      end)
+
+      assert Client.recv(client, 300) == {:error, :timeout}
+    end
+
+    test "a receipt is held once however often the bus delivers it, and it waits in progress (S-5.14)" do
+      start_all()
+      # No session from this IP: held.
+      data = held_data("twice", {10, 9, 9, 9})
+      receipt = %{status: "DELIVRD", error: "000", network_error: 0, done_at: 1, received_at: 1}
+      assert Pipeline.Forwarder.deliver(data, receipt) == :ok
+      assert Pipeline.Forwarder.deliver(data, receipt) == :ok
+      assert held_ids(1) == ["twice"]
+
+      assert Pipeline.Forwarder.consumer_options()[:progress_ms] <
+               Pipeline.Forwarder.consumer_options()[:ack_wait_ms]
+    end
+
+    test "a slow customer holds back neither another trunk's receipts nor its own other ones (S-1.18)" do
+      more = [CustomerCase.trunk(id: 2, username: "other", name: "OTHER")]
+
+      %{port: port} =
+        start_all(
+          config: [
+            customer_trunks: [
+              PipelineConfig.customer_trunk(),
+              PipelineConfig.customer_trunk(id: 2)
+            ]
+          ],
+          more_customers: more,
+          session: [deliver_timeout_ms: 1_500]
+        )
+
+      {fast, %{status: 0}} =
+        Client.bind(port, :bind_transceiver, %{system_id: "other", password: "secret"})
+
+      now = System.os_time(:millisecond)
+      # Trunk 1's client (bound by start_all) never answers; trunk 2's does.
+      for n <- 1..3, do: hold(held_data("slow-#{n}", {127, 0, 0, 1}), now + n)
+      hold(held_data("fast", {127, 0, 0, 1}, 2), now)
+
+      send(Pipeline.Held, :sweep)
+      assert {_, %Pdu{} = dlr} = recv_until(fast, &(&1.command == :deliver_sm), 1_000)
+      assert receipted(dlr) == {:receipted_message_id, "fast"}
+
+      # Trunk 1's run waited once, for its first receipt: all three are kept for a later try.
+      assert_eventually(fn -> held_ids(2) == [] end)
+      Process.sleep(2_000)
+      assert Enum.sort(held_ids(1)) == ["slow-1", "slow-2", "slow-3"]
     end
   end
 end

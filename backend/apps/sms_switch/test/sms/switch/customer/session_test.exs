@@ -616,6 +616,31 @@ defmodule Sms.Switch.Customer.SessionTest do
       assert Session.deliver(session_pid(), %{}) == {:error, :timeout}
     end
 
+    test "after a timeout a slow reader takes no receipt until it answers one, or for the timeout (S-1.18)" do
+      %{port: port} = restart(session: [deliver_timeout_ms: 300])
+      client = bound(port)
+      pid = session_pid()
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      assert {client, %Pdu{command: :deliver_sm} = late} = Client.recv(client)
+      # At once, without waiting for the client.
+      assert Session.deliver(pid, %{}) == {:error, :slow}
+
+      # A late answer shows the client reading again.
+      Client.send_pdu(client, Pdu.response(late, :esme_rok, %{message_id: ""}))
+      Process.sleep(100)
+      task = Task.async(fn -> Session.deliver(pid, %{}) end)
+      assert {client, %Pdu{command: :deliver_sm} = dlr} = Client.recv(client)
+      Client.send_pdu(client, Pdu.response(dlr, :esme_rok, %{message_id: ""}))
+      assert {:ok, %{status: 0}} = Task.await(task)
+
+      # Silent again: slow until the timeout has passed once more.
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      assert Session.deliver(pid, %{}) == {:error, :slow}
+      Process.sleep(350)
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      _ = client
+    end
+
     test "the session closing: waiting deliveries get :closed", %{port: port} do
       client = bound(port)
       pid = session_pid()

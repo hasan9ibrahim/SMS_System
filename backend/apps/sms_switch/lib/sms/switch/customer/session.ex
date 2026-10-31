@@ -26,7 +26,9 @@ defmodule Sms.Switch.Customer.Session do
     * Our own requests to the client (`deliver_sm` receipts, `enquire_link`) use sequence numbers 1–0x7FFFFFFF,
       wrapping and never reusing one still waiting (S-1.14). At most `:outbound_window` `deliver_sm` wait for their
       response; a full window answers `{:error, :window_full}` at once and the caller keeps the receipt (never this
-      process's memory).
+      process's memory). After a `deliver_sm` the client did not answer in time, the session takes no new one for
+      `:deliver_timeout_ms` (`{:error, :slow}`) unless the client answers one meanwhile, so a slow reader never
+      keeps the switch's receipt workers waiting (S-1.18, S-5.14).
 
   ## Keep-alive
 
@@ -91,6 +93,7 @@ defmodule Sms.Switch.Customer.Session do
     :unbind_timer,
     :enquire,
     :stop_reason,
+    :slow_until,
     phase: :open,
     buffer: <<>>,
     armed: false,
@@ -111,8 +114,9 @@ defmodule Sms.Switch.Customer.Session do
   @doc """
   Sends a `deliver_sm` (a receipt or MO) to the client on this session and waits for its response:
   `{:ok, %{status: code, message_id: id}}` (a non-zero status is the client refusing it), or `{:error, reason}`:
-  `:window_full`, `:not_receiver` (a TX bind), `:closed` (try another session or hold), `:timeout` (the client may
-  have it; retry on this session, S-5.14), `{:invalid_pdu, reason}`.
+  `:window_full`, `:slow` (it did not answer the last one in time), `:not_receiver` (a TX bind), `:closed` (try
+  another session or hold), `:timeout` (the client may have it; retry on this session, S-5.14), `{:invalid_pdu,
+  reason}`.
   """
   @spec deliver(pid(), map(), list()) :: {:ok, map()} | {:error, term()}
   def deliver(pid, fields, tlvs \\ []) do
@@ -296,9 +300,17 @@ defmodule Sms.Switch.Customer.Session do
         if entry.from, do: GenServer.reply(entry.from, {:error, :timeout})
         state = %{state | out: out}
 
-        if entry.command == :unbind,
-          do: {:stop, {:shutdown, state.unbind_request || :unbind_timeout}, state},
-          else: {:noreply, state}
+        case entry.command do
+          :unbind ->
+            {:stop, {:shutdown, state.unbind_request || :unbind_timeout}, state}
+
+          # A slow reader: no new receipt for a while (S-1.18).
+          :deliver_sm ->
+            {:noreply, %{state | slow_until: now() + state.settings.deliver_timeout_ms}}
+
+          _ ->
+            {:noreply, state}
+        end
     end
   end
 
@@ -870,6 +882,9 @@ defmodule Sms.Switch.Customer.Session do
           state.settings.outbound_window ->
         {:reply, {:error, :window_full}, state}
 
+      state.slow_until != nil and now() < state.slow_until ->
+        {:reply, {:error, :slow}, state}
+
       true ->
         {seq, state} = next_sequence(state)
         pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
@@ -909,6 +924,9 @@ defmodule Sms.Switch.Customer.Session do
   # ---------------------------------------------------------------- our requests and their responses
 
   defp handle_response(state, %Pdu{sequence: seq} = pdu) do
+    # Any answer to a receipt, even a late one, shows a slow reader reading again.
+    state = if pdu.command == :deliver_sm_resp, do: %{state | slow_until: nil}, else: state
+
     case Map.pop(state.out, seq) do
       {nil, _} ->
         Logger.warning("#{pdu.command} #{seq} answers nothing we sent; ignored")
