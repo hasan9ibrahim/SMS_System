@@ -182,12 +182,22 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
 
         // A sender a handset cannot show: passed over while the vendor refuses invalid senders (the default), taken
         // with that off; auto cannot fix a length. Only when the vendor's own egress rules leave the sender as it is.
-        const egress = await app.inject({
-          method: "POST",
-          url: `${API_PREFIX}/vendor-trunks/${v}/rules/test`,
-          payload: { message: { sender: LONG_SENDER, receiver: "447700900123", text: CODE } },
-        });
-        if ((egress.json() as { after: { sender: string } }).after.sender === LONG_SENDER) {
+        // The customer trunk's ingress rules must leave it too: the seed can rewrite a customer's sender (a 12-digit
+        // number sent as TON 5, which is refused for its length instead).
+        const keeps = async (url: string) =>
+          (
+            (
+              await app.inject({
+                method: "POST",
+                url: `${API_PREFIX}${url}`,
+                payload: { message: { sender: LONG_SENDER, receiver: "447700900123", text: CODE } },
+              })
+            ).json() as { after: { sender: string } }
+          ).after.sender === LONG_SENDER;
+        if (
+          (await keeps(`/customer-trunks/${p.trunk}/rules/test`)) &&
+          (await keeps(`/vendor-trunks/${v}/rules/test`))
+        ) {
           const extra = { senderId: LONG_SENDER, sourceTon: 1 };
           await setVendor(v, "refuse_invalid_senders = true");
           const refused = await simulate(p.trunk, p.mccmnc, CODE, extra);
