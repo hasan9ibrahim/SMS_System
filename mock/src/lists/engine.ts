@@ -51,6 +51,12 @@ export interface ListDef<Row> {
   searchPrefix?: boolean;
   /** Unique, stable tie-breaker so paging never repeats or skips rows. */
   idSql: string;
+  /**
+   * A list that grows while it is read (audit log, incidents): `max` gives the newest row's `idSql` when the first page
+   * is read, and later pages leave out rows added since, so new rows do not push the next page back onto rows already
+   * shown (QA 2026-10-31, §13.25). They show on the next refresh.
+   */
+  snapshot?: { max: string };
   /** SELECT list; rows are passed to mapRow. */
   select: string;
   mapRow: (row: Record<string, unknown>) => Row;
@@ -76,18 +82,41 @@ export function searchPattern(text: string, prefix = false): string {
   return /[%_]/.test(text) ? text : prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
 }
 
-/** Cursor = position in the sorted result. Valid for the same filter and sort only. */
-export function encodeCursor(offset: number): string {
-  return Buffer.from(JSON.stringify({ o: offset })).toString("base64url");
+/**
+ * Cursor = position in the sorted result, plus what keeps later pages in place while rows arrive (QA 2026-10-31,
+ * §13.25): `k`, the last row's sort values (keyset, the EDR lists), or `b`, the newest row when the first page was read
+ * (lists that grow, `snapshot`). Valid for the same filter and sort only.
+ */
+export interface Cursor {
+  offset: number;
+  keys: (string | null)[] | null;
+  bound: string | null;
+}
+export function encodeCursor(offset: number, more: { keys?: (string | null)[]; bound?: string | null } = {}): string {
+  const c: Record<string, unknown> = { o: offset };
+  if (more.keys) c.k = more.keys;
+  if (more.bound != null) c.b = more.bound;
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+export function readCursor(cursor: string | null | undefined): Cursor {
+  const none: Cursor = { offset: 0, keys: null, bound: null };
+  if (!cursor) return none;
+  try {
+    const c = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { o?: unknown; k?: unknown; b?: unknown };
+    const o = c.o;
+    const keys =
+      Array.isArray(c.k) && c.k.every((x) => x === null || typeof x === "string") ? (c.k as (string | null)[]) : null;
+    return {
+      offset: typeof o === "number" && Number.isInteger(o) && o >= 0 ? o : 0,
+      keys,
+      bound: typeof c.b === "string" && /^\d{1,19}$/.test(c.b) ? c.b : null,
+    };
+  } catch {
+    return none;
+  }
 }
 export function decodeCursor(cursor: string | null | undefined): number {
-  if (!cursor) return 0;
-  try {
-    const o = (JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { o?: unknown }).o;
-    return typeof o === "number" && Number.isInteger(o) && o >= 0 ? o : 0;
-  } catch {
-    return 0;
-  }
+  return readCursor(cursor).offset;
 }
 
 class Params {
@@ -214,12 +243,18 @@ export function viewDef(def: ListDef<unknown>, viewer: Viewer | null): { def: Li
 }
 
 /** Builds the page and count statements. The query must have passed checkListQuery. */
-export function compileQuery(def: ListDef<unknown>, query: ListQuery, extraSelect: string[] = []) {
+export function compileQuery(
+  def: ListDef<unknown>,
+  query: ListQuery,
+  extraSelect: string[] = [],
+  bound: string | null = null,
+) {
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
   const params = new Params();
   const where: string[] = [];
   const showArchived = !!def.archivedField && !!query.filter && mentions(query.filter, def.archivedField);
   if (def.baseWhere && !showArchived) where.push(def.baseWhere);
+  if (bound !== null) where.push(`${def.idSql} <= ${params.add(bound)}`);
   if (query.filter) where.push(groupSql(query.filter, def, byName, params.add));
   if (query.search?.trim()) {
     const pattern = params.add(searchPattern(query.search.trim(), def.searchPrefix));
@@ -258,7 +293,15 @@ export async function runList<Row>(
   viewer?: Viewer | null,
 ): Promise<ListPage<Row>> {
   const view = viewDef(def as ListDef<unknown>, viewer === undefined ? await currentViewer() : viewer);
-  const q = compileQuery(view.def, query, view.extra);
+  let bound: string | null = null;
+  if (def.snapshot) {
+    bound = readCursor(query.cursor).bound;
+    if (bound === null && !query.cursor) {
+      const { rows } = await pool.query<{ b: string | null }>(`SELECT (${def.snapshot.max})::text AS b`);
+      bound = rows[0]?.b ?? null;
+    }
+  }
+  const q = compileQuery(view.def, query, view.extra, bound);
   const [page, count] = await Promise.all([
     pool.query(q.sql, q.values),
     query.withTotal === false ? null : pool.query<{ n: number }>(q.countSql, q.countValues),
@@ -275,7 +318,7 @@ export async function runList<Row>(
     rows,
     total: count ? Number(count.rows[0]?.n ?? 0) : q.offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
-    nextCursor: more ? encodeCursor(q.offset + q.limit) : null,
+    nextCursor: more ? encodeCursor(q.offset + q.limit, { bound }) : null,
     ...(masked.length ? { masked } : {}),
   };
 }
