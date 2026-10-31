@@ -6,10 +6,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { PasswordCheckInput } from "@sms/contract";
 import { sendMyPasswordCode, useChangeMyPassword, usePasswordCheck } from "../../api/admin";
 import { useMyPasswordStatus } from "../../api/security";
+import { useMe } from "../../api/hooks";
 import { ApiError } from "../../api/client";
 import { ask, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
+import { UsernameHint } from "../../ui/UsernameHint";
 import { problemText } from "../routing/dialogs";
 
 export const statusCell = (status: "active" | "inactive") => (
@@ -58,6 +60,7 @@ function PasswordInput({
   error,
   autoFocus,
   autoComplete = "new-password",
+  name,
 }: {
   label: string;
   value: string;
@@ -65,6 +68,8 @@ function PasswordInput({
   error?: string | undefined;
   autoFocus?: boolean;
   autoComplete?: string;
+  /** Stable name for password managers (current-password, new-password, confirm-password). */
+  name?: string;
 }) {
   const [show, setShow] = useState(false);
   return (
@@ -77,6 +82,7 @@ function PasswordInput({
           maxLength={200}
           autoFocus={autoFocus}
           autoComplete={autoComplete}
+          name={name}
           onChange={(e) => onChange(e.target.value)}
         />
         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShow((s) => !s)}>
@@ -190,6 +196,7 @@ export function PasswordChangeForm({
 }) {
   const change = useChangeMyPassword();
   const qc = useQueryClient();
+  const { data: me } = useMe();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -236,18 +243,28 @@ export function PasswordChangeForm({
     );
   return wrap(
     <div className="fgrid cols-1">
+      {/* The new password is saved for this username, not for the code typed below (§13.28). */}
+      {me && <UsernameHint username={me.username} />}
       <PasswordInput
         label="Current password *"
         value={current}
         onChange={setCurrent}
         error={errors["/currentPassword"]}
         autoComplete="current-password"
+        name="current-password"
         autoFocus
       />
-      <PasswordInput label="New password *" value={next} onChange={setNext} error={errors["/newPassword"]} />
+      <PasswordInput
+        label="New password *"
+        value={next}
+        onChange={setNext}
+        error={errors["/newPassword"]}
+        name="new-password"
+      />
       <PasswordInput
         label="Confirm new password *"
         value={confirm}
+        name="confirm-password"
         onChange={setConfirm}
         error={confirm && confirm !== next ? "the passwords do not match" : undefined}
       />
@@ -256,6 +273,7 @@ export function PasswordChangeForm({
         <span>{totp ? "2FA code (from your authenticator app) *" : "Code sent to your e-mail *"}</span>
         <span className="pw-code">
           <input
+            name="one-time-code"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}

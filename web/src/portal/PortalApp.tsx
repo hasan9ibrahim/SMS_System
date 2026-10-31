@@ -12,6 +12,7 @@ import { Chart, useChartColors } from "../ui/Chart";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Button } from "../ui/primitives";
+import { UsernameHint } from "../ui/UsernameHint";
 import {
   downloadRates,
   fetchMessages,
@@ -65,7 +66,15 @@ function SignIn() {
     signIn.mutate({ username, password });
   };
   const pending = signIn.data?.status === "code_required" ? signIn.data : null;
-  if (pending?.challenge) return <SignInCode challenge={pending.challenge} sentTo={pending.sentTo} onBack={() => signIn.reset()} />;
+  if (pending?.challenge)
+    return (
+      <SignInCode
+        challenge={pending.challenge}
+        sentTo={pending.sentTo}
+        username={username}
+        onBack={() => signIn.reset()}
+      />
+    );
   return (
     <div className="portal-center">
       <form className="portal-card portal-signin" onSubmit={submit}>
@@ -78,12 +87,23 @@ function SignIn() {
         </div>
         <label className="portal-field">
           <span>Username</span>
-          <input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+          <input
+            autoFocus
+            id="username"
+            name="username"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
         </label>
         <label className="portal-field">
           <span>Password</span>
           <input
             type="password"
+            id="current-password"
+            name="current-password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -100,7 +120,17 @@ function SignIn() {
 }
 
 /** The 6-digit code e-mailed after the password (backend step 13). */
-function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?: string; onBack: () => void }) {
+function SignInCode({
+  challenge,
+  sentTo,
+  username,
+  onBack,
+}: {
+  challenge: string;
+  sentTo?: string;
+  username: string;
+  onBack: () => void;
+}) {
   const send = useSignInCode();
   const resend = useResendCode();
   const [code, setCode] = useState("");
@@ -112,6 +142,8 @@ function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?:
   return (
     <div className="portal-center">
       <form className="portal-card portal-signin" onSubmit={submit}>
+        {/* The password is saved with this username, not with the code typed below (§13.28). */}
+        <UsernameHint username={username} />
         <div className="portal-brand">
           <BrandLogo height={30} />
           <div>
@@ -123,6 +155,8 @@ function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?:
           <span>Code</span>
           <input
             autoFocus
+            id="one-time-code"
+            name="one-time-code"
             inputMode="numeric"
             autoComplete="one-time-code"
             maxLength={6}
@@ -157,6 +191,7 @@ function SignInCode({ challenge, sentTo, onBack }: { challenge: string; sentTo?:
 
 function ChangePassword({ forced, onDone }: { forced: boolean; onDone?: () => void }) {
   const change = useChangePassword();
+  const username = usePortalSession().data?.user.username ?? "";
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [again, setAgain] = useState("");
@@ -169,10 +204,14 @@ function ChangePassword({ forced, onDone }: { forced: boolean; onDone?: () => vo
     <form className="portal-card portal-signin" onSubmit={submit}>
       <h2>{forced ? "Choose a new password" : "Change password"}</h2>
       {forced && <p className="muted small">Your password expired or was set by your account manager.</p>}
+      {/* The new password is saved for this username (§13.28). */}
+      <UsernameHint username={username} />
       <label className="portal-field">
         <span>Current password</span>
         <input
           type="password"
+          id="current-password"
+          name="current-password"
           autoComplete="current-password"
           value={current}
           onChange={(e) => setCurrent(e.target.value)}
@@ -180,11 +219,25 @@ function ChangePassword({ forced, onDone }: { forced: boolean; onDone?: () => vo
       </label>
       <label className="portal-field">
         <span>New password</span>
-        <input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+        <input
+          type="password"
+          id="new-password"
+          name="new-password"
+          autoComplete="new-password"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+        />
       </label>
       <label className="portal-field">
         <span>New password again</span>
-        <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} />
+        <input
+          type="password"
+          id="confirm-password"
+          name="confirm-password"
+          autoComplete="new-password"
+          value={again}
+          onChange={(e) => setAgain(e.target.value)}
+        />
       </label>
       {next && again && next !== again && <p className="error-text">The new passwords are not the same.</p>}
       {errors?.length ? (
