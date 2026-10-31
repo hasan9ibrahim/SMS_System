@@ -6,7 +6,7 @@ defmodule Sms.Switch.Pipeline.ScheduledTest do
   @moduletag capture_log: true
 
   alias Sms.Core.Bus.Local
-  alias Sms.Switch.Customer.TrunkStore
+  alias Sms.Switch.Customer.{Trunk, TrunkStore}
   alias Sms.Switch.Pipeline.{Buffers, Intake, MessageId, Scheduled, Store, Timeouts}
   alias Sms.Switch.Test.CustomerCase
   alias Sms.Switch.Throttle
@@ -134,6 +134,92 @@ defmodule Sms.Switch.Pipeline.ScheduledTest do
     assert Enum.sort(released()) == Enum.sort(ids)
     assert length(released()) == 10
     assert {:ok, []} = Store.waiting_trunks()
+  end
+
+  # Messages held for `at` (one ms apart), each sent by the customer in `parts` submits (one customer id per part, as
+  # reassembly leaves them); their message ids in that order.
+  defp hold_parts(trunk_id, parts_list, at) do
+    for {parts, i} <- Enum.with_index(parts_list, 1) do
+      id = MessageId.new()
+      ids = [id | for(_ <- 2..parts//1, do: MessageId.new())]
+
+      :ok =
+        Scheduled.hold(%{
+          id: id,
+          ids: ids,
+          trunk: %{id: trunk_id, enterprise_id: @ent},
+          scheduled_at: at + i,
+          scheduled: true,
+          buffered: false,
+          text: "fake scheduled #{i}"
+        })
+
+      id
+    end
+  end
+
+  defp counters(trunk_id) do
+    {:ok, trunk} = TrunkStore.get(trunk_id)
+    Trunk.tps_counters(trunk)
+  end
+
+  test "a multipart message takes one TPS place per part the customer sent; a long one sent in one submit takes one" do
+    trunks([[id: 1, tps: 5]])
+    [a, b, c] = hold_parts(1, [3, 2, 1], now() - 60_000)
+    assert Scheduled.submits(%{id: "x"}) == 1
+    assert Scheduled.submits(%{id: "x", ids: ["x", "y", "z"]}) == 3
+
+    second_start()
+    :ok = Scheduled.release_due()
+    # 3 + 2 places: the second is full, the third waits.
+    assert released() == [a, b]
+
+    second_start()
+    :ok = Scheduled.release_due()
+    assert released() == [a, b, c]
+  end
+
+  test "off the waiting set: the rest of its places are taken after it is read, or it waits again with none kept" do
+    trunks([[id: 1, tps: 3]])
+    [a, b, c] = hold_parts(1, [1, 3, 1], now() - 60_000)
+
+    second_start()
+    :ok = Scheduled.release_due()
+    # One place left of three: the 3-part one waits, and the next behind it.
+    assert released() == [a]
+
+    # Live traffic took one place of the next second before the sweep: the 3-part one gets its first place, not the
+    # other two, and waits again with that place given back.
+    second_start()
+    second = System.os_time(:second)
+    :ok = Throttle.acquire(counters(1), second)
+    :ok = Scheduled.release_due()
+    assert released() == [a]
+    assert Scheduled.held?(@ent, b) == {:ok, true}
+    assert Throttle.acquire_many(counters(1), 2, second) == :ok
+
+    second_start()
+    :ok = Scheduled.release_due()
+    assert released() == [a, b]
+
+    second_start()
+    :ok = Scheduled.release_due()
+    assert released() == [a, b, c]
+  end
+
+  test "a message in more parts than the trunk's TPS still goes, in a second of its own" do
+    trunks([[id: 1, tps: 2]])
+    [a, b] = hold_parts(1, [4, 1], now() - 60_000)
+    assert Throttle.places(counters(1), 4) == 2
+
+    second_start()
+    :ok = Scheduled.release_due()
+    assert released() == [a]
+
+    second_start()
+    :ok = Scheduled.release_due()
+    assert released() == [a, b]
+    assert Throttle.places([], 0) == 1
   end
 
   test "a trunk's newly due message waits behind its held ones; another trunk is not held back" do

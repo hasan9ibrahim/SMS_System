@@ -101,6 +101,49 @@ defmodule Sms.Switch.Throttle do
   end
 
   @doc """
+  Counts `n` submits against every counter in `second`, all or none (S-2.12: a scheduled message takes one place per
+  submit the customer sent for it): `:ok`, or the error of the first that does not fit, with the places already taken
+  given back. `n` is capped at the smallest limit (`places/2`), so a message larger than the TPS still fits in a second.
+  """
+  @spec acquire_many([counter()], pos_integer(), integer()) :: :ok | {:error, atom()}
+  def acquire_many(counters, n, second \\ System.os_time(:second))
+  def acquire_many([], _n, _second), do: :ok
+
+  def acquire_many(counters, n, second) do
+    n = places(counters, n)
+
+    Enum.reduce_while(1..n, 0, fn _, taken ->
+      case acquire(counters, second) do
+        :ok -> {:cont, taken + 1}
+        error -> {:halt, {error, taken}}
+      end
+    end)
+    |> case do
+      {error, taken} ->
+        Enum.each(List.duplicate(:place, taken), fn _ -> release(counters, second) end)
+        error
+
+      ^n ->
+        :ok
+    end
+  end
+
+  @doc "Gives back the `n` submits `acquire_many/3` counted in `second` (capped as it was)."
+  @spec release_many([counter()], pos_integer(), integer()) :: :ok
+  def release_many(counters, n, second) do
+    Enum.each(List.duplicate(:place, places(counters, n)), fn _ -> release(counters, second) end)
+  end
+
+  @doc "The places `n` submits take: at least one, at most the smallest limit of the counters."
+  @spec places([counter()], integer()) :: pos_integer()
+  def places([], n), do: max(n, 1)
+
+  def places(counters, n) do
+    limit = counters |> Enum.map(fn {_name, _key, limit} -> limit end) |> Enum.min()
+    n |> max(1) |> min(limit)
+  end
+
+  @doc """
   Takes a place in a trunk's overflow buffer (S-2.4: over its TPS, a customer trunk with a buffer has its messages
   accepted and queued up to the buffer size): true when there was room. The count is shared like the TPS counters;
   while Redis is unavailable each server keeps its share of the buffer.

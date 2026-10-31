@@ -95,6 +95,7 @@ export function RepushRequestsPage() {
                 <dt>Re-sent</dt>
                 <dd>
                   {r.edrCount} EDRs · {r.delivered} delivered · {r.failed} failed
+                  {r.status === "done" ? "" : " so far, outcomes will follow"}
                 </dd>
                 <dt>Skipped</dt>
                 <dd>{r.skipped ? `${r.skipped} (delivered, or not the final attempt)` : "none"}</dd>

@@ -28,6 +28,7 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   require Logger
   alias Sms.Switch.Customer.{Trunk, TrunkStore}
   alias Sms.Switch.Pipeline.{Edr, Forwarder, Intake, Store}
+  alias Sms.Switch.Throttle
 
   @default_max_s 7 * 86_400
   @lease_ms 60_000
@@ -142,37 +143,72 @@ defmodule Sms.Switch.Pipeline.Scheduled do
 
   # The trunk's place is taken before the message, so a full trunk costs no more than that; a message the other server
   # took first (or cancel_sm) gives its place back.
-  defp release_waiting_ids(_trunk, _t, [], _now, progress),
-    do: if(progress, do: :more, else: :full)
+  defp release_waiting_ids(_trunk, _t, [], _now, progress), do: stopped(progress)
 
   defp release_waiting_ids(trunk, t, [id | rest], now, progress) do
     second = System.os_time(:second)
 
-    case admit(trunk, second) do
+    case admit(trunk, second, 1) do
       :full ->
         :full
 
       admission ->
         lease = now + @lease_ms
 
-        if Store.claim_waiting(t, id, lease) do
-          release_claimed(id, trunk, admission, second)
-          release_waiting_ids(trunk, t, rest, now, true)
-        else
-          unadmit(trunk, admission, second)
-          release_waiting_ids(trunk, t, rest, now, progress)
+        case claim_and_release(trunk, t, id, admission, second, lease) do
+          :sent -> release_waiting_ids(trunk, t, rest, now, true)
+          :taken -> release_waiting_ids(trunk, t, rest, now, progress)
+          :full -> stopped(progress)
         end
     end
   end
 
-  defp release_claimed(id, trunk, admission, second) do
+  defp stopped(true), do: :more
+  defp stopped(false), do: :full
+
+  # `:taken`: another server (or cancel_sm) got it first, and its place is given back.
+  defp claim_and_release(trunk, t, id, admission, second, lease) do
+    if Store.claim_waiting(t, id, lease) do
+      release_claimed(id, trunk, admission, second, lease)
+    else
+      unadmit(trunk, admission, second)
+      :taken
+    end
+  end
+
+  # One TPS place was taken before the message was read: a message the customer sent in more submits takes the rest now
+  # (all or none), else a place in the trunk's overflow buffer, else it waits again in its place (`:full`).
+  defp release_claimed(id, trunk, admission, second, lease) do
     case Store.scheduled(id) do
       {:ok, held} ->
-        send_on(id, held, decode(held), trunk, admission, second)
+        msg = decode(held)
+        submits = submits(msg)
+
+        case rest(trunk, admission, second, submits) do
+          :full ->
+            wait(id, held, msg, lease)
+            :full
+
+          admission ->
+            send_on(id, held, msg, trunk, admission, second, submits)
+            :sent
+        end
 
       other ->
         unadmit(trunk, admission, second)
         unreadable(id, other)
+        :sent
+    end
+  end
+
+  defp rest(nil, admission, _second, _submits), do: admission
+  defp rest(_trunk, :buffered, _second, _submits), do: :buffered
+
+  defp rest(trunk, :ok, second, submits) do
+    cond do
+      Trunk.admit_rest(trunk, second, submits) == :ok -> :ok
+      Throttle.buffer_take(Trunk.buffer_key(trunk), trunk.overflow_buffer) -> :buffered
+      true -> :full
     end
   end
 
@@ -217,14 +253,15 @@ defmodule Sms.Switch.Pipeline.Scheduled do
     else
       trunk = trunk(t)
       second = System.os_time(:second)
+      submits = submits(msg)
 
-      case admit(trunk, second) do
+      case admit(trunk, second, submits) do
         :full ->
           wait(id, held, msg, lease)
           MapSet.put(busy, t)
 
         admission ->
-          send_on(id, held, msg, trunk, admission, second)
+          send_on(id, held, msg, trunk, admission, second, submits)
           busy
       end
     end
@@ -258,7 +295,7 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   # On the bus as an accepted message (within the TPS) or in the trunk's overflow buffer (over it, with its place),
   # queued so cancel_sm and query_sm see it as any other (S-2.15, `Intake.store/1`); the lease ends once it is there.
   # Not stored: its place is given back and the lease runs out (tried again).
-  defp send_on(id, held, msg, trunk, admission, second) do
+  defp send_on(id, held, msg, trunk, admission, second, submits) do
     msg =
       case admission do
         :buffered -> %{msg | buffered: true, tps_counters: Trunk.tps_counters(trunk)}
@@ -271,7 +308,7 @@ defmodule Sms.Switch.Pipeline.Scheduled do
         Logger.info("scheduled message #{id} released (S-2.12)")
 
       {:error, reason} ->
-        unadmit(trunk, admission, second)
+        unadmit(trunk, admission, second, submits)
 
         Logger.warning(
           "scheduled message #{id} not released yet, tried again: #{inspect(reason)}"
@@ -299,11 +336,20 @@ defmodule Sms.Switch.Pipeline.Scheduled do
     end
   end
 
-  defp admit(nil, _second), do: :ok
-  defp admit(trunk, second), do: Trunk.admit(trunk, second)
+  defp admit(nil, _second, _submits), do: :ok
+  defp admit(trunk, second, submits), do: Trunk.admit(trunk, second, submits)
 
-  defp unadmit(nil, _admission, _second), do: :ok
-  defp unadmit(trunk, admission, second), do: Trunk.unadmit(trunk, admission, second)
+  defp unadmit(trunk, admission, second, submits \\ 1)
+  defp unadmit(nil, _admission, _second, _submits), do: :ok
+
+  defp unadmit(trunk, admission, second, submits),
+    do: Trunk.unadmit(trunk, admission, second, submits)
+
+  @doc false
+  # The TPS places a scheduled message takes: one per submit the customer sent for it (its parts as sent; one for a
+  # long text sent in one submit), as the intake counted them (S-2.12).
+  @spec submits(map()) :: pos_integer()
+  def submits(msg), do: msg |> Map.get(:ids, [msg.id]) |> length() |> max(1)
 
   @doc "Whether a customer message id of the enterprise is held for its time (query_sm: ENROUTE)."
   def held?(enterprise_id, id) do

@@ -118,7 +118,7 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
   require Logger
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Trunk
-  alias Sms.Switch.Pipeline.{Buffers, Intake, Sender}
+  alias Sms.Switch.Pipeline.{Buffers, Intake, Scheduled, Sender}
   alias Sms.Switch.Throttle
 
   @idle_ms 5_000
@@ -182,8 +182,9 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
     end
   end
 
+  # A scheduled message takes one place per submit the customer sent for it (S-2.12); a live one is one submit.
   defp work(%{kind: :customer, held: {msg, handle}} = state) do
-    case Throttle.acquire(msg.tps_counters) do
+    case Throttle.acquire_many(msg.tps_counters, Scheduled.submits(msg)) do
       :ok -> release(msg, handle, state)
       {:error, _counter} -> later(state, @tps_retry_ms)
     end

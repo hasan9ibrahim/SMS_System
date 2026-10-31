@@ -474,9 +474,12 @@ export function RepushDialog({ ids, eligible, done }: { ids: string[]; eligible:
                   onSuccess: (r) => {
                     toast({
                       tone: r.edrCount ? "good" : "warning",
-                      message: r.edrCount
-                        ? `Repush request ${r.id}: ${r.delivered} delivered, ${r.failed} failed${r.skipped ? ` · ${r.skipped} skipped` : ""}`
-                        : `Nothing to repush: all ${r.skipped} were delivered or not final attempts`,
+                      message: !r.edrCount
+                        ? `Nothing to repush: all ${r.skipped} were delivered or not final attempts`
+                        : r.status === "done"
+                          ? `Repush request ${r.id}: ${r.delivered} delivered, ${r.failed} failed${r.skipped ? ` · ${r.skipped} skipped` : ""}`
+                          : // The switch sends them now; their receipts come later (Repush requests shows them).
+                            `Repush request ${r.id}: ${r.edrCount} sent, outcomes will follow${r.skipped ? ` · ${r.skipped} skipped` : ""}`,
                     });
                     done();
                     if (r.edrCount) navigate("/monitoring/repush");
