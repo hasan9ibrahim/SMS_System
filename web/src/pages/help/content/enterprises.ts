@@ -54,7 +54,7 @@ export const topics: HelpTopic[] = [
             items: [
               "**Undo**: undoes your own last change on enterprises (also **Ctrl+Z**). See [[undo-and-history]].",
               "**History**: opens the change history of all enterprises: who changed what and when, with undo per change.",
-              "**Export**: exports the rows that match the current filters. In the trial this button is not active yet.",
+              "**Export**: downloads the rows that match the current filters and search as a CSV file, with the columns you show. See [[grids-and-filters#export]].",
               "**New enterprise** (the filled button): opens an empty enterprise record in a new tab.",
             ],
           },
@@ -827,7 +827,7 @@ export const topics: HelpTopic[] = [
             title: "Header buttons",
             items: [
               "**Undo** and **History**: your last change on customer trunks, and the full change history.",
-              "**Export**: not active yet in the trial.",
+              "**Export**: downloads the rows that match the current filters and search as a CSV file.",
               "**New customer trunk** (filled): opens an empty trunk form in a new tab.",
             ],
           },
@@ -988,7 +988,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and the header actions with **Clone…** (one trunk) and **Delete N trunks…**.",
+            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and the header actions with **Clone…** (one trunk) and **Delete N trunks…**.",
           },
           {
             kind: "fields",
@@ -1851,10 +1851,6 @@ export const topics: HelpTopic[] = [
               "Revenue and cost limits stop traffic when reached in their period.",
               "Each save is one change in History, with undo. The password is recorded without its value, so undo cannot bring back an old password.",
             ],
-          },
-          {
-            kind: "tip",
-            text: "In the trial no real SMPP or HTTP traffic flows: binds, receipts and limits are simulated.",
           },
         ],
       },

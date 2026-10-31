@@ -177,7 +177,7 @@ export const topics: HelpTopic[] = [
               "Exchange rates are stored as units per 1 EUR, the base currency (EUR = 1). Converting from one currency to another goes through EUR.",
               "A new rate starts from the moment it is saved. Earlier rates are kept, so amounts already converted never move.",
               "A payment's **Final Amount** is its amount converted to the base currency of the enterprise's business company, at the rate in force on the payment date.",
-              "Totals across partners and companies (for example the [[charges|Charges calculator]] totals and the vendor invoice monthly summary) are in the **platform currency**. In the trial the platform currency is the euro (`EUR`).",
+              "Totals across partners and companies (for example the [[charges|Charges calculator]] totals and the vendor invoice monthly summary) are in the **platform currency**, set when the platform is installed (normally the euro, `EUR`).",
               "Money is always calculated to 6 decimals. Each page keeps its usual display (Live analytics shows all 6).",
             ],
           },
@@ -552,10 +552,6 @@ export const topics: HelpTopic[] = [
             kind: "tip",
             text: "If a confirmation fails, add a finance (or commercial) contact on the enterprise's contacts, then use **Re-send confirmation**.",
           },
-          {
-            kind: "tip",
-            text: "In the trial, confirmation e-mails are not really sent; they are recorded in Email logs as if they were.",
-          },
         ],
       },
     ],
@@ -870,7 +866,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial the generated traffic covers only a limited date range. A traffic request for a period outside it fails with a message naming the dates that are covered. Auto invoices in the list come from the generated data, and e-mails are recorded in [[email-logs|Email logs]] instead of being sent.",
+            text: "On the test system the generated traffic covers only a limited date range: a traffic request for a period outside it fails with a message naming the dates that are covered. Auto invoicing does not run there; the auto invoices in the list come from the generated data.",
           },
         ],
       },
@@ -1223,7 +1219,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial a simulated billing mailbox “receives” weekly invoices from about a third of the vendors (source **Email**), every six hours. Their figures are close to ours, with some off by a few percent, so you can practise disputes.",
+            text: "On the test system a simulated billing mailbox “receives” weekly invoices from about a third of the vendors (source **Email**), every six hours. Their figures are close to ours, with some off by a few percent, so you can practise disputes.",
           },
         ],
       },
@@ -1480,10 +1476,6 @@ export const topics: HelpTopic[] = [
             kind: "warning",
             text: "A partner without a billing contact cannot receive an SOA. Its send fails and shows on SOA report with the error “The partner has no billing contact”.",
           },
-          {
-            kind: "tip",
-            text: "In the trial, SOA e-mails are recorded in [[email-logs|Email logs]] instead of being sent.",
-          },
         ],
       },
     ],
@@ -1518,7 +1510,7 @@ export const topics: HelpTopic[] = [
             title: "Header buttons",
             items: [
               "**New SOA** (the accent button): opens the [[soa|SOA]] page.",
-              "**Export** is not available on this page.",
+              "**Export**: downloads the reports that match the current filters and search as a CSV file.",
             ],
           },
           {
@@ -1814,10 +1806,6 @@ export const topics: HelpTopic[] = [
               "The result is not saved. See [[invoices|Invoices]] to bill the usage.",
             ],
           },
-          {
-            kind: "tip",
-            text: "In the trial the traffic records cover a limited date range, so periods outside it show “No traffic in the period”.",
-          },
         ],
       },
     ],
@@ -1856,7 +1844,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Finance and admins use this page to keep the list of currencies and their exchange rates. Rates are used to convert payments to the business company's base currency and to show cross-partner totals in the platform currency (the euro in the trial).",
+            text: "Finance and admins use this page to keep the list of currencies and their exchange rates. Rates are used to convert payments to the business company's base currency and to show cross-partner totals in the platform currency (normally the euro).",
           },
           {
             kind: "text",
@@ -2011,7 +1999,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "**Sync Rates** on Currency Exchange takes every rate at once, like the daily update. In the trial nothing is sent to the rate API, even with an account set up: each source's quote is simulated (the same all hour, staying close to the currency's reference rate, a little different per source) and the system takes that quote.",
+            text: "**Sync Rates** on Currency Exchange takes every rate from the source at once, like the daily update. A currency the source does not quote keeps its rate. On the test system the rate API is never called, even with an account set up: each source's quote is simulated (the same all hour, close to the currency's reference rate, a little different per source).",
           },
           {
             kind: "fields",
@@ -2086,10 +2074,6 @@ export const topics: HelpTopic[] = [
               "See [[billing-basics#currencies|currencies and conversion]].",
             ],
           },
-          {
-            kind: "tip",
-            text: "In the trial, **Sync Rates** does not reach a real market feed: it moves each rate by a small random amount (up to about 0.6 %).",
-          },
         ],
       },
     ],
@@ -2133,7 +2117,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Header buttons",
             items: [
-              "**Add cycle** (the accent button), **Undo** and **History**. **Export** is not available on this page.",
+              "**Add cycle** (the accent button), **Undo**, **History** and **Export** (the cycles that match the current filters, as a CSV file).",
             ],
           },
           {

@@ -324,10 +324,6 @@ export const topics: HelpTopic[] = [
             kind: "tip",
             text: 'If the grid says "Pick at least one grouping and one metric", add a **Group by** level or tick a metric in **Column Selection**.',
           },
-          {
-            kind: "tip",
-            text: 'In the trial, "now" is the time of the newest fake message, so **Today** and **TPS (now)** are counted up to that moment, not up to the real clock.',
-          },
         ],
       },
     ],
@@ -834,10 +830,6 @@ export const topics: HelpTopic[] = [
             kind: "warning",
             text: "Balance and Credit Used % are as of today even when you report an old period.",
           },
-          {
-            kind: "tip",
-            text: "**Export** is not available on this page yet.",
-          },
         ],
       },
     ],
@@ -937,10 +929,6 @@ export const topics: HelpTopic[] = [
           {
             kind: "tip",
             text: "For Failed Submits, Delivery Delay and Re-routes, a red arrow means the value went up compared with last week.",
-          },
-          {
-            kind: "tip",
-            text: 'In the trial there is no live SMPP traffic: the figures come from generated messages, and "now" is the time of the newest one.',
           },
         ],
       },
@@ -1368,10 +1356,6 @@ export const topics: HelpTopic[] = [
               "Every save is one change you can undo with **Undo** (Ctrl+Z). See [[undo-and-history]].",
             ],
           },
-          {
-            kind: "tip",
-            text: "In the trial, e-mails are only written to Email logs; nothing is actually sent.",
-          },
         ],
       },
     ],
@@ -1511,10 +1495,6 @@ export const topics: HelpTopic[] = [
               "Every e-mail, sent or failed, is written to [[email-logs|Email logs]].",
               "Saves can be undone (Ctrl+Z); delete archives the alert.",
             ],
-          },
-          {
-            kind: "tip",
-            text: "In the trial, e-mails are only written to Email logs; nothing is actually sent.",
           },
         ],
       },
