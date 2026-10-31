@@ -87,6 +87,7 @@ defmodule Sms.Switch.Vendor.Session do
     :bound_at,
     :down_since,
     :local_port,
+    :peer,
     :tls,
     :vendor_unbind,
     phase: :idle,
@@ -122,9 +123,10 @@ defmodule Sms.Switch.Vendor.Session do
   @doc """
   Sends a `submit_sm` or `data_sm` with these fields and TLVs, and waits for the vendor's response.
 
-  `{:ok, %{status: code, message_id: key, raw_message_id: id, session_id: id, tlvs: tlvs}}` is the response: a
-  non-zero status is the vendor refusing it (the pipeline classifies it, S-5.3), and `message_id` is normalised per
-  the trunk's MsgID Type (`Sms.Switch.Vendor.MessageId`). Errors, never sent: `:window_full`, `:closed`,
+  `{:ok, %{status: code, message_id: key, raw_message_id: id, session_id: id, peer: peer, tlvs: tlvs}}` is the
+  response: a non-zero status is the vendor refusing it (the pipeline classifies it, S-5.3), `message_id` is
+  normalised per the trunk's MsgID Type (`Sms.Switch.Vendor.MessageId`) and `peer` is the vendor's address as
+  connected (`%{ip: ip, port: port}`, or nil). Errors, never sent: `:window_full`, `:closed`,
   `:not_transmitter`, `{:invalid_pdu, reason}`. Errors, possibly sent: `:timeout`, `:connection_lost`.
 
   Options: `:ref`, the caller's id for the message, returned in `late_response`.
@@ -472,11 +474,19 @@ defmodule Sms.Switch.Vendor.Session do
         {:error, _} -> nil
       end
 
+    # The vendor's address as connected (its host name resolved), for the EDR's vendor IP and port.
+    peer =
+      case peername(transport, socket) do
+        {:ok, {ip, port}} -> %{ip: ip, port: port}
+        {:error, _} -> nil
+      end
+
     state = %{
       state
       | tags: tags(transport),
         phase: :binding,
         local_port: local_port,
+        peer: peer,
         tls: negotiated_tls(transport, socket),
         buffer: <<>>,
         armed: false,
@@ -505,6 +515,9 @@ defmodule Sms.Switch.Vendor.Session do
 
   defp sockname(:gen_tcp, socket), do: :inet.sockname(socket)
   defp sockname(:ssl, socket), do: :ssl.sockname(socket)
+
+  defp peername(:gen_tcp, socket), do: :inet.peername(socket)
+  defp peername(:ssl, socket), do: :ssl.peername(socket)
 
   defp tags(:gen_tcp), do: {:tcp, :tcp_closed, :tcp_error}
   defp tags(:ssl), do: {:ssl, :ssl_closed, :ssl_error}
@@ -812,6 +825,7 @@ defmodule Sms.Switch.Vendor.Session do
          message_id: message_id && MessageId.normalize(message_id, state.trunk.msg_id_type),
          raw_message_id: message_id,
          session_id: state.id,
+         peer: state.peer,
          tlvs: pdu.tlvs
        }}
     )

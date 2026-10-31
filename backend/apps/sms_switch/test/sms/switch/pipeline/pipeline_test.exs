@@ -120,7 +120,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
   describe "a message delivered" do
     test "is routed, rated, sent with receipts asked, and its receipt comes back to the customer" do
-      %{client: client, conns: [conn]} = start_all()
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
 
       {client, resp} =
         submit(client, %{short_message: "Your code is 1234", registered_delivery: 1})
@@ -149,6 +149,9 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert attempt["v_message_id"] == "1"
       assert attempt["route_rule_id"] == 1
       assert attempt["c_msg_status"] == "ACCEPTD"
+      # The vendor connection's address; route rule groups are gone (R4); not a DLR re-route.
+      assert {attempt["v_ip"], attempt["v_port"]} == {"127.0.0.1", FakeSmsc.port(smsc)}
+      assert {attempt["route_rule_group_id"], attempt["dlr_reroute"]} == {0, 0}
       # §7: both sides bill on submit here, so the money is on the attempt row.
       assert attempt["is_customer_billable"] == 1
       assert attempt["is_vendor_billable"] == 1
@@ -1501,8 +1504,11 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
       assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
 
-      assert Enum.map(Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"]), & &1["v_trunk_id"]) ==
-               [1, 2]
+      # The attempt the failed receipt caused is marked a DLR re-route.
+      assert Enum.map(
+               Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"]),
+               &{&1["v_trunk_id"], &1["dlr_reroute"]}
+             ) == [{1, 0}, {2, 1}]
     end
 
     test "no re-route from a vendor that bills on submit: the customer gets the failure" do

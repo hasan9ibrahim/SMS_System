@@ -165,7 +165,7 @@ defmodule Sms.Switch.Pipeline.Sender do
       {:ok, job} ->
         outcome = send_parts(vt, job, msg.id, held)
         left_buffer(held, vt)
-        outcome(outcome, {msg, route, no, tried, rows, held}, job)
+        outcome(outcome, {msg, route, no, tried, rows, held})
     end
   end
 
@@ -183,21 +183,26 @@ defmodule Sms.Switch.Pipeline.Sender do
          done: [],
          temporary: 0,
          not_before: 0,
+         # The vendor's address as connected, from its last answer (EDR v_ip / v_port).
+         peer: nil,
          started: System.os_time(:millisecond)
        }}
     end
   end
 
-  defp outcome({:sent, results}, {msg, route, no, tried, rows, _held}, job),
-    do: sent(msg, route, Map.put(attempt_of(no, route, job), :tried, tried), results, rows)
+  # What happened on the vendor; `job` as it ended (the parts the vendor accepted, the parts left).
+  defp outcome({:sent, job}, {msg, route, no, tried, rows, _held}) do
+    attempt = no |> attempt_of(route, job) |> Map.put(:tried, tried)
+    sent(msg, route, attempt, Enum.reverse(job.done), rows)
+  end
 
-  defp outcome({:busy, reason}, {msg, route, no, tried, rows, held}, _job),
+  defp outcome({:busy, reason}, {msg, route, no, tried, rows, held}),
     do: busy(msg, route, no, tried, rows, held, reason)
 
-  defp outcome({:later, job}, {msg, route, no, tried, rows, _held}, _job),
+  defp outcome({:later, job}, {msg, route, no, tried, rows, _held}),
     do: park(msg, route, no, tried, rows, job)
 
-  defp outcome({:unavailable, reason}, {msg, route, no, tried, rows, _held}, _job) do
+  defp outcome({:unavailable, reason}, {msg, route, no, tried, rows, _held}) do
     Logger.info(
       "message #{msg.id}: vendor trunk #{route.vendor_trunk_id} unavailable (#{inspect(reason)})"
     )
@@ -205,8 +210,8 @@ defmodule Sms.Switch.Pipeline.Sender do
     next(msg, no, tried, rows, nil)
   end
 
-  defp outcome({:rejected, status, done}, {msg, route, no, tried, rows, _held}, job) do
-    row = no |> attempt_of(route, job) |> refused(done, status)
+  defp outcome({:rejected, status, job}, {msg, route, no, tried, rows, _held}) do
+    row = no |> attempt_of(route, job) |> refused(job.done, status)
 
     next(
       msg,
@@ -217,15 +222,15 @@ defmodule Sms.Switch.Pipeline.Sender do
     )
   end
 
-  defp outcome({:possibly_sent, reason, done}, {msg, route, no, tried, rows, _held}, job) do
+  defp outcome({:possibly_sent, reason, job}, {msg, route, no, tried, rows, _held}) do
     Logger.warning(
       "message #{msg.id}: no answer from vendor trunk #{route.vendor_trunk_id} (#{reason}); re-routing (D4)"
     )
 
     attempt = attempt_of(no, route, job)
     # The parts not answered: from the first one not accepted to the last.
-    _ = possibly_sent(msg, attempt, length(done) + 1, length(job.done) + length(job.submits))
-    row = refused(attempt, done, -1)
+    _ = possibly_sent(msg, attempt, length(job.done) + 1, length(job.done) + length(job.submits))
+    row = refused(attempt, job.done, -1)
     next(msg, no + 1, tried, rows, {row, %{status: "UNKNOWN", error: "000", command_status: -1}})
   end
 
@@ -233,7 +238,7 @@ defmodule Sms.Switch.Pipeline.Sender do
     %{
       edr_id: Edr.new_id(),
       no: no,
-      vendor: Map.merge(route, %{data_coding: job.coding}),
+      vendor: Map.merge(route, %{data_coding: job.coding, peer: job[:peer]}),
       submit_time: job.started,
       resp_time: System.os_time(:millisecond),
       # The parts the message counts as, not the PDUs (one message_payload is billed per part, S-3.1).
@@ -321,7 +326,7 @@ defmodule Sms.Switch.Pipeline.Sender do
       {:error, error} ->
         Logger.warning("message #{msg.id} not queued for vendor trunk #{vt}: #{inspect(error)}")
         wait_until(job.not_before)
-        outcome(send_parts(vt, job, msg.id, held), {msg, route, no, tried, rows, held}, job)
+        outcome(send_parts(vt, job, msg.id, held), {msg, route, no, tried, rows, held})
     end
   end
 
@@ -405,7 +410,9 @@ defmodule Sms.Switch.Pipeline.Sender do
     _ =
       case reroute(msg, tried) do
         {:ok, routed} ->
-          attempt(msg, Intake.route_of(routed), resend.no + 1, tried, [])
+          # The EDR marks this attempt as a DLR re-route.
+          route = routed |> Intake.route_of() |> Map.put(:dlr_reroute, true)
+          attempt(msg, route, resend.no + 1, tried, [])
 
         {:error, reason, _} ->
           Logger.info(
@@ -678,7 +685,8 @@ defmodule Sms.Switch.Pipeline.Sender do
   # waits (what must wait goes on in the vendor's queue, `{:later, job}`); the vendor's queue entry otherwise.
   defp send_parts(vt, job, message_id, held) do
     if (Config.vendor_trunk(vt) || %{})[:service] == true,
-      do: {:sent, Enum.map(job.submits, fn _ -> service_result() end)},
+      do:
+        {:sent, %{job | submits: [], done: Enum.map(job.submits, fn _ -> service_result() end)}},
       else: send_all(vt, job, message_id, held)
   end
 
@@ -687,20 +695,18 @@ defmodule Sms.Switch.Pipeline.Sender do
     %{message_id: id, raw_message_id: id}
   end
 
-  defp send_all(_vt, %{submits: []} = job, _message_id, _held),
-    do: {:sent, Enum.reverse(job.done)}
+  defp send_all(_vt, %{submits: []} = job, _message_id, _held), do: {:sent, job}
 
   defp send_all(vt, %{submits: [{fields, tlvs} | rest]} = job, message_id, held) do
     ref = "#{message_id}:#{length(job.done) + 1}"
 
     case submit(vt, fields, tlvs, ref, prefer(job.done), part_deadline(job.done, held)) do
       {:ok, result} ->
-        send_all(
-          vt,
-          %{job | submits: rest, done: [result | job.done], temporary: 0},
-          message_id,
-          held
-        )
+        job = Map.merge(job, %{submits: rest, done: [result | job.done], temporary: 0})
+        send_all(vt, Map.put(job, :peer, result[:peer]), message_id, held)
+
+      {refusal, status, peer} ->
+        part_failed({refusal, status}, vt, Map.put(job, :peer, peer), message_id, held)
 
       failure ->
         part_failed(failure, vt, job, message_id, held)
@@ -729,7 +735,7 @@ defmodule Sms.Switch.Pipeline.Sender do
         send_all(vt, job, message_id, held)
       end
     else
-      {:rejected, status, job.done}
+      {:rejected, status, job}
     end
   end
 
@@ -744,10 +750,10 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   defp part_failed({reason, detail}, _vt, job, _message_id, _held)
        when reason in [:busy, :unavailable, :possibly_sent],
-       do: {:possibly_sent, detail, job.done}
+       do: {:possibly_sent, detail, job}
 
   defp part_failed({:rejected, status}, _vt, job, _message_id, _held),
-    do: {:rejected, status, job.done}
+    do: {:rejected, status, job}
 
   # How long a part waits for room when the vendor is at its TPS or its window is full: never in a sender worker; in the
   # vendor's queue the first part until 30 s after it was queued, a later part `:vendor_wait_ms`.
@@ -762,11 +768,11 @@ defmodule Sms.Switch.Pipeline.Sender do
       {:ok, %{status: 0} = result} ->
         {:ok, result}
 
-      {:ok, %{status: status}} when status in @temporary ->
-        {:temporary, status}
+      {:ok, %{status: status} = result} when status in @temporary ->
+        {:temporary, status, result[:peer]}
 
-      {:ok, %{status: status}} ->
-        {:rejected, status}
+      {:ok, %{status: status} = result} ->
+        {:rejected, status, result[:peer]}
 
       {:error, reason} when reason in [:throttled, :window_full] ->
         if System.monotonic_time(:millisecond) < deadline do
