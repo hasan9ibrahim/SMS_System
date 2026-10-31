@@ -135,6 +135,35 @@ test("Back from a record a list opens in place (?list=12) returns to the list (t
   assert.equal(parentPath("/switch/number-lists?q=fake"), null, "a list with filters has no parent");
 });
 
+test("a record's title goes when the tab leaves the record, also for its own list (functional QA round 13)", () => {
+  const title = (id: string) => s().tabs.find((t) => t.id === id)!.title;
+  const tab = s().open("/enterprises", { newTab: true });
+  assert.equal(title(tab), "Enterprises");
+  s().setPath(tab, "/enterprises/218", { step: true });
+  s().setTitle(tab, "Enterprise · Aladex Messaging Ltd");
+  s().setPath(tab, "/enterprises/218?tab=billing");
+  assert.equal(title(tab), "Enterprise · Aladex Messaging Ltd", "a section of the same record keeps it");
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().tabs.find((t) => t.id === tab)!.path, "/enterprises");
+  assert.equal(title(tab), "Enterprises", "Back to the list shows the list's title");
+  // A record a list opens in place, and the list's own filters.
+  s().setPath(tab, "/rates/manager?table=5");
+  s().setTitle(tab, "Rates · FAKE_TABLE buy");
+  s().setPath(tab, "/rates/manager?table=5&view=log");
+  assert.equal(title(tab), "Rates · FAKE_TABLE buy");
+  s().setPath(tab, "/rates/manager?g=abc");
+  assert.equal(title(tab), "Rate manager");
+  s().setTitle(tab, "My rate tables");
+  s().setPath(tab, "/rates/manager?g=abd");
+  assert.equal(title(tab), "My rate tables", "filter changes keep a title given on the list");
+  // A link to a rule in the list's panel: once the list takes over, the list's title.
+  const rule = s().open("/routing/rules?rule=183", { forceNew: true, title: "FAKE_RULE" });
+  assert.equal(title(rule), "FAKE_RULE");
+  s().setPath(rule, "/routing/rules");
+  assert.equal(title(rule), "Route rules");
+});
+
 test("closing the tab in view goes back to the tab used before it (team trial round 12)", () => {
   const a = s().open("/rates", { newTab: true });
   s().open("/routing/rules", { newTab: true });

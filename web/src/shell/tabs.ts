@@ -121,7 +121,29 @@ function pushBack(back: TabsState["back"], id: string, from: string, to: string,
 /** Query parameters naming a record a list page opens in place, with the parameters that belong to that record (a
  * rate table's ?view=): ?list=12 on Number lists, ?profile= on the Master Table, ?rn= on Incoming RNs, ?table= on the
  * Rate Manager, ?provider= on HLR. */
-const RECORD_PARAMS: Record<string, string[]> = { list: [], profile: [], rn: [], table: ["view"], provider: [] };
+const RECORD_PARAMS: Record<string, string[]> = {
+  list: [],
+  profile: [],
+  rn: [],
+  table: ["view"],
+  provider: [],
+  // A rule or user a link opens in the list's detail panel (functional QA round 13).
+  rule: [],
+  user: [],
+};
+
+/**
+ * The page and the record it shows (/enterprises/218, /rates/manager?table=5), without filters or sections: a title
+ * the page gave (an enterprise's name) belongs to that record and goes when the tab leaves it, also for its own list
+ * (functional QA round 13: "Enterprise · Aladex" stayed on the Enterprises list after Back).
+ */
+function recordOf(path: string): string {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const param = Object.keys(RECORD_PARAMS).find((k) => query.has(k));
+  return `${pathname(path)}${param ? `?${param}=${query.get(param)}` : ""}`;
+}
+/** The tab's title on its new path: kept on the same record, else the new page's own. */
+const titleAfter = (tab: Tab, path: string) => (recordOf(tab.path) === recordOf(path) ? tab.title : defaultTitle(path));
 
 /**
  * Where Back goes in a tab with no earlier page: a record's list (/enterprises/12 → /enterprises,
@@ -374,9 +396,8 @@ export const useTabs = create<TabsState>((set, get) => ({
     set({
       tabs: get().tabs.map((t) => {
         if (t.id !== id || t.path === path) return t;
-        // Keep a page-given title while staying on the same page; reset it when leaving.
-        const samePage = pageForPath(t.path) === pageForPath(path);
-        return { ...t, path, title: samePage ? t.title : defaultTitle(path) };
+        // Keep a page-given title while staying on the same record; reset it when leaving.
+        return { ...t, path, title: titleAfter(t, path) };
       }),
     });
   },
@@ -388,8 +409,7 @@ export const useTabs = create<TabsState>((set, get) => ({
         back: { ...get().back, [id]: { ...b, paths: b.paths.slice(0, -1) } },
         tabs: get().tabs.map((t) => {
           if (t.id !== id) return t;
-          const samePage = pageForPath(t.path) === pageForPath(prev);
-          return { ...t, path: prev, title: samePage ? t.title : defaultTitle(prev) };
+          return { ...t, path: prev, title: titleAfter(t, prev) };
         }),
       });
       return true;
