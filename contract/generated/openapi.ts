@@ -11390,7 +11390,14 @@ export type components = {
       revenueLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
       /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
       billingTimezone?: string | null;
+      tonNpiMode?: components["schemas"]["TonNpiMode"];
     };
+    /**
+     * @description TON / NPI (docs/SMPP_SCENARIOS.md S-4.7). `as_sent` (the default) keeps the source and destination TON / NPI as the message has them; an address unfit to send after translation is refused with 0x0A (a customer trunk) or passes the vendor over (a vendor trunk). `auto` sets them from the address after translation: on a customer trunk after its ingress translation, on a vendor trunk after its egress translation (what that vendor receives). Source: alphanumeric (anything but digits with an optional leading +) TON 5 / NPI 0, still at most 11 printable ASCII characters; + then digits TON 1 / NPI 1 without the +; 9 or more digits TON 1 / NPI 1; 3-8 digits (a short code) TON 3 / NPI 0. Destination: a full international number (8-15 digits, an optional leading + taken off) TON 1 / NPI 1, anything else as it is. A translation rule that sets Sender or Destination TON / NPI wins over auto for that field. The capability filter (allowed TON / NPI), the sender check and the PDU sent all use the values auto sets.
+     * @default as_sent
+     * @enum {string}
+     */
+    TonNpiMode: "as_sent" | "auto";
     /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). No port: it follows sslType (v0.93.0). */
     CustomerTrunkInput: WithRequired<
       components["schemas"]["CustomerTrunkFields"],
@@ -11534,6 +11541,7 @@ export type components = {
       costLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
       /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
       billingTimezone?: string | null;
+      tonNpiMode?: components["schemas"]["TonNpiMode"];
     };
     /** @description Vendor trunk form (§5.5) with cost limit (§13.26). */
     VendorTrunkInput: WithRequired<
