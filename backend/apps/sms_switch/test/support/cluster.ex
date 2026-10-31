@@ -73,9 +73,15 @@ defmodule Sms.Switch.Test.Cluster do
 
   defp await_redis(tries) do
     case Redis.command(["PING"]) do
-      {:ok, "PONG"} -> :ok
-      _ when tries > 0 -> Process.sleep(50) && await_redis(tries - 1)
-      error -> error
+      {:ok, "PONG"} ->
+        :ok
+
+      _ when tries > 0 ->
+        Process.sleep(50)
+        await_redis(tries - 1)
+
+      error ->
+        error
     end
   end
 

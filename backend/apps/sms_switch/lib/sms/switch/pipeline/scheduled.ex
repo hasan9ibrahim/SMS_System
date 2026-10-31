@@ -32,7 +32,7 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   @queued_s 86_400
 
   @doc "How far ahead a message may be scheduled (ms): `:max_schedule_s`, 7 days by default."
-  @spec max_ahead_ms() :: pos_integer()
+  @spec max_ahead_ms() :: number()
   def max_ahead_ms,
     do:
       :sms_switch
@@ -44,7 +44,6 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   Holds an accepted message until its scheduled time. It gives back the overflow buffer place it took (it waits here,
   not in the trunk's buffer, S-2.4) and goes on as an ordinary message when released.
   """
-  @spec hold(map()) :: :ok | {:error, term()}
   def hold(msg) do
     released =
       Map.merge(msg, %{release: true, buffered: false, tps_counters: [], credit_held: false})
@@ -122,7 +121,6 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   end
 
   @doc "Whether a customer message id of the enterprise is held for its time (query_sm: ENROUTE)."
-  @spec held?(integer(), String.t()) :: {:ok, boolean()} | {:error, term()}
   def held?(enterprise_id, id) do
     case Store.scheduled_id(enterprise_id, id) do
       {:ok, nil} -> {:ok, false}
@@ -135,7 +133,6 @@ defmodule Sms.Switch.Pipeline.Scheduled do
   Cancels a message held for its time (cancel_sm, any of its customer message ids): `:ok`, or `:not_held` when it is
   not held (released already: the queued cancel decides).
   """
-  @spec cancel(integer(), String.t()) :: :ok | :not_held | {:error, term()}
   def cancel(enterprise_id, id) do
     with {:ok, sid} when is_binary(sid) <- Store.scheduled_id(enterprise_id, id),
          {:ok, held} <- Store.take_scheduled(sid) do

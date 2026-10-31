@@ -266,10 +266,13 @@ defmodule Sms.Switch.Pipeline.Ledger do
   def unreserve(%{id: id} = msg) do
     key = key(:customer, msg.trunk.enterprise_id)
 
-    with %{} <- account(key),
-         {:error, reason} <- Store.release_credit(key, id),
-         do:
-           Logger.warning("hold of #{id} on #{key} not released (it expires): #{inspect(reason)}")
+    _ =
+      with %{} <- account(key),
+           {:error, reason} <- Store.release_credit(key, id),
+           do:
+             Logger.warning(
+               "hold of #{id} on #{key} not released (it expires): #{inspect(reason)}"
+             )
 
     :ok
   end
@@ -281,10 +284,11 @@ defmodule Sms.Switch.Pipeline.Ledger do
   def extend_hold(enterprise_id, id, timeout_s) do
     key = key(:customer, enterprise_id)
 
-    if account(key) != nil do
-      until = System.os_time(:millisecond) + (timeout_s + @hold_margin_s) * 1_000
-      _ = Store.extend_credit_hold(key, id, until)
-    end
+    _ =
+      if account(key) != nil do
+        until = System.os_time(:millisecond) + (timeout_s + @hold_margin_s) * 1_000
+        Store.extend_credit_hold(key, id, until)
+      end
 
     :ok
   end

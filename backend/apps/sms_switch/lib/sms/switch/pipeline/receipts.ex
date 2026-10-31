@@ -310,8 +310,9 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
     _ = charge(billed, row)
 
-    if message_final and c_parts == 0 and bill.charged != true,
-      do: Ledger.release(data.trunk.enterprise_id, data.id)
+    _ =
+      if message_final and c_parts == 0 and bill.charged != true,
+        do: Ledger.release(data.trunk.enterprise_id, data.id)
 
     case Edr.publish_receipt(row) do
       :ok -> :ok
