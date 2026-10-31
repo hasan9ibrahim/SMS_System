@@ -34,9 +34,12 @@ import {
   passwordExpiry,
   passwordRules,
   policy,
+  TOTP_USED,
+  totpMatch,
   totpSecretOf,
+  totpStepUsed,
+  useTotpStep,
   verifyPassword,
-  verifyTotp,
 } from "../admin/passwords.js";
 import {
   ACCESS_GROUP_FROM,
@@ -573,15 +576,21 @@ export function confirmUserTotp(request: FastifyRequest, reply: FastifyReply) {
     if (refused) return sendProblem(reply, 403, refused);
     const pending = totpSecretOf(rows[0].totp_pending_secret);
     if (!pending) return badInput(reply, [{ path: "/code", message: "start the QR enrolment first" }]);
-    if (!verifyTotp(pending, code))
+    const step = totpMatch(pending, code);
+    if (step === null)
       return badInput(reply, [{ path: "/code", message: "the code does not match; check the phone's clock" }]);
     const change = await inTransaction(pool, async (c) => {
-      await c.query(
-        "UPDATE users SET totp_enabled = true, totp_secret = totp_pending_secret, totp_pending_secret = NULL, updated_at = now() WHERE id = $1",
-        [id],
+      // The confirming code is the new secret's first used step (§13.28), so it cannot sign in afterwards. Only the
+      // request that still finds this pending secret enables it: a double-submit confirms once.
+      const { rows: done } = await c.query(
+        `UPDATE users SET totp_enabled = true, totp_secret = totp_pending_secret, totp_pending_secret = NULL,
+                totp_last_step = $3, updated_at = now()
+          WHERE id = $1 AND totp_pending_secret = $2 RETURNING id`,
+        [id, rows[0].totp_pending_secret, step],
       );
-      return totpChange(request, c, id, true, rows[0].username as string);
+      return done[0] ? totpChange(request, c, id, true, rows[0].username as string) : null;
     });
+    if (!change) return badInput(reply, [{ path: "/code", message: TOTP_USED }]);
     return { record: await loadUser(pool, id), change };
   });
 }
@@ -596,7 +605,8 @@ export function disableUserTotp(request: FastifyRequest, reply: FastifyReply) {
     if (!u.totpEnabled) return { record: u, change: null };
     const change = await inTransaction(pool, async (c) => {
       await c.query(
-        "UPDATE users SET totp_enabled = false, totp_secret = NULL, totp_pending_secret = NULL, updated_at = now() WHERE id = $1",
+        `UPDATE users SET totp_enabled = false, totp_secret = NULL, totp_pending_secret = NULL, totp_last_step = NULL,
+                updated_at = now() WHERE id = $1`,
         [id],
       );
       return totpChange(request, c, id, false, u.username);
@@ -689,7 +699,8 @@ export async function checkEmailCode(
   );
   const r = rows[0];
   if (!code) return missing;
-  if (!r?.password_code_hash || !r.live) return "the code has expired; send a new one";
+  // A used code is cleared (useEmailCode), so it reads as gone, like an expired one.
+  if (!r?.password_code_hash || !r.live) return "the code has expired or was already used; send a new one";
   if (Number(r.password_code_tries) >= CODE_TRIES) return "too many wrong codes; send a new one";
   const want = Buffer.from(r.password_code_hash as string, "hex");
   const got = Buffer.from(codeHash(userId, code), "hex");
@@ -698,13 +709,30 @@ export async function checkEmailCode(
   return "the code does not match";
 }
 
+export const EMAIL_CODE_USED = "the code was already used; send a new one";
+
+/**
+ * Uses up an e-mailed code that checkEmailCode accepted (§13.28): it works once. True when this call cleared it; false
+ * when it was used or replaced in the meantime. One conditional UPDATE: of two parallel requests with the same code
+ * only one gets the row.
+ */
+export async function useEmailCode(c: Db, userId: number, code: string): Promise<boolean> {
+  const { rows } = await c.query(
+    `UPDATE users SET password_code_hash = NULL, password_code_expires_at = NULL
+      WHERE id = $1 AND password_code_hash = $2 AND password_code_expires_at > now() RETURNING id`,
+    [userId, codeHash(userId, code)],
+  );
+  return rows.length > 0;
+}
+
 /** §13.28: the signed-in user's own change - current password, a code (always, R6), rules; other sessions end. */
 export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as PasswordChangeInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const { rows } = await pool.query(
-      "SELECT username, first_name, last_name, password_hash, totp_enabled, totp_secret FROM users WHERE id = $1",
+      `SELECT username, first_name, last_name, password_hash, totp_enabled, totp_secret, totp_last_step
+         FROM users WHERE id = $1`,
       [me.id],
     );
     const u = rows[0];
@@ -712,14 +740,18 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
     const errors: FieldError[] = [];
     if (!verifyPassword(b.currentPassword, u.password_hash as string))
       errors.push({ path: "/currentPassword", message: "the current password is wrong" });
-    // A code is always needed (R6): the authenticator's when 2FA is on, otherwise the e-mailed one.
+    // A code is always needed (R6): the authenticator's when 2FA is on, otherwise the e-mailed one. Each works once
+    // (§13.28): checked here, used up only with the change itself, so fixing another field keeps the code valid.
+    let step: number | null = null;
     if (u.totp_enabled) {
       const secret = totpSecretOf(u.totp_secret);
-      if (!b.totpCode || !secret || !verifyTotp(secret, b.totpCode))
+      step = b.totpCode && secret ? totpMatch(secret, b.totpCode) : null;
+      if (step === null)
         errors.push({
           path: "/totpCode",
           message: b.totpCode ? "the 2FA code does not match" : "enter the code from your 2FA app",
         });
+      else if (totpStepUsed(step, u.totp_last_step)) errors.push({ path: "/totpCode", message: TOTP_USED });
     } else {
       const wrong = await checkEmailCode(pool, me.id, b.emailCode);
       if (wrong) errors.push({ path: "/emailCode", message: wrong });
@@ -743,6 +775,9 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
     const hash = hashPassword(b.newPassword);
     const changedAt = new Date();
     const signedOut = await inTransaction(pool, async (c) => {
+      // Used by a parallel request with the same code since the check above: nothing changes.
+      if (step !== null ? !(await useTotpStep(c, me.id, step)) : !(await useEmailCode(c, me.id, b.emailCode!)))
+        return null;
       await c.query(
         `UPDATE users SET password_hash = $2, password_changed_at = $3, must_change_password = false,
                 temp_password_expires_at = NULL, password_code_hash = NULL, password_code_expires_at = NULL,
@@ -762,6 +797,12 @@ export function changeMyPassword(request: FastifyRequest, reply: FastifyReply) {
         me.id,
       );
     });
+    if (signedOut === null) {
+      await recordFailure(pool, request, me.id);
+      return badInput(reply, [
+        step !== null ? { path: "/totpCode", message: TOTP_USED } : { path: "/emailCode", message: EMAIL_CODE_USED },
+      ]);
+    }
     return {
       changedAt: changedAt.toISOString(),
       expiresAt: passwordExpiry(changedAt).toISOString(),

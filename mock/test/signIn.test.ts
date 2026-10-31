@@ -8,9 +8,10 @@ import type { CurrentUser, SignInResult } from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
-import { totpCode } from "../src/admin/passwords.js";
+import { SEED_PASSWORD } from "../src/generator/admin.js";
+import { encryptSecret, TOTP_USED, totpCode } from "../src/admin/passwords.js";
 import { API_URL, injector } from "./remote.js";
+import { withFreshTotp } from "./totp.js";
 
 process.env.MOCK_REQUIRE_SIGN_IN = "1";
 process.env.MOCK_PROXY_SECRET = "test-proxy-secret";
@@ -39,9 +40,10 @@ after(async () => {
   if (ready) {
     for (const u of users)
       await db().query(
-        `UPDATE users SET otp_method = $2, allow_multiple_login = $3, failed_logins = 0, locked_until = NULL
+        `UPDATE users SET otp_method = $2, allow_multiple_login = $3, totp_enabled = $4, totp_secret = $5,
+                totp_last_step = NULL, failed_logins = 0, locked_until = NULL
           WHERE id = $1`,
-        [u.id, u.otp_method, u.allow_multiple_login],
+        [u.id, u.otp_method, u.allow_multiple_login, u.totp_enabled, u.totp_secret],
       );
     await db().query("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = 1");
     await db().query("DELETE FROM user_sessions WHERE user_kind = 'staff' AND logged_in_at >= $1", [started]);
@@ -134,11 +136,74 @@ describe("staff sign-in (§13.28)", { skip: skip || (!other && "no plain users")
     assert.equal(first.method, "authenticator");
     assert.equal(first.sentTo, undefined);
     await expect("resendSignInCode", call("POST", "/session/code/resend", { challenge: first.challenge }), 409);
-    const done = await expect<SignInResult>(
-      "signInCode",
-      call("POST", "/session/code", { challenge: first.challenge, code: totpCode(DEMO_TOTP_SECRET) }),
+    const done = await withFreshTotp(1, (code) =>
+      expect<SignInResult>("signInCode", call("POST", "/session/code", { challenge: first.challenge, code })),
     );
     assert.equal(done.user?.id, 1);
+  });
+
+  // §13.28: a code seen over someone's shoulder or caught in transit must not sign in again inside its 30 s window.
+  // A plain user gets a test-only authenticator secret here (put back after the file).
+  const SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"; // RFC 6238 test secret, fake
+  const challengeOf = async (username: string) => {
+    const r = await expect<SignInResult>("signIn", signInWith(username));
+    assert.equal(r.method, "authenticator");
+    return r.challenge!;
+  };
+  const sendCode = (challenge: string, code: string) => call("POST", "/session/code", { challenge, code });
+  const withSecret = (multiple: boolean) =>
+    db().query(
+      `UPDATE users SET otp_method = 'authenticator', totp_enabled = true, totp_secret = $2, totp_last_step = NULL,
+              allow_multiple_login = $3
+        WHERE id = $1`,
+      [plain.id, encryptSecret(SECRET), multiple],
+    );
+
+  test("an authenticator code works once; the next step's code still signs in", async () => {
+    await withSecret(false);
+    const t0 = Date.now();
+    const code = totpCode(SECRET, t0);
+    const first = await expect<SignInResult>("signInCode", sendCode(await challengeOf(plain.username), code));
+    assert.equal(first.status, "signed_in");
+    // Same code, new sign-in with the password: refused, without using one of the challenge's tries.
+    const challenge = await challengeOf(plain.username);
+    const again = await expect("signInCode", sendCode(challenge, code), 401);
+    assert.equal(again.title, TOTP_USED);
+    assert.equal(again.code, "code_used");
+    const { rows } = await db().query(
+      "SELECT tries FROM sign_in_challenges WHERE user_id = $1 ORDER BY id DESC LIMIT 1",
+      [plain.id],
+    );
+    assert.equal(Number(rows[0].tries), 0);
+    // The code of the next 30 s step (inside the clock-drift window) is a new code: it signs in on the same challenge.
+    const next = await expect<SignInResult>("signInCode", sendCode(challenge, totpCode(SECRET, t0 + 30_000)));
+    assert.equal(next.status, "signed_in");
+  });
+
+  test("the same authenticator code sent twice at once signs in only once", async () => {
+    await withSecret(true);
+    const [a, b] = [await challengeOf(plain.username), await challengeOf(plain.username)];
+    const code = totpCode(SECRET);
+    const answers = await Promise.all([sendCode(a, code), sendCode(b, code)]);
+    assert.deepEqual(answers.map((r) => r.statusCode).sort(), [200, 401], answers.map((r) => r.body).join(" | "));
+    const refused = answers.find((r) => r.statusCode === 401)!;
+    check("signInCode", refused);
+    assert.equal(refused.json().code, "code_used");
+  });
+
+  test("the same e-mailed code sent twice at once signs in only once", async () => {
+    await db().query("UPDATE users SET otp_method = 'email', totp_enabled = false WHERE id = $1", [plain.id]);
+    const first = await expect<SignInResult>("signIn", signInWith(plain.username));
+    const { rows } = await db().query(
+      `SELECT body FROM email_logs WHERE email_type = 'otp' AND $1 = ANY(to_addresses) ORDER BY id DESC LIMIT 1`,
+      [plain.email],
+    );
+    const code = /code is (\d{6})/.exec(rows[0].body as string)![1]!;
+    const answers = await Promise.all([sendCode(first.challenge!, code), sendCode(first.challenge!, code)]);
+    assert.deepEqual(answers.map((r) => r.statusCode).sort(), [200, 401], answers.map((r) => r.body).join(" | "));
+    const refused = answers.find((r) => r.statusCode === 401)!;
+    check("signInCode", refused);
+    assert.equal(refused.json().code, "challenge_expired");
   });
 
   test("without Allow Multiple Login a new sign-in ends the other session", async () => {

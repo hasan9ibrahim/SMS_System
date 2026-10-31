@@ -11,10 +11,11 @@ import type { LightMyRequestResponse } from "fastify";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { decryptSecret, totpCode } from "../src/admin/passwords.js";
+import { TOTP_USED } from "../src/admin/passwords.js";
 import { parseCsv, pgArray, toCsv } from "../src/migration/csv.js";
 import { PACKAGE_DIR, PackageError, readPackage, writePackage } from "../src/migration/package.js";
 import { runningApplies, runningExports } from "../src/api/migration.js";
+import { withFreshTotp } from "./totp.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -60,11 +61,8 @@ async function fails(operationId: string, res: Promise<LightMyRequestResponse>, 
   check(operationId, r);
   return r.json();
 }
-async function myTotp() {
-  const { rows } = await db().query("SELECT totp_secret FROM users WHERE id = 1");
-  const stored = String(rows[0].totp_secret);
-  return totpCode(stored.startsWith("enc:") ? decryptSecret(stored)! : stored);
-}
+/** The test admin's (user 1) authenticator code, fresh for each call: a code works once (§13.28). */
+const asAdmin = <T>(use: (code: string) => Promise<T>) => withFreshTotp(1, use);
 
 describe("csv", () => {
   test("parses quotes, separators and line breaks; writes them back", () => {
@@ -205,11 +203,21 @@ describe("migration center", { skip }, () => {
     const before = Number(
       (await db().query("SELECT count(*) AS n FROM email_logs WHERE email_type = 'credential_transfer'")).rows[0].n,
     );
-    const x = await ok(
-      "createMigrationExport",
-      call("POST", "/migration/exports", { ...body, totpCode: await myTotp() }),
-      201,
-    );
+    const x = await asAdmin(async (code) => {
+      const made = await ok(
+        "createMigrationExport",
+        call("POST", "/migration/exports", { ...body, totpCode: code }),
+        201,
+      );
+      // The code works once (§13.28): the same code makes no second export.
+      const reused = await fails(
+        "createMigrationExport",
+        call("POST", "/migration/exports", { ...body, totpCode: code }),
+        400,
+      );
+      assert.deepEqual(reused.errors, [{ path: "/totpCode", message: TOTP_USED }]);
+      return made;
+    });
     madeExports.push(x.id);
     assert.equal(x.status, "running");
     assert.ok(x.includesCredentials);
@@ -225,9 +233,8 @@ describe("migration center", { skip }, () => {
     assert.equal(list[0].id, x.id);
 
     await fails("createMigrationLink", call("POST", `/migration/exports/${x.id}/link`, {}), 400);
-    const link = await ok(
-      "createMigrationLink",
-      call("POST", `/migration/exports/${x.id}/link`, { totpCode: await myTotp() }),
+    const link = await asAdmin((code) =>
+      ok("createMigrationLink", call("POST", `/migration/exports/${x.id}/link`, { totpCode: code })),
     );
     assert.match(link.url, /\/migration\/downloads\/[\w-]{20,}$/);
     const token = link.url.split("/").pop();
@@ -359,10 +366,8 @@ describe("migration center", { skip }, () => {
     assert.equal(refused.errors[0].path, "/totpCode");
     assert.equal(await importsNow(), countBefore, "a refused import writes nothing");
 
-    const dry = await ok(
-      "createMigrationImport",
-      call("POST", "/migration/imports", files("999", await myTotp(), "192.0.2.1;192.0.2.300")),
-      201,
+    const dry = await asAdmin((code) =>
+      ok("createMigrationImport", call("POST", "/migration/imports", files("999", code, "192.0.2.1;192.0.2.300")), 201),
     );
     madeImports.push(dry.id);
     assert.equal(dry.status, "validated");
@@ -380,12 +385,10 @@ describe("migration center", { skip }, () => {
     );
     await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
 
-    const fixed = await ok(
-      "revalidateMigrationImport",
-      call(
-        "PUT",
-        `/migration/imports/${dry.id}`,
-        files("424", await myTotp(), "192.0.2.10-192.0.2.13;198.51.100.0/24"),
+    const fixed = await asAdmin((code) =>
+      ok(
+        "revalidateMigrationImport",
+        call("PUT", `/migration/imports/${dry.id}`, files("424", code, "192.0.2.10-192.0.2.13;198.51.100.0/24")),
       ),
     );
     assert.equal(fixed.report.canApply, true, JSON.stringify(fixed.report.issues));

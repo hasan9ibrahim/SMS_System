@@ -186,9 +186,54 @@ export function totpCode(secret: string, at = Date.now()): string {
   const n = (h.readUInt32BE(o) & 0x7fffffff) % 1_000_000;
   return String(n).padStart(6, "0");
 }
-/** Accepts the current 30 s step and one either side. */
-export const verifyTotp = (secret: string, code: string, at = Date.now()) =>
-  [-1, 0, 1].some((d) => totpCode(secret, at + d * 30_000) === code);
+/** The RFC 6238 counter (30 s step) of a moment. */
+export const totpStep = (at = Date.now()) => Math.floor(at / 30_000);
+/** The step whose code `code` is: the current 30 s step or one either side (the latest if several match), else null. */
+export function totpMatch(secret: string, code: string, at = Date.now()): number | null {
+  const now = totpStep(at);
+  for (const step of [now + 1, now, now - 1]) if (totpCode(secret, step * 30_000) === code) return step;
+  return null;
+}
+/** Accepts the current 30 s step and one either side. Whether the code was already used is useTotpStep's job. */
+export const verifyTotp = (secret: string, code: string, at = Date.now()) => totpMatch(secret, code, at) !== null;
+
+/** §13.28: an authenticator code works once, also inside its 30 s window and the clock-drift steps around it. */
+export const TOTP_USED = "This code was already used. Wait for the next one.";
+
+type Querier = { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
+
+/** Whether `step` is not later than the user's last accepted step (users.totp_last_step), i.e. its code was used. */
+export const totpStepUsed = (step: number, lastStep: unknown) => lastStep != null && step <= Number(lastStep);
+
+/**
+ * Uses up an authenticator step for the user (§13.28, migration 102): true when this call moved the user's last
+ * accepted step forward to `step`; false when that step or a later one was accepted already, by an earlier request or a
+ * parallel one with the same code. One conditional UPDATE: of two requests with the same code only one gets the row.
+ */
+export async function useTotpStep(c: Querier, userId: number, step: number): Promise<boolean> {
+  const { rows } = await c.query(
+    `UPDATE users SET totp_last_step = $2
+      WHERE id = $1 AND (totp_last_step IS NULL OR totp_last_step < $2) RETURNING id`,
+    [userId, step],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Checks an authenticator code for the user and uses it up (sign-in, credential exports and imports): null when
+ * accepted, "wrong" when it is not the code of the current step or one either side, "used" when it was used already.
+ */
+export async function acceptTotp(
+  c: Querier,
+  userId: number,
+  secret: string | null,
+  code: string,
+  at = Date.now(),
+): Promise<null | "wrong" | "used"> {
+  const step = secret ? totpMatch(secret, code, at) : null;
+  if (step === null) return "wrong";
+  return (await useTotpStep(c, userId, step)) ? null : "used";
+}
 export const otpauthUri = (secret: string, account: string) =>
   `otpauth://totp/Xpert:${encodeURIComponent(account)}?secret=${secret}&issuer=Xpert&digits=6&period=30`;
 
@@ -223,7 +268,7 @@ export const totpSecretOf = (stored: unknown): string | null =>
   typeof stored !== "string" || !stored ? null : stored.startsWith("enc:") ? decryptSecret(stored) : stored;
 
 /** Encrypts authenticator secrets still stored in plain text (run once at start; cheap when there are none). */
-export async function encryptStoredTotp(pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> }) {
+export async function encryptStoredTotp(pool: Querier) {
   const { rows } = await pool.query(
     `SELECT id, totp_secret, totp_pending_secret FROM users
       WHERE (totp_secret IS NOT NULL AND totp_secret NOT LIKE 'enc:%')

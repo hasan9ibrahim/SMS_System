@@ -27,7 +27,7 @@ import type {
 } from "@sms/contract";
 import { db, withDb } from "../db.js";
 import { sendProblem } from "../problem.js";
-import { decryptSecret, encryptSecret, totpSecretOf, verifyTotp } from "../admin/passwords.js";
+import { acceptTotp, decryptSecret, encryptSecret, TOTP_USED, totpSecretOf } from "../admin/passwords.js";
 import { toCsv } from "../migration/csv.js";
 import { BUILT_IN_MAPPINGS, ENTITY, IMPORT_ENTITIES, REFERENCE_PLATFORM } from "../migration/entities.js";
 import { packageFiles } from "../migration/fromPackage.js";
@@ -37,7 +37,7 @@ import { logEmail } from "./emailLog.js";
 import type { DiffEntry } from "./records.js";
 import { iso, recordChange } from "./records.js";
 import { adminSql, getCurrentUser } from "./session.js";
-import { checkEmailCode } from "./admin.js";
+import { checkEmailCode, EMAIL_CODE_USED, useEmailCode } from "./admin.js";
 import { inTransaction } from "./views.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -58,13 +58,16 @@ async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: st
   const { rows } = await c.query("SELECT totp_enabled, totp_secret FROM users WHERE id = $1", [me.id]);
   const u = rows[0];
   // Without the authenticator app, the code e-mailed by sendMyCredentialCode is the second factor, as at sign-in (R9).
+  // Either code works once (§13.28): it is used up here, as the last check before the export, link or import.
   if (!u?.totp_enabled || !u.totp_secret) {
     const wrong = await checkEmailCode(db(), me.id, code, "enter the code we e-mailed you (Send code)");
-    return wrong ? () => fieldError(reply, "/totpCode", wrong) : null;
+    if (wrong) return () => fieldError(reply, "/totpCode", wrong);
+    return (await useEmailCode(c, me.id, code!)) ? null : () => fieldError(reply, "/totpCode", EMAIL_CODE_USED);
   }
-  const secret = totpSecretOf(u.totp_secret);
   if (!code) return () => fieldError(reply, "/totpCode", "enter the code from your 2FA app");
-  if (!secret || !verifyTotp(secret, code)) return () => fieldError(reply, "/totpCode", "the 2FA code does not match");
+  const refused = await acceptTotp(c, me.id, totpSecretOf(u.totp_secret), code);
+  if (refused === "wrong") return () => fieldError(reply, "/totpCode", "the 2FA code does not match");
+  if (refused === "used") return () => fieldError(reply, "/totpCode", TOTP_USED);
   return null;
 }
 
