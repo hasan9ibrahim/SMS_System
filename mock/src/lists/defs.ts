@@ -3045,7 +3045,11 @@ export const BALANCE_FROM = `enterprises e
         (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'customer') AS customer,
         (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'vendor') AS vendor) bal ON true
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
-    LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
+    LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency
+    -- Credit held for messages in flight, written by the switch (migration 103, §7, decided 2026-10-31).
+    LEFT JOIN credit_reservations cr ON cr.enterprise_id = e.id`;
+/** Reserved for messages in flight: customer billing only, 0 when the switch has written nothing. */
+const reservedSql = "CASE WHEN cb.id IS NOT NULL THEN round(COALESCE(cr.reserved, 0), 4) END";
 const netSql = `round(COALESCE(bal.customer, 0)
     - COALESCE(bal.vendor * COALESCE(ccl.rate_per_eur, vcl.rate_per_eur) / vcl.rate_per_eur, 0), 4)`;
 /** Credit used: what the client owes us (a negative balance) as a share of the limit, never below 0. */
@@ -3060,6 +3064,7 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
     enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
     customerBalance: visCol(hide("balances", "round(bal.customer, 4)", byEnterprise("e.id"))),
+    customerReserved: visCol(hide("balances", reservedSql, byEnterprise("e.id"))),
     customerCurrency: { sql: "cb.currency" },
     vendorBalance: visCol(hide("balances", "round(bal.vendor, 4)", byEnterprise("e.id"))),
     vendorCurrency: { sql: "vb.currency" },
@@ -3073,8 +3078,8 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   },
   search: ["enterprise", "accountManager"],
   idSql: "e.id",
-  select: `e.id, e.name, e.type, round(bal.customer, 4) AS customer_balance, cb.currency AS customer_currency,
-    round(bal.vendor, 4) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
+  select: `e.id, e.name, e.type, round(bal.customer, 4) AS customer_balance, ${reservedSql} AS customer_reserved,
+    cb.currency AS customer_currency, round(bal.vendor, 4) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
     ${fullName("am")} AS account_manager, cb.billing_type, cb.credit_limit, ${creditUsedSql} AS credit_used_pct,
     bcy.name AS billing_cycle, COALESCE(cb.currency, vb.currency) AS currency`,
   mapRow: (r) => ({
@@ -3082,6 +3087,7 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
     enterprise: r.name as string,
     enterpriseType: r.type as string,
     customerBalance: r.customer_balance === null ? null : Number(r.customer_balance),
+    customerReserved: r.customer_reserved == null ? null : Number(r.customer_reserved),
     customerCurrency: r.customer_currency === null ? null : String(r.customer_currency).trim(),
     vendorBalance: r.vendor_balance === null ? null : Number(r.vendor_balance),
     vendorCurrency: r.vendor_currency === null ? null : String(r.vendor_currency).trim(),

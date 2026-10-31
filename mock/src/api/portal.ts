@@ -463,7 +463,9 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: b.tz });
     const monthStart = `${today.slice(0, 8)}01`;
     const [bal, trunks, inv, figures] = await Promise.all([
-      pool.query(`SELECT bal.customer FROM ${BALANCE_FROM} WHERE e.id = $1`, [me.enterpriseId]),
+      pool.query(`SELECT bal.customer, COALESCE(cr.reserved, 0) AS reserved FROM ${BALANCE_FROM} WHERE e.id = $1`, [
+        me.enterpriseId,
+      ]),
       pool.query(
         `SELECT t.id, t.name, t.tps, CASE WHEN tb.status = 'online' THEN 'up' ELSE 'down' END AS connection
            FROM customer_trunks t LEFT JOIN trunk_binds tb ON tb.side = 'customer' AND tb.trunk_id = t.id
@@ -488,6 +490,8 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       return acc;
     }, {});
     const balance = bal.rows[0]?.customer == null ? null : Number(bal.rows[0].customer);
+    // What the switch lets the customer send now: less the credit held for messages in flight (§7, v0.131.0).
+    const reserved = Number(bal.rows[0]?.reserved ?? 0);
     const i = inv.rows[0];
     const day = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : d ? String(d).slice(0, 10) : null);
     return {
@@ -496,7 +500,7 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       billingType: b.billingType,
       balance,
       creditLimit: b.creditLimit,
-      availableCredit: balance === null ? null : money(balance + (b.creditLimit ?? 0)),
+      availableCredit: balance === null ? null : money(balance + (b.creditLimit ?? 0) - reserved),
       today: totals(todayRow),
       thisMonth: totals(month),
       trunks: trunks.rows.map((t) => ({

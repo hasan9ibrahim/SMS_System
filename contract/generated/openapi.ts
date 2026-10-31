@@ -14169,6 +14169,8 @@ export type components = {
       enterpriseType: string;
       /** @description Customer balance in the customer billing currency; positive = the client's credit, negative = what the client owes us; null = no customer billing. */
       customerBalance: number | null;
+      /** @description Credit reserved for the customer's messages in flight, in the customer billing currency (§7, decided 2026-10-31, v0.131.0): the switch holds each accepted message's full cost until it is charged (its Billing Type) or ends unbilled, so the credit check counts balance + credit limit − reserved. Not part of the balance. Written by the switch every few seconds; 0 when nothing is in flight; null = no customer billing. */
+      customerReserved: number | null;
       customerCurrency: string | null;
       /** @description Vendor balance in the vendor billing currency; positive = the vendor's credit with us (we paid ahead), negative = what we owe the vendor. */
       vendorBalance: number | null;
@@ -17050,7 +17052,7 @@ export type components = {
       /** @description Positive = the customer's credit with us, negative = what they owe (§7 balance sign). */
       balance: number | null;
       creditLimit: number | null;
-      /** @description Balance plus credit limit. */
+      /** @description Balance plus credit limit, less the credit reserved for messages in flight (§7, v0.131.0): what the switch lets the customer send now. */
       availableCredit: number | null;
       today: components["schemas"]["PortalTotals"];
       thisMonth: components["schemas"]["PortalTotals"];

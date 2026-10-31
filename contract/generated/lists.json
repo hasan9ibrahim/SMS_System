@@ -8300,6 +8300,27 @@
    },
    {
     "sortable": true,
+    "hidden": false,
+    "field": "customerReserved",
+    "label": "Reserved",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
     "hidden": true,
     "field": "customerCurrency",
     "label": "Customer Currency",

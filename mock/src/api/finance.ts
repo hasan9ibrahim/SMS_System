@@ -842,6 +842,7 @@ export const exportEnterpriseBalances = (request: FastifyRequest, reply: Fastify
     [
       ["enterprise", (r) => r.enterprise],
       ["customer_balance", (r) => r.customerBalance],
+      ["customer_reserved", (r) => r.customerReserved],
       ["customer_currency", (r) => r.customerCurrency],
       ["vendor_balance", (r) => r.vendorBalance],
       ["vendor_currency", (r) => r.vendorCurrency],
