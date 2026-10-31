@@ -8,7 +8,8 @@ defmodule Sms.Switch.Pipeline.Intake do
        S-2.10), priority_flag, registered_delivery and esm_class, the scheduled time and validity period (0x61 /
        0x62, S-2.12, S-2.13);
     2. **ingress translation**: the customer trunk's translation rules in their order (§6.4, §13.2); a block refuses
-       the message (0x45);
+       the message (0x45); a trunk set to auto TON / NPI then fixes them from the addresses (S-4.7), and a sender
+       left unfit to send is refused (0x0A / 0x48 / 0x49);
     3. **destination and rate**: the longest dial code of the receiver (§6.1) and the customer's rate (§5.4); none →
        0x0B (S-6.2);
     4. **routing**: the route rules and the egress-block skip (`Sms.Switch.Pipeline.Router`); no rule, a blocking rule
