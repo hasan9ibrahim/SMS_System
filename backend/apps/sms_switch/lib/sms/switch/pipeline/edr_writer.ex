@@ -89,15 +89,16 @@ defmodule Sms.Switch.Pipeline.EdrWriter do
 
     with {:ok, stored} <- stored_keys(groups, deadline) do
       Enum.reduce_while(groups, :ok, fn {table, entries}, :ok ->
-        case entries
-             |> fresh(table, Map.get(stored, table, MapSet.new()))
-             |> write_entries(table, deadline) do
-          :ok -> {:cont, :ok}
-          {:error, _} = error -> {:halt, error}
-        end
+        entries
+        |> fresh(table, Map.get(stored, table, MapSet.new()))
+        |> write_entries(table, deadline)
+        |> continue()
       end)
     end
   end
+
+  defp continue(:ok), do: {:cont, :ok}
+  defp continue({:error, _} = error), do: {:halt, error}
 
   # The batch's rows per table, with their keys as a column; events of an unknown type are dropped.
   defp groups(events) do
