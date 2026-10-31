@@ -2764,7 +2764,7 @@
     ]
    },
    {
-    "sortable": true,
+    "sortable": false,
     "hidden": true,
     "field": "entityId",
     "label": "Record ID",
@@ -2773,11 +2773,6 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
@@ -13949,15 +13944,8 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
-     "not_in",
-     "empty",
-     "not_empty"
+     "not_in"
     ]
    }
   ]
