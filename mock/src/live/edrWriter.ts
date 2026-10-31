@@ -71,6 +71,7 @@ async function prepare(): Promise<WriterState | null> {
     await chQuery(`CREATE TABLE ${TEMPLATES} AS edr ENGINE = MergeTree ORDER BY edr_id`);
     // Two light steps (team trial round 2): pick the templates on a few narrow columns, then copy those rows
     // whole. Sorting a week of whole rows (about 100 columns) passed the trial server's ClickHouse memory limit.
+    // A row stored twice (ClickHouse 010, S-7.3) makes one template, not two copies of each message written.
     const since = `(SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY`;
     await chQuery(
       `INSERT INTO ${TEMPLATES} SELECT * FROM edr
@@ -78,6 +79,7 @@ async function prepare(): Promise<WriterState | null> {
           SELECT edr_id FROM edr
            WHERE submit_time > ${since} AND is_final_attempt = 1 AND attempt_no = 1
            ORDER BY submit_time DESC LIMIT ${PER_OUTCOME} BY c_trunk_id, ${OUTCOME})
+        LIMIT 1 BY edr_id
         SETTINGS max_bytes_before_external_sort = 500000000, max_bytes_before_external_group_by = 500000000`,
       180_000,
     );
@@ -239,6 +241,7 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
       return chQuery(
         `INSERT INTO edr SELECT * EXCEPT (m_id, m_trunk, m_ent, m_seq, m_vt, m_ve, m_cost, m_bills, m_vbt, m_rule, m_rtype, m_by) REPLACE (
           generateUUIDv4(m_seq) AS edr_id,
+          '' AS row_key,
           toUInt32(m_trunk) AS c_trunk_id,
           toUInt32(m_ent) AS c_enterprise_id,
           addMilliseconds(start_time, ${shift}) AS start_time,

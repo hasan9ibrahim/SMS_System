@@ -28,6 +28,7 @@ import { startAutoInvoicing } from "./jobs/autoInvoices.js";
 import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
 import { startSwitchJobs } from "./jobs/switchJobs.js";
+import { startEdrRepair } from "./jobs/edrRepair.js";
 import { encryptStoredTotp } from "./admin/passwords.js";
 import { resetStuckImports } from "./api/migration.js";
 
@@ -83,6 +84,8 @@ whenLeader(() => {
   startFxRefresh();
   // E-mail out of the outbox (jobs/mailer.ts); nothing is queued outside production.
   startMailer();
+  // EDRs the switch stored twice, and the totals that counted them, put right every night (S-7.3, ClickHouse 010).
+  startEdrRepair();
   if (production) {
     // Auto Invoicing at each billing cycle's end (§12.3); the fake data's history already has its auto invoices.
     startAutoInvoicing();

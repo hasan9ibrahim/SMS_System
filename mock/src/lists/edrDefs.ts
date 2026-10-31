@@ -236,6 +236,8 @@ export const edrList: ChListDef<EdrRow> = {
   searchNumbers: ["senderId", "dnid"],
   searchNames: ["customerEnterprise", "customerTrunk", "vendorEnterprise", "vendorTrunk"],
   idSql: "edr_id",
+  // An attempt the switch wrote twice is listed once (ClickHouse 010, S-7.3).
+  rowKey: true,
   mapRow: (r, names) => edrValues(edrFields.fields, EDR_COLUMNS, r, names) as unknown as EdrRow,
   owners: {
     customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" },
@@ -257,6 +259,7 @@ export const failedEdrList: ChListDef<FailedEdrRow> = {
   searchNumbers: ["senderId", "dnid"],
   searchNames: ["customerEnterprise", "customerTrunk"],
   idSql: "edr_id",
+  rowKey: true,
   mapRow: (r, names) => edrValues(failedFields.fields, FAILED_COLUMNS, r, names) as unknown as FailedEdrRow,
   owners: { customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" } },
 };
