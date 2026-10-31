@@ -10,3 +10,23 @@ web_tls_keyfile: /etc/sms/tls/web.key
 # too, so smpp_tls_certfile / smpp_tls_keyfile may point at the same files.
 web_letsencrypt: false
 letsencrypt_email: ""
+# Content-Security-Policy (§14; deploy/ansible/README.md "Content-Security-Policy"). Sent report-only first: the
+# browser only reports what the policy would block, to /api/v1/csp-reports (one line each in the service log). Set
+# web_csp_enforce: true to send the same policy as Content-Security-Policy, which blocks. $host is nginx's (the name
+# the browser used). style-src needs 'unsafe-inline' for the e-mail previews and designer (sandboxed srcdoc frames
+# take this policy and e-mails are styled inline); the screens themselves set styles only through the DOM.
+web_csp_enforce: false
+web_csp_policy: >-
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  font-src 'self';
+  connect-src 'self' wss://$host;
+  frame-src 'none';
+  frame-ancestors 'self';
+  base-uri 'self';
+  form-action 'self';
+  object-src 'none';
+  report-uri /api/v1/csp-reports;
+  report-to csp-endpoint
