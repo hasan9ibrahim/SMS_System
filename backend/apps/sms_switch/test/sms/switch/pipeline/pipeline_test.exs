@@ -815,6 +815,55 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                edr("edr.attempt")
     end
 
+    test "a refused part waits for its retry in the vendor's queue, never in a sender worker (D2)" do
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
+      # Part 2 refused for now (0x14), then taken: the same reference, one attempt.
+      FakeSmsc.set(smsc, :submit, [:ok, {:status, 0x14}, :ok])
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("q", 200)})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p1}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p2}, 2_000
+      refused_at = System.monotonic_time(:millisecond)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = again}, 3_000
+      assert System.monotonic_time(:millisecond) - refused_at >= 400
+      assert again.fields.short_message == p2.fields.short_message
+      assert <<5, 0, 3, ref, 2, 1, _::binary>> = p1.fields.short_message
+      assert <<5, 0, 3, ^ref, 2, 2, _::binary>> = again.fields.short_message
+
+      # The worker handed it to the vendor's queue for the pause.
+      assert Enum.any?(Local.published(), &(&1.type == "msg.vendor_buffered"))
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"is_submit_success" => 1, "msg_count" => 2} = row] = edr("edr.attempt")
+      assert [_, _] = String.split(row["v_message_id"], ",")
+    end
+
+    test "a later part refused for good: all parts via the next vendor; the accepted one stays the first attempt's (D2)" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors())
+
+      FakeSmsc.set(s1, :submit, [:ok, {:status, 0x45}])
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("r", 200)})
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = a1}, 2_000
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = b1}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      assert <<5, 0, 3, ref_a, 2, 1, _::binary>> = a1.fields.short_message
+      assert <<5, 0, 3, ref_b, 2, 1, _::binary>> = b1.fields.short_message
+      assert ref_a != ref_b
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = attempts()
+
+      # Vendor 1 bills on submit: its accepted part is its cost (0.02 × 1), with its id.
+      assert %{"attempt_no" => 1, "is_submit_success" => 0, "command_status" => 0x45} = first
+      assert %{"v_message_id" => "1", "msg_count" => 1, "is_vendor_billable" => 1} = first
+      assert first["cost"] == "0.02"
+      assert %{"attempt_no" => 2, "is_submit_success" => 1, "msg_count" => 2} = second
+      assert second["is_customer_billable"] == 1
+    end
+
     test "a vendor at its TPS limit without an overflow buffer is skipped at once for the next (S-5.1)" do
       %{client: client, conns: [c1, c2]} =
         start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [tps: 1]})
@@ -1358,10 +1407,29 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert {:sar_total_segments, 2} in first.tlvs and {:sar_segment_seqnum, 1} in first.tlvs
     end
 
-    test "message_payload: the whole message in one PDU" do
+    test "message_payload: the whole message in one PDU, billed per part (S-3.1)" do
       first = long_to_vendor("payload")
       assert first.fields.short_message == ""
       assert {:message_payload, @long} in first.tlvs
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"msg_count" => 2, "cost" => "0.04", "revenue" => "0.1"}] = edr("edr.attempt")
+    end
+
+    test "references count up per handset: two messages open together never share one (S-3.10)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, %{status: 0}} = submit(client, %{short_message: String.duplicate("s", 200)}, 2)
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("t", 200)}, 3)
+
+      refs =
+        for _ <- 1..4 do
+          assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p}, 2_000
+          <<5, 0, 3, ref, 2, _n, _::binary>> = p.fields.short_message
+          ref
+        end
+
+      [a, b] = Enum.uniq(refs)
+      assert b == rem(a + 1, 256)
     end
 
     test "a vendor without multipart, or with a shorter maximum, is skipped for the next one" do

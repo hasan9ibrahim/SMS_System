@@ -16,6 +16,8 @@ defmodule Sms.Switch.Pipeline.Store do
     * `dup:<customer trunk>:<fingerprint>`: the message id of a message, for the duplicate filter's window (D6);
       `lp:<fingerprint>`: the customer trunk of a message in flight to a vendor, for Loop Detection (S-5.16);
     * `pd:<message id>:<part>`: the attempt of a part whose submit timed out, for a late answer (D4);
+    * `ur:<destination>`: the count the concatenation references of messages split for that handset come from
+      (S-3.10);
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       of their keys (message id and status) by arrival, `hd:<customer trunk>` each one's entry; `hs` the trunks that
       have any, `hl:<customer trunk>` the lock of the node sending them.
@@ -327,6 +329,21 @@ defmodule Sms.Switch.Pipeline.Store do
       {:ok, nil} -> {:ok, nil}
       {:ok, trunk} -> {:ok, String.to_integer(trunk)}
       error -> error
+    end
+  end
+
+  @doc """
+  The next concatenation reference count for a message the switch splits for `destination` (S-3.10, D2): one count per
+  handset, whatever the vendor, kept an hour after its last use, far longer than a message stays open.
+  """
+  @spec next_reference(String.t()) :: {:ok, pos_integer()} | {:error, term()}
+  def next_reference(destination) do
+    key = "ur:#{destination}"
+
+    case transaction([["INCRBY", key, 1], ["EXPIRE", key, 3_600]]) do
+      {:ok, [n, _]} when is_integer(n) -> {:ok, n}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _} = error -> error
     end
   end
 

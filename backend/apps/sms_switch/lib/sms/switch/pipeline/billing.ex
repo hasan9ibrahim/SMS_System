@@ -53,13 +53,15 @@ defmodule Sms.Switch.Pipeline.Billing do
   def on_receipt?(_type, _status), do: false
 
   @doc """
-  The billable flags of an attempt row (`row`: `no`, `final`, `success`, `vendor`): the customer on the final attempt
-  of a message not yet billed, a vendor on any attempt it received.
+  The billable flags of an attempt row (`row`: `no`, `final`, `success`, `vendor`, `accepted`): the customer on the
+  final attempt of a message not yet billed, a vendor on any attempt it received. A vendor that accepted some parts of
+  an attempt that then failed (`accepted` > 0) is billed for those as accepted (D2).
   """
   @spec flags(map(), map()) :: %{customer_billable: boolean(), vendor_billable: boolean()}
   def flags(msg, row) do
     vendor = row[:vendor]
     success = row[:success] == true
+    accepted = success or (row[:accepted] || 0) > 0
 
     customer =
       msg[:sell] != nil and row[:final] == true and (row[:no] || 0) > 0 and
@@ -68,7 +70,7 @@ defmodule Sms.Switch.Pipeline.Billing do
 
     %{
       customer_billable: customer,
-      vendor_billable: vendor != nil and on_send?(vendor_type(vendor.vendor_trunk_id), success)
+      vendor_billable: vendor != nil and on_send?(vendor_type(vendor.vendor_trunk_id), accepted)
     }
   end
 
