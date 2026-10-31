@@ -670,7 +670,8 @@ export function AlertRulesPage() {
               <span className="muted small">
                 {r.lastTriggeredAt ? `Last triggered ${fmtWhen(r.lastTriggeredAt)}` : "Never triggered"}
               </span>
-              {r.updatedBy && <span className="muted small">by {r.updatedBy}</span>}
+              {/* The last person to edit the rule, not who triggered it: alerts are raised by the traffic (QA round 13). */}
+              {r.updatedBy && <span className="muted small">edited by {r.updatedBy}</span>}
             </span>
           ),
         },

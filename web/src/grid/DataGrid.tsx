@@ -2,7 +2,6 @@
 // the server through POST /{list}/query; rows are virtualised and the next page loads in the
 // background as the user scrolls, so every matching row is on one scrollable page (§13.25).
 import {
-  isValidElement,
   memo,
   useCallback,
   useEffect,
@@ -23,6 +22,7 @@ import { ApiError } from "../api/client";
 import { fieldLine, problemFields, problemTitle } from "../api/problems";
 import { Icon } from "../ui/Icon";
 import { StatusPill } from "../ui/primitives";
+import { nodeText, shareWidth } from "./fit";
 import { ColumnFilter } from "./ColumnFilter";
 import { isChoice, isNumeric, isTime, nextSort, toListQuery, type GridState } from "./filterModel";
 
@@ -128,15 +128,6 @@ function fitText(f: FieldDescriptor, value: unknown, seconds: boolean): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (f.type === "enum") return f.enumValues?.find((e) => e.value === value)?.label ?? String(value);
   return String(value);
-}
-
-/** The text in a column's render (a time with "UTC", a rate to 6 places, "↑ +13.2%"); empty for a component. */
-function nodeText(n: ReactNode): string {
-  if (n === null || n === undefined || typeof n === "boolean") return "";
-  if (typeof n === "string" || typeof n === "number") return String(n);
-  if (Array.isArray(n)) return n.map(nodeText).join("");
-  if (isValidElement(n)) return nodeText((n.props as { children?: ReactNode }).children);
-  return "";
 }
 
 /**
@@ -637,18 +628,16 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     const sum = base.reduce((n, w) => n + w, 0);
     let width = base;
     if (sum < space) width = base.map((w) => w * (space / sum));
-    else {
-      let short = sum - space;
-      width = [...base];
-      for (const pass of [false, true]) {
-        const idx = naturalCells.flatMap((c, i) => (isAtomic(c.field, !!c.render) === pass ? [i] : []));
-        const slack = idx.reduce((n, i) => n + base[i]! - floor[i]!, 0);
-        if (short <= 0 || slack <= 0) continue;
-        const take = Math.min(short, slack);
-        for (const i of idx) width[i] = base[i]! - ((base[i]! - floor[i]!) * take) / slack;
-        short -= take;
-      }
-    }
+    else
+      width = shareWidth(
+        space,
+        naturalCells.map((c, i) => ({
+          base: base[i]!,
+          floor: floor[i]!,
+          content: measured.get(c.field.field)?.content ?? 0,
+          atomic: isAtomic(c.field, !!c.render),
+        })),
+      );
     return naturalCells.map((c, i) => ({ ...c, width: Math.floor(width[i]!) }));
   }, [naturalCells, boxWidth, trailing?.width, autoFit, measured, state.sort, columns, sizing]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
