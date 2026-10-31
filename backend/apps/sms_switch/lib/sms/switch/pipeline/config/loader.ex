@@ -178,8 +178,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
              t.multipart_format, coalesce(t.overflow_buffer, 0) AS overflow_buffer,
              -- Capability filter (§5.5, S-4.4): NULL = any.
              t.allowed_data_codings, t.allowed_src_ton, t.allowed_src_npi, t.allowed_dst_ton, t.allowed_dst_npi,
-             -- TON / NPI as sent or fixed after the egress translation (S-4.7, migration 101).
-             t.ton_npi_mode,
+             -- TON / NPI as sent or fixed after the egress translation; a sender a handset cannot show refused or
+             -- taken (S-4.7, migration 101).
+             t.ton_npi_mode, t.refuse_invalid_senders,
              coalesce((SELECT array_agg(rt.id ORDER BY rt.id) FROM rate_tables rt
                         WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
         FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id

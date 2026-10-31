@@ -188,6 +188,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         allowed_dst_ton: nil,
         allowed_dst_npi: nil,
         ton_npi_mode: "as_sent",
+        refuse_invalid_senders: true,
         rate_table_ids: [200]
       },
       Map.new(fields)

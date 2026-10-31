@@ -69,4 +69,49 @@ defmodule Sms.Switch.Message.AddressTest do
       assert Address.source_problem(fixed.sender, fixed.sender_ton, fixed.sender_npi) == nil
     end
   end
+
+  describe "fit/2: the one equivalent a vendor's allowed TON / NPI take" do
+    test "alphanumeric 5 / 0, international 1 / 1, only where the lists do not take what it has" do
+      lists = %{
+        allowed_src_ton: [5],
+        allowed_src_npi: [0],
+        allowed_dst_ton: [1],
+        allowed_dst_npi: [1]
+      }
+
+      a = Address.fit(msg(), lists)
+      assert source(a) == {"FakeBank", 5, 0}
+      assert destination(a) == {"4915112345678", 1, 1}
+      assert Address.fit(msg(), %{}) == msg(), "nil lists take anything"
+
+      plus = msg(sender: "+447700900123", sender_ton: 5, sender_npi: 0)
+      assert source(Address.fit(plus, %{allowed_src_ton: [1]})) == {"447700900123", 1, 1}
+    end
+
+    test "no single equivalent, or one the lists do not take either: left as it is" do
+      # A short code (TON 3 is one guess among several) and a national destination.
+      assert source(Address.fit(msg(sender: "12345", sender_ton: 0), %{allowed_src_ton: [3]})) ==
+               {"12345", 0, 1}
+
+      assert destination(Address.fit(msg(receiver: "1234567"), %{allowed_dst_ton: [1]})) ==
+               {"1234567", 0, 0}
+
+      assert source(Address.fit(msg(), %{allowed_src_ton: [2]})) == {"FakeBank", 1, 1}
+    end
+  end
+
+  describe "protocol_problem/3 and handset_problem/2" do
+    test "SMPP's own limits always; what a handset shows is the vendor's choice" do
+      assert Address.protocol_problem("FakeBank", 7, 0) == :esme_rinvsrcton
+      assert Address.protocol_problem("FakeBank", 5, 2) == :esme_rinvsrcnpi
+      assert Address.protocol_problem("", 5, 0) == :esme_rinvsrcadr
+      assert Address.protocol_problem("ABCDEFGHIJKLMN", 5, 0) == nil
+      assert Address.handset_problem("ABCDEFGHIJKLMN", 5) == :esme_rinvsrcadr
+      assert Address.handset_problem("Fakë", 5) == :esme_rinvsrcadr
+      assert Address.handset_problem(String.duplicate("1", 21), 1) == :esme_rinvsrcadr
+      assert Address.handset_problem("447700900123", 1) == nil
+      assert Address.too_long?(String.duplicate("A", 21))
+      refute Address.too_long?("ABCDEFGHIJKLMN")
+    end
+  end
 end

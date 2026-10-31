@@ -3,12 +3,20 @@ defmodule Sms.Switch.Message.Address do
   Address checks (SMPP 3.4 §5.2.5–§5.2.6, docs/SMPP_SCENARIOS.md S-2.10, S-4.7): what a sender must be to go to a
   vendor, as the customer sent it and again after each translation.
 
+  Always (`protocol_problem/3`, refused at intake):
+
     * TON 0–6 (unknown, international, national, network specific, subscriber number, alphanumeric, abbreviated);
     * NPI 0, 1, 3, 4, 6, 8, 9, 10, 14 or 18 (unknown, E.164, data, telex, land mobile, national, private, ERMES,
       internet, WAP client id);
+    * a sender.
+
+  What a handset can show (`handset_problem/2`), checked per vendor trunk unless its Refuse invalid senders is off:
+
     * a numeric sender (digits, an optional leading +) at most 20 digits, the most a submit_sm source_addr holds;
     * an alphanumeric one (anything else, or any sender with TON 5) at most 11 characters, printable ASCII, the most a
       handset shows.
+
+  `auto/2` and `fit/2` set TON / NPI from the address (S-4.7).
   """
 
   @npis [0, 1, 3, 4, 6, 8, 9, 10, 14, 18]
@@ -23,27 +31,47 @@ defmodule Sms.Switch.Message.Address do
 
   @doc """
   What is wrong with a sender and its TON / NPI (nil: unset, taken as 0), as the SMPP status to answer, or nil when
-  it can go: `:esme_rinvsrcton`, `:esme_rinvsrcnpi` or `:esme_rinvsrcadr`.
+  it can go: `:esme_rinvsrcton`, `:esme_rinvsrcnpi` or `:esme_rinvsrcadr`. Both `protocol_problem/3` and
+  `handset_problem/2`.
   """
   @spec source_problem(String.t() | nil, integer() | nil, integer() | nil) ::
           :esme_rinvsrcton | :esme_rinvsrcnpi | :esme_rinvsrcadr | nil
-  def source_problem(sender, ton, npi) do
+  def source_problem(sender, ton, npi),
+    do: protocol_problem(sender, ton, npi) || handset_problem(sender, ton)
+
+  @doc """
+  A sender SMPP cannot carry, whatever the vendor (refused at intake): a TON or NPI SMPP does not define (nil: unset,
+  taken as 0), or no sender.
+  """
+  @spec protocol_problem(String.t() | nil, integer() | nil, integer() | nil) ::
+          :esme_rinvsrcton | :esme_rinvsrcnpi | :esme_rinvsrcadr | nil
+  def protocol_problem(sender, ton, npi) do
     cond do
       not ton?(ton || 0) -> :esme_rinvsrcton
       not npi?(npi || 0) -> :esme_rinvsrcnpi
-      true -> sender_problem(sender, ton)
+      sender in [nil, ""] -> :esme_rinvsrcadr
+      true -> nil
     end
   end
 
-  defp sender_problem(sender, _ton) when sender in [nil, ""], do: :esme_rinvsrcadr
+  @doc """
+  A sender a handset cannot show (a vendor trunk's Refuse invalid senders): a numeric one over 20 digits, an
+  alphanumeric one (or any with TON 5) over 11 characters or not printable ASCII.
+  """
+  @spec handset_problem(String.t() | nil, integer() | nil) :: :esme_rinvsrcadr | nil
+  def handset_problem(sender, _ton) when sender in [nil, ""], do: nil
 
-  defp sender_problem(sender, ton) do
+  def handset_problem(sender, ton) do
     cond do
       ton == 5 or not Regex.match?(~r/\A\+?[0-9]+\z/, sender) -> alphanumeric(sender)
       digits(sender) > 20 -> :esme_rinvsrcadr
       true -> nil
     end
   end
+
+  @doc "Whether a sender is longer than the 20 characters (octets) a submit_sm source_addr holds."
+  @spec too_long?(String.t() | nil) :: boolean()
+  def too_long?(sender), do: is_binary(sender) and byte_size(sender) > 20
 
   defp digits("+" <> rest), do: byte_size(rest)
   defp digits(sender), do: byte_size(sender)
@@ -119,4 +147,49 @@ defmodule Sms.Switch.Message.Address do
   end
 
   defp fix_destination(_receiver), do: nil
+
+  @doc """
+  The addresses with the single unambiguous equivalent TON / NPI a vendor's allowed lists take, where the lists do
+  not take the values it has (S-4.7, whatever the trunk's TON / NPI mode): an alphanumeric sender 5 / 0, an
+  international one (9 or more digits, or `+` then digits, the `+` taken off) 1 / 1, a full international destination
+  (8–15 digits) 1 / 1. A side the lists already take, with no such equivalent, or whose equivalent they do not take
+  either stays as it is (and the vendor is passed over). A value not set (nil) is not checked. `allowed`: the vendor
+  trunk's `allowed_src_ton`, `allowed_src_npi`, `allowed_dst_ton` and `allowed_dst_npi` (nil: any).
+  """
+  @spec fit(addresses(), map()) :: addresses()
+  def fit(addresses, allowed) do
+    addresses
+    |> fit_side(
+      equivalent_source(addresses.sender),
+      {:sender, :sender_ton, :sender_npi},
+      {allowed[:allowed_src_ton], allowed[:allowed_src_npi]}
+    )
+    |> fit_side(
+      fix_destination(addresses.receiver),
+      {:receiver, :dest_ton, :dest_npi},
+      {allowed[:allowed_dst_ton], allowed[:allowed_dst_npi]}
+    )
+  end
+
+  defp fit_side(a, nil, _keys, _lists), do: a
+
+  defp fit_side(a, {address, ton, npi}, {address_key, ton_key, npi_key}, {tons, npis}) do
+    taken = takes?(tons, a[ton_key]) and takes?(npis, a[npi_key])
+
+    if taken or not (takes?(tons, ton) and takes?(npis, npi)),
+      do: a,
+      else: %{a | address_key => address, ton_key => ton, npi_key => npi}
+  end
+
+  defp takes?(nil, _value), do: true
+  defp takes?(_list, nil), do: true
+  defp takes?(list, value), do: value in list
+
+  # A short code (3–8 digits) has no single equivalent: TON 3 is one guess among several.
+  defp equivalent_source(sender) do
+    case fix_source(sender) do
+      {_, 3, 0} -> nil
+      fix -> fix
+    end
+  end
 end

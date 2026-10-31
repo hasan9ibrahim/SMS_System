@@ -9,11 +9,12 @@ defmodule Sms.Switch.Pipeline.Intake do
        0x62, S-2.12, S-2.13);
     2. **ingress translation**: the customer trunk's translation rules in their order (§6.4, §13.2); a block refuses
        the message (0x45); a trunk set to auto TON / NPI then fixes them from the addresses (S-4.7), and a sender
-       left unfit to send is refused (0x0A / 0x48 / 0x49);
+       SMPP cannot carry (no sender, a TON / NPI outside SMPP) is refused (0x0A / 0x48 / 0x49);
     3. **destination and rate**: the longest dial code of the receiver (§6.1) and the customer's rate (§5.4); none →
        0x0B (S-6.2);
     4. **routing**: the route rules and the egress-block skip (`Sms.Switch.Pipeline.Router`); no rule, a blocking rule
-       or no vendor → 0x45 (decided Q15);
+       or no vendor → 0x45 (decided Q15); every vendor refusing the sender (a handset cannot show it, S-2.10, S-4.7)
+       → 0x0A;
     5. **credit**: `Sms.Switch.Pipeline.Credit` (balances come with build step 6);
     6. **stored**: the message goes on the durable bus (`sms.msg.accepted`, JetStream), and only then the resp is
        sent with our message_id (S-2.2). The vendor leg runs from the bus (`Sms.Switch.Pipeline.Sender`).
@@ -438,9 +439,10 @@ defmodule Sms.Switch.Pipeline.Intake do
   end
 
   # S-2.10: a receiver must be a number (an optional + then digits) with a TON and NPI SMPP defines; a sender must be
-  # there, with a TON and NPI SMPP defines, a numeric one at most 20 digits and an alphanumeric one (or TON 5) at most
-  # 11 characters (`Sms.Switch.Message.Address`); on a customer trunk set to auto TON / NPI, with the TON / NPI auto
-  # gives it (S-4.7). Then the flags (`flags/1`).
+  # there, with a TON and NPI SMPP defines (`Sms.Switch.Message.Address.protocol_problem/3`); on a customer trunk set
+  # to auto TON / NPI, with the TON / NPI auto gives it (S-4.7). What a handset can show (an alphanumeric sender at
+  # most 11 characters, a numeric one at most 20 digits) is each vendor trunk's choice, checked when routing (S-4.7).
+  # Then the flags (`flags/1`).
   defp addresses(msg) do
     f = msg.fields
     dest = Map.get(f, :destination_addr, "")
@@ -474,11 +476,11 @@ defmodule Sms.Switch.Pipeline.Intake do
         dest_npi: nil
       })
 
-    Address.source_problem(a.sender, a.sender_ton, a.sender_npi)
+    Address.protocol_problem(a.sender, a.sender_ton, a.sender_npi)
   end
 
   defp source_problem(_trunk, f),
-    do: Address.source_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi])
+    do: Address.protocol_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi])
 
   # SMPP 3.4 §5.2.12–§5.2.17: priority_flag 0–3; registered_delivery without its reserved bits (7–5) or the reserved
   # receipt value 3; esm_class with a message type a submit can have (default, delivery or manual / user
@@ -569,9 +571,10 @@ defmodule Sms.Switch.Pipeline.Intake do
       result.blocked ->
         {:reject, :esme_rsubmitfail, :blocked_by_translation, msg}
 
-      # S-4.7: a translation that leaves the sender unfit to send (too long, a TON or NPI SMPP does not define) fails
-      # the message here, never at the vendor; on an auto trunk, with the TON / NPI auto set (it cannot fix a length).
-      status = Address.source_problem(ingress.sender, ingress.sender_ton, ingress.sender_npi) ->
+      # S-4.7: a translation that leaves no sender, or a TON or NPI SMPP does not define, fails the message here, never
+      # at the vendor; on an auto trunk, with the TON / NPI auto set. A sender too long to show is each vendor's
+      # choice (Refuse invalid senders), checked when routing.
+      status = Address.protocol_problem(ingress.sender, ingress.sender_ton, ingress.sender_npi) ->
         {:reject, status, :invalid_sender_after_translation, msg}
 
       true ->
@@ -660,6 +663,10 @@ defmodule Sms.Switch.Pipeline.Intake do
         # The EDR records the customer trunk's TPS when it was routed (§13.8 Visibility).
         {:ok,
          %{msg | route: Map.put(route, :measured_tps, LiveTps.rate("ct:#{msg.trunk.id}", 5))}}
+
+      # S-4.7: each vendor that could take it refuses its sender: the sender is what is wrong (0x0A, not 0x45).
+      {:error, :invalid_sender, _decision} ->
+        {:reject, :esme_rinvsrcadr, :invalid_sender, msg}
 
       {:error, reason, _decision} ->
         {:reject, :esme_rsubmitfail, reason, msg}
