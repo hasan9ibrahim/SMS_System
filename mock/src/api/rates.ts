@@ -979,7 +979,8 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       const change = await recordChange(c, {
         entityType: "rate_table",
         entityIds: [id],
-        changeType: body.items.length > 1 ? "bulk" : "edit",
+        // One save of this table's rates is an edit, however many lines (QA 2026-10-31): "bulk" is Bulk rating's.
+        changeType: "edit",
         diff,
         note: body.note?.trim() || (breaches.length ? `Short notice accepted for ${breaches.length} increases` : null),
         userId: me.id,

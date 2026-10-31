@@ -11890,6 +11890,20 @@ export type components = {
       user: string | null;
       /** @description create, edit, undo, … */
       changeType: string;
+      /**
+       * @description What the save did, for the entry's title (QA 2026-10-31, §13.12): `created` the table was added (copied rates are in the note), `rates` rates changed in this table (Rate Manager, an accepted rate notification, an auto-apply), `rates_added` every rate of the save is new (Add rates), `bulk_rating` a Bulk rating job (§13.11), `details` name or description, `deleted` / `restored` the table archived or brought back (§13.29), `undo` an undo (§13.10), `cleanup` a Cleanup Center fix.
+       * @enum {string}
+       */
+      operation:
+        | "created"
+        | "rates"
+        | "rates_added"
+        | "bulk_rating"
+        | "details"
+        | "deleted"
+        | "restored"
+        | "undo"
+        | "cleanup";
       note: string | null;
       undoOfId: number | null;
       currency: string;

@@ -14,6 +14,17 @@ const ready = await dbReady();
 const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
 after(async () => {
   await bestBuySettled();
+  // The sell table "add from a vendor's rates" makes goes with its rates and history (QA 2026-10-31).
+  if (ready) {
+    const { rows } = await db().query("SELECT id FROM rate_tables WHERE name ILIKE $1", [`Test_Sell_${run}%`]);
+    const ids = rows.map((r) => Number(r.id));
+    if (ids.length) {
+      await db().query("DELETE FROM changes WHERE entity_type = 'rate_table' AND entity_ids <@ $1::bigint[]", [ids]);
+      for (const table of ["rate_lines", "rate_table_stats"])
+        await db().query(`DELETE FROM ${table} WHERE rate_table_id = ANY($1)`, [ids]);
+      await db().query("DELETE FROM rate_tables WHERE id = ANY($1)", [ids]);
+    }
+  }
   await app.close();
   await closeDb();
 });
@@ -287,7 +298,7 @@ describe("rate edits (§13.12, §13.10)", { skip }, () => {
         ],
       }),
     );
-    assert.equal(saved.change.changeType, "bulk");
+    assert.equal(saved.change.changeType, "edit", "one save of a table's rates is an edit (QA 2026-10-31)");
     await undo(saved.change.id);
     const now = (await lines(id, [{ field: "mccmnc", op: "eq", value: before.mccmnc }])).rows.filter(
       (r: { senderId: string | null }) => r.senderId === null,
@@ -463,6 +474,41 @@ describe("rate table records and safe delete (§6.2, §13.29)", { skip }, () => 
     const archived = await ok("archiveRateTable", call("POST", `/rate-tables/${id}/archive`, {}));
     assert.ok(archived.record.archived);
     await ok("restoreRateTable", call("POST", `/rate-tables/${id}/restore`));
+
+    // The change log names each save by what it did (QA 2026-10-31, §13.12).
+    const { rows: free } = await db().query(
+      `SELECT m.mccmnc FROM mccmnc m WHERE m.deleted_at IS NULL AND NOT m.is_all_networks
+          AND NOT EXISTS (SELECT 1 FROM rate_lines l WHERE l.rate_table_id = $1 AND l.mccmnc_id = m.id) LIMIT 2`,
+      [id],
+    );
+    const added = await ok(
+      "changeRateLines",
+      call("POST", `/rate-tables/${id}/lines/changes`, {
+        items: free.map((f) => ({ action: "set", mccmnc: f.mccmnc, rate: 0.0123 })),
+      }),
+    );
+    assert.equal(added.change.changeType, "edit", "adding rates is not Bulk rating");
+    const one = (await lines(id, [{ field: "mccmnc", op: "eq", value: free[0].mccmnc }])).rows[0];
+    const set = await ok(
+      "changeRateLines",
+      call("POST", `/rate-tables/${id}/lines/changes`, { items: [{ action: "set", lineId: one.id, rate: 0.0124 }] }),
+    );
+    await undo(set.change.id);
+    const log = await ok("getRateChangeLog", call("GET", `/rate-tables/${id}/change-log?limit=20`));
+    const byChange = new Map(
+      log.rows.map((e: { changeId: number; operation: string; itemCount: number }) => [e.changeId, e]),
+    );
+    const op = (changeId: number) => (byChange.get(changeId) as { operation: string } | undefined)?.operation;
+    assert.equal(op(created.change.id), "created");
+    assert.equal(op(renamed.change.id), "details");
+    assert.equal(op(archived.change.id), "deleted");
+    assert.equal(op(added.change.id), "rates_added");
+    assert.equal(op(set.change.id), "rates");
+    assert.deepEqual(
+      log.rows.slice(0, 1).map((e: { operation: string }) => e.operation),
+      ["undo"],
+    );
+    assert.ok(log.rows.some((e: { operation: string }) => e.operation === "restored"));
     const vendorArchive = await call("POST", `/rate-tables/${v.table_id}/archive`, {});
     assert.equal(vendorArchive.statusCode, 403, "a buy table goes with its vendor trunk");
     check("archiveRateTable", vendorArchive);

@@ -18344,7 +18344,7 @@ components:
           format: date-time
     RateChangeLogEntry:
       type: object
-      required: [changeId, at, user, changeType, note, undoOfId, currency, counts, items, itemCount]
+      required: [changeId, at, user, changeType, operation, note, undoOfId, currency, counts, items, itemCount]
       properties:
         changeId:
           type: integer
@@ -18356,6 +18356,15 @@ components:
         changeType:
           type: string
           description: create, edit, undo, …
+        operation:
+          type: string
+          enum: [created, rates, rates_added, bulk_rating, details, deleted, restored, undo, cleanup]
+          description: >-
+            What the save did, for the entry's title (QA 2026-10-31, §13.12): `created` the table was added (copied
+            rates are in the note), `rates` rates changed in this table (Rate Manager, an accepted rate notification,
+            an auto-apply), `rates_added` every rate of the save is new (Add rates), `bulk_rating` a Bulk rating job
+            (§13.11), `details` name or description, `deleted` / `restored` the table archived or brought back
+            (§13.29), `undo` an undo (§13.10), `cleanup` a Cleanup Center fix.
         note:
           type: [string, "null"]
         undoOfId:
