@@ -142,23 +142,13 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
       db().query(`UPDATE vendor_trunks SET ${sql} WHERE id = $1`, [id, ...params]);
     let equivalents = false;
     let senders = false;
-    // Whether a vendor trunk's own egress rules leave a sender as it is. The customer side is read from each
-    // simulation's own sender: CI's seed has customer rules that rewrite the sender for some destinations only (a
-    // 12-digit number sent as TON 5), which a vendor then refuses for that sender, whatever the step checks.
-    const keeps = async (url: string, sender: string) =>
-      (
-        (
-          await app.inject({
-            method: "POST",
-            url: `${API_PREFIX}${url}`,
-            payload: { message: { sender, receiver: "447700900123", text: CODE } },
-          })
-        ).json() as { after: { sender: string } }
-      ).after.sender === sender;
+    // CI's seed has translation rules, on customer and on vendor trunks, that put a random 12-digit number in the
+    // sender for some destinations only (sent as TON 5), which a vendor refusing invalid senders passes over whatever
+    // the step checks. The TON / NPI steps run with that refusal off; the sender step takes only a vendor whose
+    // refusal names the test's own sender.
     for (const p of await pairs(60)) {
       if (equivalents && senders) return;
       const first = await simulate(p.trunk, p.mccmnc, CODE);
-      if (first.sender !== "INFO") continue;
       const v = first.route.decision?.outcome === "route" ? first.route.decision.vendor!.vendorTrunkId : null;
       if (v === null) continue;
       const ruleId = first.route.decision!.ruleId;
@@ -175,11 +165,13 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
       const before = rows[0];
       try {
         // National destinations only: an international number has no equivalent it takes.
-        await setVendor(v, "allowed_dst_ton = '{2}', allowed_dst_npi = NULL, ton_npi_mode = 'as_sent'");
+        await setVendor(
+          v,
+          "allowed_dst_ton = '{2}', allowed_dst_npi = NULL, ton_npi_mode = 'as_sent', refuse_invalid_senders = false",
+        );
         const national = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, destNpi: 0 });
         const d = national.route.decision;
         if (d?.ruleId !== ruleId) continue; // another rule took over
-        if (national.sender !== "INFO") continue; // the customer's rules rewrite the sender for national numbers
         equivalents = true;
         assert.notEqual(d.vendor?.vendorTrunkId, v, "no equivalent: passed over");
         assert.ok(
@@ -198,15 +190,17 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
         assert.equal(auto.route.decision?.vendor?.vendorTrunkId, v, "auto sends the international number as 1 / 1");
 
         // A sender a handset cannot show: passed over while the vendor refuses invalid senders (the default), taken
-        // with that off; auto cannot fix a length. Only when both trunks' rules leave the sender as it is.
-        if (await keeps(`/vendor-trunks/${v}/rules/test`, LONG_SENDER)) {
+        // with that off; auto cannot fix a length. Only where both trunks' rules leave the sender as it is: the
+        // customer's as the simulation reports it, the vendor's as its refusal names it.
+        {
           const extra = { senderId: LONG_SENDER, sourceTon: 1 };
           await setVendor(v, "refuse_invalid_senders = true");
           const refused = await simulate(p.trunk, p.mccmnc, CODE, extra);
           await setVendor(v, "refuse_invalid_senders = false");
           const taken = await simulate(p.trunk, p.mccmnc, CODE, extra);
           const same = (sim: Sim) => sim.route.decision?.ruleId === ruleId && sim.sender === LONG_SENDER;
-          if (same(refused) && same(taken)) {
+          const namesIt = notes(refused).some((n) => n.includes(JSON.stringify(LONG_SENDER)));
+          if (same(refused) && same(taken) && namesIt) {
             assert.notEqual(refused.route.decision?.vendor?.vendorTrunkId, v);
             assert.ok(
               notes(refused).some((n) =>
