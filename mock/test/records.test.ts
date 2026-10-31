@@ -695,7 +695,7 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     const fingerprint = async () =>
       (await db().query("SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') AS f FROM customer_trunks"))
         .rows[0].f as string;
-    const ent = (await newEnterprise("customer", "F")).record;
+    const ent = (await newEnterprise("customer", "FP")).record;
     const id = (await ok("createCustomerTrunk", call("POST", "/customer-trunks", customerTrunk(ent.id, "f")), 201)).record
       .id;
     let seen = await fingerprint();

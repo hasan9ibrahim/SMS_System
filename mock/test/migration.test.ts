@@ -413,6 +413,12 @@ describe("migration center", { skip }, () => {
     assert.equal(applied.status, "applied", applied.applyError);
     assert.equal(applied.applyError, null);
     assert.ok(applied.changeId);
+    // Rolled back below; if an assertion stops the test first, the import is undone when the tests end, so its live
+    // partner, trunks, rule and user do not stay in the shared database (QA 2026-10-31).
+    cleanup.push(async () => {
+      const { rows: undone } = await db().query("SELECT 1 FROM changes WHERE undo_of_id = $1", [applied.changeId]);
+      if (!undone.length) await call("POST", `/changes/${applied.changeId}/undo`, {});
+    });
     assert.equal(applied.inactiveTrunks, 2);
     await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
     const { rows: e } = await db().query(
