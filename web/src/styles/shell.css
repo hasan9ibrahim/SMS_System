@@ -2739,6 +2739,7 @@ select.chip-select {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+  flex: none;
 }
 .status-pill.on {
   color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));

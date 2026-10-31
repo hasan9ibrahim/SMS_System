@@ -772,6 +772,17 @@
   font-size: 12px;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  /* Shrinks with its address cut by an ellipsis when the cell is narrow (a phone card; design QA round 13). */
+  min-width: 0;
+}
+.ip-chip > .num {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ip-dot,
+.ip-count {
+  flex: none;
 }
 .ip-chip.on {
   border-style: solid;

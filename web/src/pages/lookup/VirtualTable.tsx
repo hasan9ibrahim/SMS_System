@@ -18,6 +18,10 @@ export interface VColumn<Row> {
   filter?: ReactNode;
 }
 
+/** Plain text in its own box, so a value wider than its cell ends in an ellipsis (design QA round 13). */
+const textBox = (v: ReactNode) =>
+  typeof v === "string" || typeof v === "number" ? <span className="vt-text">{v}</span> : v;
+
 export function VirtualTable<Row>({
   rows,
   columns: given,
@@ -124,7 +128,7 @@ export function VirtualTable<Row>({
                     className={`vt-cell align-${c.align ?? "left"}${c.sticky ? " sticky" : ""}${c.cellClass?.(row) ? ` ${c.cellClass(row)}` : ""}`}
                     style={cellStyle(c, i)}
                   >
-                    {c.render(row)}
+                    {textBox(c.render(row))}
                   </div>
                 ))}
               </div>

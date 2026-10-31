@@ -190,6 +190,34 @@
   display: flex;
   align-items: center;
 }
+/* Chips, badges, links and status pills in a cell shrink to the cell and end in an ellipsis, instead of being cut off
+   at its edge (design QA round 13): an ellipsis never applies to an inline-block or inline-flex box itself. */
+.gc :is(.tag, .rr-badge, .chip-tag, .status-pill, .with-dot, button.link),
+.gcard-value :is(.tag, .rr-badge, .chip-tag, .status-pill, .with-dot, button.link) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.gc .chip-tag,
+.gcard-value .chip-tag {
+  display: inline-block;
+}
+.gc .chip-tag > .dot-mini,
+.gcard-value .chip-tag > .dot-mini {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+/* The label beside a dot (status pill, route type) is the part that shrinks. */
+.status-pill-label,
+.with-dot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .grid-message {
   position: absolute;
   left: 16px;

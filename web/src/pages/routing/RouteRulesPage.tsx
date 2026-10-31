@@ -627,7 +627,7 @@ export function RouteRulesPage() {
           const t = routeTypeOf(r.routeType);
           return (
             <span className="with-dot">
-              <StatusDot tone={t.tone} /> {t.label}
+              <StatusDot tone={t.tone} /> <span className="with-dot-label">{t.label}</span>
             </span>
           );
         },

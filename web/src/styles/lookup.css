@@ -58,6 +58,12 @@
 .vt-cell.sticky {
   background: var(--color-panel);
 }
+/* What a cell shows shrinks to the cell and ends in an ellipsis, instead of being cut off (design QA round 13). */
+.vt-row .vt-cell > :not(svg) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .vt-cell.sticky + .vt-cell:not(.sticky) {
   border-left: var(--border-width) solid var(--color-border);
 }
@@ -457,6 +463,11 @@ button.chip.accent {
 }
 .sl-dest svg {
   flex-shrink: 0;
+}
+.sl-dest > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sl-dest {
   display: inline-flex;
