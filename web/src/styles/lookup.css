@@ -59,6 +59,7 @@
   background: var(--color-panel);
 }
 /* What a cell shows shrinks to the cell and ends in an ellipsis, instead of being cut off (design QA round 13). */
+.vt-head .vt-cell > :not(svg),
 .vt-row .vt-cell > :not(svg) {
   min-width: 0;
   overflow: hidden;

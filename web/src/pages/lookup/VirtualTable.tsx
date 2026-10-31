@@ -97,7 +97,7 @@ export function VirtualTable<Row>({
               style={cellStyle(c, i)}
               title={c.title}
             >
-              {c.header}
+              {textBox(c.header)}
             </div>
           ))}
         </div>
