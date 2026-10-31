@@ -1,9 +1,38 @@
 /* Phones (team trial round 5): every page usable at phone width. Only applies below 760 px, so laptop and desktop
-   layouts are unchanged. Loaded last. */
+   layouts are unchanged; the one exception is the main menu, which moves to the drawer up to 1180 px. Loaded last. */
 
-/* Hidden on laptops; the drawer and card styles only matter on phones. */
+/* Hidden on laptops; the drawer and card styles only matter on phones and tablets. */
 .menu-burger {
   display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+/* Tablets and small laptops (design QA round 13, §15.1): the full main menu needs about 1150 px beside the logo,
+   search and status, so up to 1180 px it sits in the drawer behind the menu button. Only the top bar changes; the
+   pages keep the desktop layout. */
+@media (max-width: 1180px) {
+  .menu-burger {
+    display: inline-flex;
+  }
+  .topbar .menu-bar {
+    display: none;
+  }
+}
+/* The menu's room goes to the search field and its label. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .topbar .jump {
+    width: 260px;
+  }
+  .topbar .jump > span {
+    display: inline;
+  }
 }
 .mnav-backdrop {
   position: fixed;
@@ -178,17 +207,6 @@
   .topbar-main {
     gap: 8px;
     padding: 0 10px;
-  }
-  .menu-burger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-panel);
-    color: var(--color-text);
   }
   .menu-bar,
   .logo > .logo-full,
