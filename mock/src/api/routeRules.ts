@@ -1313,7 +1313,7 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
 /**
  * The message as the customer sent it, for Deny Multipart and the vendors' capability filter (§6.3, §5.5): the Test
  * form has no coding or TON / NPI, so the text goes in the coding it needs (GSM, else UCS-2) and TON / NPI are checked
- * only as auto sets them (S-4.7).
+ * only as a translation rule or auto TON / NPI sets them (S-4.7).
  */
 const testForm = (raw: RouteTestRequest): MessageForm => ({
   text: raw.content ?? "",
