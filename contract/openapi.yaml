@@ -16823,6 +16823,10 @@ components:
         website:
           type: [string, "null"]
           maxLength: 300
+          description: >-
+            An http(s) address (QA 2026-10-31, §5.1). A bare domain such as `partner.example` is stored as
+            `https://partner.example`; other text (another scheme, spaces, no domain) is refused with 400 on
+            `/website`. Empty = none.
         fax:
           type: [string, "null"]
           maxLength: 50

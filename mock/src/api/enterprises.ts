@@ -177,8 +177,34 @@ const normContact = (c: Contact | undefined): Contact => ({
   emails: (c?.emails ?? []).map((e) => e.trim().toLowerCase()),
 });
 
+/**
+ * A website is an http(s) address (QA 2026-10-31, §5.1): a bare domain gets https:// in front, empty is none, anything
+ * else (another scheme, spaces, credentials, no domain) is an Error.
+ */
+export function normWebsite(raw: string | null | undefined): string | null | undefined | Error {
+  if (raw === undefined) return undefined;
+  const text = raw?.trim() ?? "";
+  if (!text) return null;
+  const bad = new Error("a web address, e.g. https://partner.example");
+  if (/\s/.test(text)) return bad;
+  const address = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return bad;
+  }
+  const host = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/i;
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || !host.test(url.hostname))
+    return bad;
+  return address;
+}
+
 async function checkInput(db: Db, input: EnterpriseInput, id: number | null): Promise<FieldError[]> {
   const errors: FieldError[] = [];
+  const website = normWebsite(input.website);
+  if (website instanceof Error) errors.push({ path: "/website", message: website.message });
+  else if (website !== undefined) input.website = website;
   // Archived names stay reserved (§13.29), so the check includes archived enterprises.
   const { rows: clash } = await db.query(
     `SELECT id, name, deleted_at FROM enterprises WHERE lower(name) = lower($1) AND id IS DISTINCT FROM $2 LIMIT 1`,

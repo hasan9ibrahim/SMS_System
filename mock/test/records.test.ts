@@ -204,6 +204,41 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.ok(paths.includes("/creditAlertPercent"));
   });
 
+  test("website: an http(s) address, a bare domain gets https:// (QA 2026-10-31, §5.1)", async () => {
+    const saved = await newEnterprise("customer", "W");
+    const id = saved.record.id as number;
+    const { contacts, address, creditAlertPercent } = saved.record;
+    const input = (website: string | null) => ({
+      ...Object.fromEntries(
+        ["name", "alias", "type", "tier", "status", "businessCompanyId"].map((k) => [k, saved.record[k]]),
+      ),
+      address,
+      contacts,
+      creditAlertPercent,
+      website,
+    });
+    const edit = (website: string | null) => call("PUT", `/enterprises/${id}`, input(website));
+    const stored = async (website: string | null) => (await ok("updateEnterprise", edit(website))).record.website;
+    assert.equal(await stored("partner.example"), "https://partner.example");
+    assert.equal(await stored(" http://www.partner.example/sms?x=1 "), "http://www.partner.example/sms?x=1");
+    assert.equal(await stored("   "), null);
+    for (const bad of [
+      "javascript:alert(1)",
+      "ftp://partner.example",
+      "partner",
+      "not a website",
+      "user:pw@partner.example",
+    ]) {
+      const r = await edit(bad);
+      assert.equal(r.statusCode, 400, `${bad}: ${r.body}`);
+      check("updateEnterprise", r);
+      assert.ok(
+        r.json().errors.some((e: { path: string }) => e.path === "/website"),
+        bad,
+      );
+    }
+  });
+
   test("billing sides, balance and undo", async () => {
     const saved = await newEnterprise("customer", "B");
     const id = saved.record.id;

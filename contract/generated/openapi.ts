@@ -11118,6 +11118,7 @@ export type components = {
       creditAlert?: boolean;
       creditAlertPercent: components["schemas"]["CreditAlertPercent"];
       address: components["schemas"]["Address"];
+      /** @description An http(s) address (QA 2026-10-31, §5.1). A bare domain such as `partner.example` is stored as `https://partner.example`; other text (another scheme, spaces, no domain) is refused with 400 on `/website`. Empty = none. */
       website?: string | null;
       fax?: string | null;
       registrationNumber?: string | null;
