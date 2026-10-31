@@ -12,6 +12,7 @@
 import { WeightedPicker, type Rng } from "./rng.js";
 import { buildCoverage } from "./rules.js";
 import { messageText } from "./names.js";
+import { compilePattern } from "../routing/pattern.js";
 import {
   allNetworksCodeOf,
   amAt,
@@ -335,7 +336,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       if (r.senderPattern) {
         let re = patterns.get(r.id);
         if (!re) {
-          re = new RegExp(r.senderPattern);
+          re = compilePattern(r.senderPattern) ?? /$^/;
           patterns.set(r.id, re);
         }
         const hit = re.test(sender);

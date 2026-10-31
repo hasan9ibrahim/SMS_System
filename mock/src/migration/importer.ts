@@ -21,6 +21,7 @@ import { csvTable } from "./csv.js";
 import { BUILT_IN_MAPPINGS, CHOICE_SYNONYMS, ENTITY, HEADER_ALIASES, IMPORT_ENTITIES } from "./entities.js";
 import { entryProblem } from "../api/numberLists.js";
 import { checkRule, insertRule, normalise } from "../api/translationRules.js";
+import { compilePattern } from "../routing/pattern.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Ent = MigrationImportEntity;
@@ -1252,11 +1253,7 @@ function planHlrRules(p: Planner, raws: Raw[]): PlanRow[] {
     if (provider == null)
       return bad("provider", `HLR provider "${r.provider}" not found: add it on the HLR page first`);
     const pattern = r.dnidPattern!.trim();
-    try {
-      new RegExp(pattern);
-    } catch {
-      return bad("dnidPattern", `"${pattern}" is not a valid regular expression`);
-    }
+    if (!compilePattern(pattern)) return bad("dnidPattern", `"${pattern}" is not a valid regular expression`);
     const names = list(r.customerTrunks);
     const targets = names.length
       ? trunkTargets(p, "hlr_rules", line, "customerTrunks", names, "customer")

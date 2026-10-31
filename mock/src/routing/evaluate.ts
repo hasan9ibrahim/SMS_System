@@ -4,6 +4,7 @@
 // number whitelist first, then the warm-up threshold, then the normal split / LCR / QBR.
 import { rankLcr, splitPick, type LcrProfileCore } from "../lcr/rank.js";
 import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail, ValueMatch } from "@sms/contract";
+import { compilePattern } from "./pattern.js";
 import { valuesHit, valuesText } from "./values.js";
 
 /**
@@ -213,11 +214,8 @@ function compiledRegex(pattern: string, matchCase: boolean): RegExp | null {
   const key = matchCase ? `c:${pattern}` : `i:${pattern}`;
   let re = compiled.get(key);
   if (re === undefined) {
-    try {
-      re = new RegExp(keywordPattern(pattern) ?? pattern, matchCase ? "" : "i");
-    } catch {
-      re = null;
-    }
+    // As the switch reads it (routing/pattern.ts); null = invalid, never matches.
+    re = compilePattern(keywordPattern(pattern) ?? pattern, matchCase ? "" : "i");
     if (compiled.size > 5000) compiled.clear();
     compiled.set(key, re);
   }

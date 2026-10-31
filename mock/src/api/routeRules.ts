@@ -52,6 +52,7 @@ import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { csvText } from "../csvSafe.js";
 import { runTrunkRules } from "./translationRules.js";
+import { compilePattern } from "../routing/pattern.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Route rule ${id} not found`);
@@ -384,15 +385,8 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
   return out as RuleCore;
 }
 
-const regexOk = (p: string | null) => {
-  if (!p) return true;
-  try {
-    new RegExp(p);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** Valid for the switch too (PCRE; routing/pattern.ts). */
+const regexOk = (p: string | null) => !p || compilePattern(p) !== null;
 
 async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
   const errors: FieldError[] = [];

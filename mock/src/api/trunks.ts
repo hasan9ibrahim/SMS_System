@@ -44,6 +44,7 @@ import {
   type FieldSpec,
 } from "./records.js";
 import { contactsHidden, maskTrunkDetail, refuseMasked } from "../visibility/records.js";
+import { compilePattern } from "../routing/pattern.js";
 
 type Db = pg.Pool | pg.PoolClient;
 export type TrunkKind = "customer" | "vendor";
@@ -325,12 +326,8 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
     }
     for (const key of ["successRegex", "messageIdRegex", "dlrStatusRegex", "dlrMidRegex"] as const) {
       const re = v.http?.[key];
-      if (!re) continue;
-      try {
-        new RegExp(re);
-      } catch {
-        errors.push({ path: `/http/${key}`, message: "invalid regular expression" });
-      }
+      // The switch runs them with PCRE (routing/pattern.ts).
+      if (re && !compilePattern(re)) errors.push({ path: `/http/${key}`, message: "invalid regular expression" });
     }
   }
   return errors;
