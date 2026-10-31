@@ -322,6 +322,7 @@ export function CleanupPage() {
   return (
     <ListScreen<CleanupFinding>
       list="cleanup_findings"
+      noExport
       page={page}
       initialState={{ columns: { state: { field: "state", op: "in", values: ["open", "awaiting_approval"] } } }}
       historyScope={{ entityTypes: ["cleanup"] }}

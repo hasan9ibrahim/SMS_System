@@ -291,6 +291,8 @@ export function EmailTemplatesPage() {
   return (
     <ListScreen<EmailTemplateRow>
       list="email_templates"
+      noExport
+      bulkDelete={{ noun: "e-mail template", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["email_template"] }}

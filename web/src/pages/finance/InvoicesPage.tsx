@@ -257,6 +257,7 @@ function RequestsView({ onGenerate }: { onGenerate: () => void }) {
   return (
     <ListScreen<InvoiceRequestRow>
       list="invoice_requests"
+      listExport
       page={page}
       title="Invoice requests"
       noSelection
@@ -695,6 +696,7 @@ function InvoicesView({ onGenerate }: { onGenerate: () => void }) {
   return (
     <ListScreen<InvoiceRow>
       list="invoices"
+      bulkDelete={{ noun: "invoice", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["invoice"] }}
       rowActions={(r) => {

@@ -152,6 +152,8 @@ export function DailyTrafficAlertsPage() {
   return (
     <ListScreen<DailyTrafficAlertRow>
       list="daily_traffic_alerts"
+      listExport
+      bulkDelete={{ noun: "daily traffic alert", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["daily_traffic_alert"] }}

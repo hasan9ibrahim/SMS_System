@@ -180,6 +180,7 @@ export function DownloadsList({
     <ListScreen<EdrDownloadRow>
       key={kind}
       list="edr_downloads"
+      noExport
       page={page}
       title={title}
       queryScope={kind}

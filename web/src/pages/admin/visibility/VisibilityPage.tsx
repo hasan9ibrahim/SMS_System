@@ -309,6 +309,7 @@ function PoliciesView() {
   return (
     <ListScreen<VisibilityPolicyRow>
       list="visibility_policies"
+      listExport
       page={page}
       above={<ViewSwitch />}
       noSelection
@@ -460,6 +461,7 @@ function AssignmentsView() {
   return (
     <ListScreen<VisibilityAssignment>
       list="visibility_assignments"
+      listExport
       page={page}
       above={
         <>
@@ -632,6 +634,7 @@ function GrantsView() {
   return (
     <ListScreen<VisibilityGrant>
       list="visibility_grants"
+      listExport
       page={page}
       above={<ViewSwitch />}
       noSelection

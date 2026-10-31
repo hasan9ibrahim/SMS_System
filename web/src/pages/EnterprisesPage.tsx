@@ -8,7 +8,7 @@ import { useMe } from "../api/hooks";
 import { useEnterprise, useRestore } from "../api/records";
 import { Fragment } from "react";
 import { useNotifySaved } from "../history/undo";
-import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
+import { isAdminUser, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
 import { newTabOf } from "../shell/useOpener";
 import { toast } from "../ui/feedback";
@@ -90,7 +90,6 @@ function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[
 export function EnterprisesPage() {
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
-  const deleteMany = useBulkDelete();
   const { data: me } = useMe();
   const restore = useRestore("enterprise");
   const notifySaved = useNotifySaved();
@@ -102,6 +101,8 @@ export function EnterprisesPage() {
   return (
     <ListScreen<Enterprise>
       list="enterprises"
+      listExport
+      bulkDelete={{ noun: "enterprise", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["enterprise"] }}
       rowActions={(r) => [
@@ -128,21 +129,6 @@ export function EnterprisesPage() {
               onSelect: () => void deleteOne("enterprise", r.id, r.name),
             },
       ]}
-      // Several selected: the header's Delete acts on all of them (team trial round 4, replacing Bulk edit).
-      selection={{
-        bulk: (ids, clear, rows) => [
-          {
-            label: `Delete ${ids.length} enterprises…`,
-            icon: "trash",
-            danger: true,
-            disabled: !rows.some((r) => !r.archivedAt),
-            onSelect: async () => {
-              const live = rows.filter((r) => !r.archivedAt);
-              if (await deleteMany("enterprise", live, "enterprise")) clear();
-            },
-          },
-        ],
-      }}
       primary={{
         label: "New enterprise",
         onClick: () => navigate("/enterprises/new", { newTab: true, title: "New enterprise" }),

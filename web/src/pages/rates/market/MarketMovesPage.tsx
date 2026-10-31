@@ -679,6 +679,7 @@ export function MarketMovesPage() {
   return (
     <ListScreen<MarketMoveRow>
       list="market_moves"
+      listExport
       page={page}
       noSelection
       historyScope={null}

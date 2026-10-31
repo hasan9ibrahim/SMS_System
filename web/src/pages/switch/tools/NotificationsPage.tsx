@@ -223,6 +223,7 @@ export function NotificationsPage() {
   return (
     <ListScreen<TrunkListRow>
       list="customer_trunks"
+      noExport
       page={page}
       historyScope={null}
       initialState={{ visible: ["enterpriseName", "name", "category", "protocol", "tps", "status"] }}

@@ -48,6 +48,7 @@ export function LoggedInUsersPage() {
   return (
     <ListScreen<UserSessionRow>
       list="user_sessions"
+      noExport
       page={page}
       noSelection
       historyScope={null}

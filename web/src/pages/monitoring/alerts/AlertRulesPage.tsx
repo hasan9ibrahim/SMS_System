@@ -588,6 +588,8 @@ export function AlertRulesPage() {
   return (
     <ListScreen<AlertRuleRow>
       list="alert_rules"
+      listExport
+      bulkDelete={{ noun: "alert rule", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["alert_rule"] }}

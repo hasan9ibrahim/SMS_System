@@ -17,6 +17,7 @@ export function AuditTrailPage() {
   return (
     <ListScreen<AuditRow>
       list="audit_log"
+      listExport
       page={page}
       noSelection
       historyScope={null}

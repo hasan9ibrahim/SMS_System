@@ -652,6 +652,8 @@ export function BusinessCompaniesPage() {
   return (
     <ListScreen<BusinessCompanyRow>
       list="business_companies"
+      listExport
+      bulkDelete={{ noun: "business company", plural: "business companies", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["business_company", "business_company_file"] }}

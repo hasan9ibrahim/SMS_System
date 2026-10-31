@@ -294,6 +294,8 @@ export function ScheduledReportsPage() {
   return (
     <ListScreen<ScheduledReportRow>
       list="scheduled_reports"
+      noExport
+      bulkDelete={{ noun: "scheduled report", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["scheduled_report"] }}

@@ -374,6 +374,8 @@ export function AccessGroupsPage() {
   return (
     <ListScreen<AccessGroupRow>
       list="access_groups"
+      listExport
+      bulkDelete={{ noun: "access group", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["access_group"] }}

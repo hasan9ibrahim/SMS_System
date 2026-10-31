@@ -92,6 +92,8 @@ export function DepartmentsPage() {
   return (
     <ListScreen<DepartmentRow>
       list="departments"
+      listExport
+      bulkDelete={{ noun: "department", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["department"] }}

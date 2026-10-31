@@ -502,6 +502,7 @@ export function TransactionsPage() {
   return (
     <ListScreen<TransactionRow>
       list="transactions"
+      bulkDelete={{ noun: "transaction", restore: true }}
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["transaction"] }}

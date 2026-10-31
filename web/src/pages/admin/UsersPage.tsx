@@ -552,6 +552,8 @@ export function UsersPage() {
   return (
     <ListScreen<UserRow>
       list="users"
+      listExport
+      bulkDelete={{ noun: "user", restore: true }}
       page={page}
       // Ctrl K: /admin/users?user=<id> selects that user and opens the detail (functional QA round 13).
       deepLink="user"

@@ -191,6 +191,7 @@ export function MccmncPage() {
   return (
     <ListScreen<Destination>
       list="destinations"
+      bulkDelete={{ noun: "MCCMNC code", restore: true }}
       page={page}
       title="MCCMNC codes"
       historyScope={{ entityTypes: ["destination"] }}

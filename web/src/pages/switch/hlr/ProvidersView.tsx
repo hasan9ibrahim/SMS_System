@@ -547,6 +547,8 @@ export function ProvidersView() {
   return (
     <ListScreen<HlrProviderRow>
       list="hlr_providers"
+      listExport
+      bulkDelete={{ noun: "HLR provider", restore: true }}
       page={page}
       title="HLR · Providers"
       selectId={selectId}

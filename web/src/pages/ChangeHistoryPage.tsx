@@ -35,6 +35,7 @@ export function ChangeHistoryPage() {
     <ListScreen<Change>
       key={`${mine ? "mine" : "all"}-${me?.id ?? 0}`}
       list="changes"
+      listExport
       page={page}
       title={mine ? "My changes" : "Change history"}
       // My changes: a page switch, so the User header box stays free (team trial round 10).
