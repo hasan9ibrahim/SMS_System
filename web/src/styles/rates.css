@@ -110,9 +110,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The page title size, like "Rate manager" beside it (design QA round 13: it was 28 px next to 20 px). */
 .rate-title h1 {
   margin: 0;
-  font-size: var(--font-size-title);
   font-weight: 650;
 }
 .stat-cards {
