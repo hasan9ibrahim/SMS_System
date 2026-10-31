@@ -557,7 +557,7 @@ defmodule Sms.Switch.Customer.Session do
 
     with :ok <- check(not Firewall.blocked?(state.ip), :esme_rbindfail, :ip_banned, nil),
          :ok <- check(TrunkStore.ready?(), :esme_rsyserr, :trunks_not_loaded, nil),
-         {:ok, trunk} <- lookup(system_id),
+         {:ok, trunk} <- lookup(system_id, state.ip),
          :ok <- check(Trunk.ip_allowed?(trunk, state.ip), :esme_rbindfail, :ip_not_allowed, trunk),
          :ok <-
            check(
@@ -591,10 +591,17 @@ defmodule Sms.Switch.Customer.Session do
   defp check(true, _status, _reason, _trunk), do: :ok
   defp check(false, status, reason, trunk), do: {:error, status, reason, trunk}
 
-  defp lookup(system_id) do
+  # S-1.1, S-8.1: an unknown system_id is answered 0x0F only to an IP some trunk lets in (a customer with a typo); any
+  # other IP gets 0x0D, as a known system_id (or a wrong password) does from there, so binds from a stranger's IP
+  # cannot tell which system_ids exist. Audited and counted as an unknown system_id either way.
+  defp lookup(system_id, ip) do
     case TrunkStore.lookup(system_id) do
-      {:ok, trunk} -> {:ok, trunk}
-      :error -> {:error, :esme_rinvsysid, :unknown_system_id, nil}
+      {:ok, trunk} ->
+        {:ok, trunk}
+
+      :error ->
+        status = if TrunkStore.known_ip?(ip), do: :esme_rinvsysid, else: :esme_rbindfail
+        {:error, status, :unknown_system_id, nil}
     end
   end
 
