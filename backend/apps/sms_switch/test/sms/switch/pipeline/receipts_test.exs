@@ -1,7 +1,6 @@
 defmodule Sms.Switch.Pipeline.ReceiptsTest do
   # The customer's receipt from its parts' receipts (S-5.9) and what the customer asked for (registered_delivery).
   use ExUnit.Case, async: true
-  alias Sms.Switch.Message.Text
   alias Sms.Switch.Pipeline.{Forwarder, Receipt, Receipts}
   alias Sms.Switch.Smpp.Pdu
 
@@ -153,12 +152,35 @@ defmodule Sms.Switch.Pipeline.ReceiptsTest do
       assert fields.esm_class == 0x04
       assert {:network_error_code, <<3, 0, 11>>} in tlvs
       assert {:message_state, 5} in tlvs
-      assert {:ok, text} = Text.decode(fields.short_message, :gsm)
+      text = fields.short_message
       assert text =~ "dlvrd:000"
-      assert text =~ "stat:UNDELIV err:011 text:"
+      assert text =~ "stat:UNDELIV err:011 text:?n?code text that i"
       assert Receipt.final?("UNDELIV")
       refute Receipt.final?("ENROUTE")
       assert Receipt.state("NOPE") == 7
+    end
+
+    test "the receipt text is ASCII, never GSM-coded: '@' and '_' stay themselves" do
+      {fields, _tlvs} =
+        Receipt.build(%{
+          message_id: "abc",
+          source: "1",
+          source_ton: 1,
+          source_npi: 1,
+          destination: "2",
+          destination_ton: 1,
+          destination_npi: 1,
+          status: "DELIVRD",
+          error: "000",
+          submitted_at: 0,
+          done_at: 0,
+          text: "mail me@x_y {€}",
+          network_error: 0
+        })
+
+      assert fields.short_message =~ ~r/^id:abc sub:001 dlvrd:001 submit date:7001010000 /
+      assert String.ends_with?(fields.short_message, "stat:DELIVRD err:000 text:mail me@x_y {?}")
+      assert for(<<b <- fields.short_message>>, reduce: true, do: (ok -> ok and b in 0x20..0x7E))
     end
   end
 end
