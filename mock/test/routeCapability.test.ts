@@ -55,15 +55,22 @@ const simulate = async (
 };
 const LONG = "a".repeat(400); // three GSM parts
 
-/** Customer trunks (TON / NPI as sent) and destinations they have a rate for. */
+/**
+ * Customer trunks (TON / NPI as sent) and a destination each has a rate for: the first network of its first rate
+ * table. One index walk per trunk, stopping at `limit` trunks; joining every rate line of every trunk first (1.4 M
+ * lines in the full seed) ran past the 15 s statement timeout on CI.
+ */
 async function pairs(limit: number) {
   const { rows } = await db().query(
-    `SELECT DISTINCT ON (t.id) t.id, l.mccmnc FROM customer_trunks t
-       JOIN customer_trunk_rate_tables x ON x.customer_trunk_id = t.id
-       JOIN rate_lines l ON l.rate_table_id = x.rate_table_id AND l.sender_id IS NULL AND NOT l.is_blocked
-            AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now()) AND length(l.mccmnc) = 5
+    `SELECT t.id, l.mccmnc FROM customer_trunks t
+       CROSS JOIN LATERAL (
+         SELECT l.mccmnc FROM customer_trunk_rate_tables x
+           JOIN rate_lines l ON l.rate_table_id = x.rate_table_id AND l.sender_id IS NULL AND NOT l.is_blocked
+                AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now()) AND length(l.mccmnc) = 5
+          WHERE x.customer_trunk_id = t.id
+          ORDER BY x.rate_table_id, l.mccmnc LIMIT 1) l
       WHERE t.deleted_at IS NULL AND t.status = 'active' AND t.ton_npi_mode = 'as_sent'
-      ORDER BY t.id, l.mccmnc LIMIT $1`,
+      ORDER BY t.id LIMIT $1`,
     [limit],
   );
   return rows.map((r) => ({ trunk: Number(r.id), mccmnc: String(r.mccmnc) }));
