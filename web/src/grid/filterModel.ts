@@ -69,6 +69,13 @@ function operand(f: FieldDescriptor, raw: string): string | number | null {
   return v;
 }
 
+/** A date typed without a time as an upper bound: the last millisecond of that day (UTC), so the day is included. */
+function dayEnd(f: FieldDescriptor, raw: string): string | number | null {
+  const value = operand(f, raw);
+  if (!isTime(f) || raw.trim().length > 10 || value === null) return value;
+  return new Date(Date.parse(String(value)) + 86_399_999).toISOString();
+}
+
 /**
  * Parses a column filter box. Returns null for an empty box and an Error for text that
  * cannot be a condition on this field.
@@ -77,7 +84,7 @@ function operand(f: FieldDescriptor, raw: string): string | number | null {
  *           typed · =ACME → equals · !test → does not start with · /^ab/ → regex · empty / !empty
  * Prefix:   505 → starts with
  * Numbers:  5 or =5 · >5 >=5 ≥5 <5 <=5 ≤5 · !=5 · 5..10 (inclusive) · 1,2,3 (in list)
- * Dates:    2026-10-01..2026-10-16 · >=2026-10-01 · <2026-10-01
+ * Dates:    2026-10-01..2026-10-16 (both days included) · >=2026-10-01 · <2026-10-01 · <=2026-10-16 (with that day)
  */
 export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCondition | null | Error {
   const text = input.trim();
@@ -91,7 +98,7 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
     const range = text.split("..");
     if (range.length === 2) {
       const a = operand(f, range[0]!);
-      const b = operand(f, range[1]!);
+      const b = dayEnd(f, range[1]!);
       if (a === null || b === null) return new Error("Use from..to, e.g. 5..10");
       return { field, op: "between", values: [a, b] };
     }
@@ -102,7 +109,8 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
     }
     const m = /^(>=|<=|!=|≥|≤|>|<|=)?\s*(.+)$/.exec(text)!;
     const sym = m[1] ?? "";
-    const value = operand(f, m[2]!);
+    // "<=2026-10-29" includes that day; ">2026-10-29" starts after it.
+    const value = ["<=", "≤", ">"].includes(sym) ? dayEnd(f, m[2]!) : operand(f, m[2]!);
     if (value === null)
       return new Error(isTime(f) ? "Use a date, e.g. >=2026-10-01" : "Use a number, e.g. >=5 or 5..10");
     const op: FilterOperator =
