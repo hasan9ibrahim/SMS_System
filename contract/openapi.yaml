@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.126.0
+  version: 0.131.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18240,8 +18240,6 @@ components:
         considerHlrRate:
           type: boolean
         serviceTypeRouting:
-          type: boolean
-        partWiseRouting:
           type: boolean
         hostIps:
           type: array

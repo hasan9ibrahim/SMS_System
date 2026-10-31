@@ -121,7 +121,6 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
       hostIps: [],
       considerHlrRate: false,
       serviceTypeRouting: false,
-      partWiseRouting: false,
       dlrPushUrl: null,
       moPushUrl: null,
       delayedSubmit: false,
@@ -625,7 +624,6 @@ export function CustomerTrunkFields({
               <>
                 <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
                 <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
-                <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
                 <CheckField form={form} path="loopDetection" label="Loop detection" />
                 <CheckField form={form} path="allowEmptyMessages" label="Allow empty messages" />
               </>

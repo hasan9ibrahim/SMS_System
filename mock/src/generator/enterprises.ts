@@ -417,6 +417,10 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
       const editor = rng.pick(noc).id;
       const express = rng.chance(0.03) ? rng.pick(world.vendorTrunks) : null;
       const revLimit = rng.chance(0.12);
+      const considerHlrRate = rng.chance(0.15);
+      const serviceTypeRouting = rng.chance(0.05);
+      // Part Wise Routing is gone (product owner 2026-10-31, S-3.8); its draw stays so the rest of the seed is unchanged.
+      rng.chance(0.05);
       await sink.insert("customer_trunks", {
         id: t.id,
         enterprise_id: e.id,
@@ -426,9 +430,8 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         billing_type: t.billingType,
         status: t.status,
         bind_type: t.bindType,
-        consider_hlr_rate: rng.chance(0.15),
-        service_type_routing: rng.chance(0.05),
-        part_wise_routing: rng.chance(0.05),
+        consider_hlr_rate: considerHlrRate,
+        service_type_routing: serviceTypeRouting,
         host_ips: t.hostIps,
         username: t.username,
         password: fakeSecret(rng, 8),

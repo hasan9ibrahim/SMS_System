@@ -11349,7 +11349,6 @@ export type components = {
       bindType: "TX" | "RX" | "TR" | "AUTO";
       considerHlrRate?: boolean;
       serviceTypeRouting?: boolean;
-      partWiseRouting?: boolean;
       /** @description Allowed client addresses (§5.4, R9): an address (192.0.2.10, 2001:db8::1), a network (192.0.2.0/24) or a range (192.0.2.10-192.0.2.50, or 192.0.2.10-50). A range is saved as the networks that cover exactly it, so the trunk shows those networks afterwards. At most 50 entries typed; at most 256 after ranges are split. */
       hostIps?: string[];
       /** @description SMPP system_id. */

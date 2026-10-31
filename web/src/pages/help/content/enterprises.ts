@@ -1323,11 +1323,6 @@ export const topics: HelpTopic[] = [
                 values: "Tick box. Off by default.",
               },
               {
-                name: "Part-wise routing",
-                what: "Route each part of a long (multipart) message on its own instead of keeping all parts together.",
-                values: "Tick box. Off by default.",
-              },
-              {
                 name: "Loop detection",
                 what: "Block messages that come back into the switch, so a message cannot circle between partners.",
                 values: "Tick box. On by default.",

@@ -73,7 +73,6 @@ const CUSTOMER_SPECS: FieldSpec[] = [
   { api: "port", col: "port", readOnly: true },
   { api: "considerHlrRate", col: "consider_hlr_rate" },
   { api: "serviceTypeRouting", col: "service_type_routing" },
-  { api: "partWiseRouting", col: "part_wise_routing" },
   { api: "hostIps", col: "host_ips", read: `ARRAY(SELECT ${inetText("x")} FROM unnest(t.host_ips) x)`, cast: "::inet[]" },
   { api: "dlrPushUrl", col: "dlr_push_url" },
   { api: "moPushUrl", col: "mo_push_url" },
