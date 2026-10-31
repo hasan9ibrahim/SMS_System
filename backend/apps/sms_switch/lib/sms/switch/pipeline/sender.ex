@@ -593,12 +593,14 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp piece(:sar, ref, total, n, p, ies),
     do: single(p, ies, sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n)
 
-  defp encoding(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
+  defp encoding(msg, text), do: msg |> encoded(text) |> vendor_coding(text || msg.text)
 
-  defp encoding(msg, text) when text == msg.text or is_nil(text),
+  defp encoded(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
+
+  defp encoded(msg, text) when text == msg.text or is_nil(text),
     do: {msg.body, msg.alphabet, msg.data_coding}
 
-  defp encoding(msg, text) do
+  defp encoded(msg, text) do
     alphabet = Text.fit(text, msg.alphabet)
 
     case Text.encode(text, alphabet) do
@@ -606,6 +608,19 @@ defmodule Sms.Switch.Pipeline.Sender do
       :error -> {:error, alphabet, msg.data_coding}
     end
   end
+
+  # S-2.11: Latin-1 bytes under data_coding 0 (a customer trunk whose Default Coding is Latin-1) would be read as GSM by
+  # the vendor: GSM when every character has one and it needs no more parts, else data_coding 3.
+  defp vendor_coding({bytes, :latin1, 0}, text) when is_binary(bytes) do
+    with {:ok, gsm} <- Text.encode(text, :gsm),
+         true <- Text.part_count(gsm, :gsm) <= Text.part_count(bytes, :latin1) do
+      {gsm, :gsm, 0}
+    else
+      _ -> {bytes, :latin1, 3}
+    end
+  end
+
+  defp vendor_coding(encoded, _text), do: encoded
 
   # Whether a changed text needs more parts than the customer sent (D3), counted like with like: the text as it goes
   # and as it came, both at 153 / 67 / 134 a part, or the parts the customer sent when it used more (a client's SAR

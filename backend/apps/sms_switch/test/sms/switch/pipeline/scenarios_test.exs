@@ -425,4 +425,23 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       assert Enum.map_join(parts, &binary_part(&1.fields.short_message, 9, 149)) == a <> b
     end
   end
+
+  describe "Latin-1 Default Coding (S-2.11, S-4.6)" do
+    test "data_coding 0 goes to the vendor in GSM when every character has one, else as data_coding 3" do
+      %{client: client, conn: conn} =
+        start_all(config: [customer_trunks: [PipelineConfig.customer_trunk(default_coding: 3)]])
+
+      send_submit(client, %{data_coding: 0, short_message: <<"caf", 0xE9>>}, [], 2)
+      {[0], client} = resps(client, 1)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      # GSM 03.38: é is 0x05.
+      assert {sent.fields.data_coding, sent.fields.short_message} == {0, <<"caf", 0x05>>}
+
+      # ï has no GSM character.
+      send_submit(client, %{data_coding: 0, short_message: <<"na", 0xEF, "ve">>}, [], 3)
+      {[0], _client} = resps(client, 1)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.data_coding, sent.fields.short_message} == {3, <<"na", 0xEF, "ve">>}
+    end
+  end
 end
