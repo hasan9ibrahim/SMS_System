@@ -10,6 +10,7 @@ import { api, unwrap } from "../../api/client";
 import { useMe } from "../../api/hooks";
 import { useRestore } from "../../api/records";
 import {
+  discardRouteRuleOnLeave,
   useBulkRouteRules,
   useDiscardRouteRule,
   exportRouteRules,
@@ -205,7 +206,12 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const discard = useDiscardRouteRule();
   const started = useRef(false);
   const idRef = useRef<number | null>(null);
+  // Saved (kept) or discarded: nothing more to do with the draft.
   const settled = useRef(false);
+  // Closed before the draft existed (QA round 13): the draft goes as soon as it arrives.
+  const abandoned = useRef(false);
+  const leftPage = useRef(false);
+  const mounted = useRef(false);
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -219,18 +225,51 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
       })
       .then((r) => {
         idRef.current = r.record.id;
+        if (abandoned.current || !mounted.current) {
+          settled.current = true;
+          if (leftPage.current) discardRouteRuleOnLeave(r.record.id);
+          else void discard.mutateAsync(r.record.id).catch(() => undefined);
+          return;
+        }
         setId(r.record.id);
       })
       .catch((e) => setCreateError(problemText(e)));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  // The window can go without × or Save, now that it lives in its tab (team trial round 12): its tab closed, or
-  // the page reloaded. The draft goes with it, as × would.
-  useEffect(
-    () => () => {
-      if (!settled.current && idRef.current !== null) void discard.mutateAsync(idRef.current).catch(() => undefined);
-    },
-    [], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  // The window can go without × or Save, now that it lives in its tab (team trial round 12): its tab closed. The
+  // draft goes with it, as × would. React's development double run unmounts and mounts again at once, so only a
+  // window still gone a moment later counts.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      setTimeout(() => {
+        if (mounted.current || settled.current) return;
+        settled.current = true;
+        abandoned.current = true;
+        if (idRef.current !== null) void discard.mutateAsync(idRef.current).catch(() => undefined);
+      });
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A reload, leaving the app or closing the window skips that cleanup (QA round 13): the draft goes with a request
+  // that outlives the page. Should the browser bring the page back from its cache, the window is gone as well.
+  useEffect(() => {
+    const leave = () => {
+      if (settled.current) return;
+      settled.current = true;
+      abandoned.current = true;
+      leftPage.current = true;
+      if (idRef.current !== null) discardRouteRuleOnLeave(idRef.current);
+    };
+    const back = (e: PageTransitionEvent) => {
+      if (e.persisted && leftPage.current) done(null);
+    };
+    window.addEventListener("pagehide", leave);
+    window.addEventListener("pageshow", back);
+    return () => {
+      window.removeEventListener("pagehide", leave);
+      window.removeEventListener("pageshow", back);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const rule = useRouteRule(id);
   const [manual, setManual] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -243,7 +282,9 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
   const close = async () => {
     setBusy(true);
     settled.current = true;
-    if (id !== null) await discard.mutateAsync(id).catch((e) => toast({ tone: "error", message: problemText(e) }));
+    abandoned.current = true;
+    const draft = idRef.current;
+    if (draft !== null) await discard.mutateAsync(draft).catch((e) => toast({ tone: "error", message: problemText(e) }));
     done(null);
   };
   const saveRule = async () => {
