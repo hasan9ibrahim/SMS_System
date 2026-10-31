@@ -197,6 +197,7 @@ export const getLcrProfileDependencies = profiles.dependencies;
 export const createLcrProfile = profiles.create;
 export const updateLcrProfile = profiles.update;
 export const archiveLcrProfile = profiles.archive;
+export const lcrProfileSpec = profiles.spec;
 export const restoreLcrProfile = profiles.restore;
 
 // ---------------------------------------------------------------- LCR table

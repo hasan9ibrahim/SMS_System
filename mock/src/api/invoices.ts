@@ -531,7 +531,7 @@ export function markInvoices(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- safe delete
 
-async function invoiceDependencies(db: Db, id: number) {
+export async function invoiceDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     `SELECT (SELECT count(*)::int FROM transactions WHERE invoice_id = $1 AND deleted_at IS NULL) AS payments,
             (SELECT count(*)::int FROM invoice_requests WHERE invoice_id = $1 AND status IN ('pending','inprogress')) AS jobs,
@@ -580,7 +580,7 @@ export function archiveInvoice(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /** A live traffic invoice of the enterprise whose usage period overlaps [from, to]. */
-async function overlapping(db: Db, enterpriseId: number, from: string, to: string, exceptId: number) {
+export async function overlapping(db: Db, enterpriseId: number, from: string, to: string, exceptId: number) {
   const { rows } = await db.query(
     `SELECT invoice_number, usage_start, usage_end FROM invoices
       WHERE enterprise_id = $1 AND id <> $4 AND deleted_at IS NULL AND kind = 'traffic' AND status <> 'failed'

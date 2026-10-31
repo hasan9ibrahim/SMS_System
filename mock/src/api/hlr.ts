@@ -368,7 +368,7 @@ async function applyProviderField(c: pg.PoolClient, id: number, field: string, v
   ]);
 }
 
-async function providerDependencies(db: Db, id: number) {
+export async function providerDependencies(db: Db, id: number) {
   const count = async (sql: string) => Number((await db.query(sql, [id])).rows[0].n);
   const [rules, policies] = await Promise.all([
     count("SELECT count(*) AS n FROM hlr_rules WHERE hlr_provider_id = $1 AND deleted_at IS NULL"),
@@ -1083,7 +1083,7 @@ export function updateHlrPolicy(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-async function policyDependencies(db: Db, id: number) {
+export async function policyDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     `SELECT count(*)::int AS n, string_agg('#' || id, ', ' ORDER BY id) FILTER (WHERE true) AS ids FROM (
        SELECT id FROM route_rules WHERE deleted_at IS NULL AND (hlr_action ->> 'policy_id')::bigint = $1 ORDER BY id) x`,

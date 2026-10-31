@@ -123,7 +123,7 @@ export function updateNumberList(request: FastifyRequest, reply: FastifyReply) {
   });
 }
 
-async function listDependencies(db: Db, id: number) {
+export async function listDependencies(db: Db, id: number) {
   const count = async (sql: string) => Number((await db.query(sql, [id])).rows[0].n);
   const [tr, rr] = await Promise.all([
     count(

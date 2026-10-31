@@ -416,7 +416,7 @@ export function updateRateTable(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
-async function tableDependencies(db: Db, id: number) {
+export async function tableDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     `SELECT count(*)::int AS n FROM customer_trunk_rate_tables x
        JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL WHERE x.rate_table_id = $1`,

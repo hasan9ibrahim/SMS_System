@@ -316,7 +316,7 @@ export function updateProductCategory(request: FastifyRequest, reply: FastifyRep
   });
 }
 
-async function categoryDependencies(db: Db, id: number) {
+export async function categoryDependencies(db: Db, id: number) {
   const count = async (sql: string) => Number((await db.query(sql, [id])).rows[0].n);
   const [ct, vt, rt, rr, tr, hr] = await Promise.all([
     count("SELECT count(*) AS n FROM customer_trunks WHERE product_category_id = $1 AND deleted_at IS NULL"),
@@ -512,7 +512,7 @@ async function codeTaken(db: Db, code: string, exceptId: number) {
   return rows.length > 0;
 }
 
-async function destinationDependencies(db: Db, id: number) {
+export async function destinationDependencies(db: Db, id: number) {
   const { rows } = await db.query("SELECT mccmnc FROM mccmnc WHERE id = $1", [id]);
   const code = rows[0]?.mccmnc as string;
   const count = async (sql: string, args: unknown[]) => Number((await db.query(sql, args)).rows[0].n);

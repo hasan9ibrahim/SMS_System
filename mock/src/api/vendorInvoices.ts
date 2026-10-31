@@ -1066,7 +1066,7 @@ export function addVendorInvoiceNote(request: FastifyRequest, reply: FastifyRepl
 
 // ---------------------------------------------------------------- safe delete
 
-async function vendorInvoiceDependencies(c: Db, id: number) {
+export async function vendorInvoiceDependencies(c: Db, id: number) {
   const { rows } = await c.query("SELECT recon_status FROM vendor_invoices WHERE id = $1", [id]);
   const accepted = rows[0]?.recon_status === "accepted" ? 1 : 0;
   return dependencies([

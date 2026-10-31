@@ -605,6 +605,9 @@ async function trunkDependencies(db: Db, k: KindDef, id: number) {
   return dependencies(items);
 }
 
+/** A trunk's delete dependencies by kind (§13.29), for the list's bulk delete (api/bulkRecords.ts). */
+export const trunkDependenciesOf = (db: Db, kind: TrunkKind, id: number) => trunkDependencies(db, KINDS[kind], id);
+
 export function getTrunkDependencies(kind: TrunkKind) {
   const k = KINDS[kind];
   return (request: FastifyRequest, reply: FastifyReply) => {

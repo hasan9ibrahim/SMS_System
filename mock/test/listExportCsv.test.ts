@@ -6,6 +6,7 @@
 import { test, after, before, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
+import type { FieldDescriptor } from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
@@ -61,7 +62,7 @@ const rowsOf = (res: LightMyRequestResponse) => {
 describe("value formatting (§13.25)", () => {
   const at = (t: number) => new Date(t).toISOString().slice(0, 16).replace("T", " ");
   test("enum labels, Yes / No, lists, times, plain numbers", () => {
-    const f = { field: "status", label: "Status", type: "enum", operators: [], sortable: true, hidden: false } as const;
+    const f: FieldDescriptor = { field: "status", label: "Status", type: "enum", operators: [], sortable: true, hidden: false };
     assert.equal(cellText({ ...f, enumValues: [{ value: "active", label: "Active" }] }, "active", at), "Active");
     assert.equal(cellText({ ...f, type: "boolean" }, true, at), "Yes");
     assert.equal(cellText({ ...f, type: "boolean" }, false, at), "No");
