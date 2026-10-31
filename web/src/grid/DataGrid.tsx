@@ -276,6 +276,9 @@ function GridRowInner<Row extends { id: number }>({
       aria-selected={checked}
       onClick={(e) => onClick(row, e)}
       onDoubleClick={(e) => onDoubleClick(row, e)}
+      // Middle button: the record in a new tab behind (§13.5). Pressing it must not start Windows' autoscroll, which
+      // swallows the click (QA round 14).
+      onMouseDown={(e) => e.button === 1 && e.preventDefault()}
       onAuxClick={(e) => e.button === 1 && onDoubleClick(row, e)}
     >
       <div className="gc gc-check" role="gridcell">

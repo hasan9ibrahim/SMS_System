@@ -202,6 +202,9 @@ export function CommandPalette({ popout = false }: { popout?: boolean }) {
                   aria-selected={i === index}
                   className="palette-item"
                   onClick={(e) => choose(item, e.ctrlKey || e.metaKey)}
+                  // Middle button: a new tab, as Ctrl-click (QA round 14).
+                  onMouseDown={(e) => e.button === 1 && e.preventDefault()}
+                  onAuxClick={(e) => e.button === 1 && choose(item, true)}
                 >
                   <Icon name={item.icon} size={15} />
                   <span className="palette-label">{item.label}</span>

@@ -13,6 +13,7 @@ import { formatMoney, formatPct } from "./format";
 import { pageForPath } from "../../nav/registry";
 import { ListScreen } from "../../page/ListScreen";
 import { useTabNavigate } from "../../shell/tabContext";
+import { newTabOf } from "../../shell/useOpener";
 import { isAdminUser, useDeleteRecord } from "../../records/parts";
 import { ask, toast } from "../../ui/feedback";
 import { problemText } from "../routing/dialogs";
@@ -28,9 +29,13 @@ const page = pageForPath("/rates/manager")!;
 export function useOpenTable() {
   const location = useLocation();
   const navigate = useTabNavigate();
-  return (id: number | null, opts: { newTab?: boolean; name?: string } = {}) => {
+  return (id: number | null, opts: { newTab?: boolean; background?: boolean; name?: string } = {}) => {
     if (opts.newTab && id !== null) {
-      navigate(`/rates/manager?table=${id}`, { forceNew: true, title: `Rates · ${opts.name ?? id}` });
+      navigate(`/rates/manager?table=${id}`, {
+        forceNew: true,
+        background: opts.background ?? false,
+        title: `Rates · ${opts.name ?? id}`,
+      });
       return;
     }
     const p = new URLSearchParams(location.search);
@@ -240,7 +245,7 @@ function FullList({ compact = false }: { compact?: boolean }) {
               className="link strong"
               onClick={(e) => {
                 e.stopPropagation();
-                open(r.id, { newTab: e.ctrlKey || e.metaKey, name: r.name });
+                open(r.id, { newTab: newTabOf(e).forceNew, background: newTabOf(e).background, name: r.name });
               }}
             >
               {r.name}
@@ -278,13 +283,13 @@ function FullList({ compact = false }: { compact?: boolean }) {
             className="icon-btn"
             aria-label={`Open ${r.name}`}
             title="Open the table (Ctrl-click: new tab)"
-            onClick={(e) => open(r.id, { newTab: e.ctrlKey || e.metaKey, name: r.name })}
+            onClick={(e) => open(r.id, { newTab: newTabOf(e).forceNew, background: newTabOf(e).background, name: r.name })}
           >
             <Icon name="chevronRight" size={14} />
           </button>
         ),
       }}
-      onOpen={(row, e) => open(row.id, { newTab: e.ctrlKey || e.metaKey, name: row.name })}
+      onOpen={(row, e) => open(row.id, { newTab: newTabOf(e).forceNew, background: newTabOf(e).background, name: row.name })}
       shortcuts="↑↓ move · Enter open the table · Ctrl-click a name: new tab · Space select for bulk rating"
     />
   );
