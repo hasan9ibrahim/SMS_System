@@ -38,7 +38,7 @@ stay in `web/src/styles/tokens.css`.
   `web/src/assets/brand` and shows the navy or white version to suit the theme (`web/src/styles/brand.css`).
 - Browser tab icon and phone home-screen icon: `web/public/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`.
 - Window titles end in "· Xpert". Authenticator apps list new enrolments as "Xpert". E-mails go out from "Xpert"
-  (`smtp_from_name` in `deploy/ansible/group_vars/all.yml`).
+  (`smtp_from_name` in `deploy/ansible/roles/settings/defaults/main.yml`; an inventory can set its own).
 
 The lettering is drawn shapes, not a font, so the logo needs no font installed. The tagline is set in Poppins Medium
 (SIL Open Font License) and converted to outlines.

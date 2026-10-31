@@ -3,40 +3,40 @@
 #   ansible-playbook -i inventories/production site.yml --ask-vault-pass
 - name: Every machine
   hosts: all
-  roles: [base, etcd]
+  roles: [settings, base, etcd]
 
 - name: The two servers' PostgreSQL
   hosts: servers
-  roles: [postgres]
+  roles: [settings, postgres]
 
 - name: Redis (servers) and Sentinel, NATS (every machine)
   hosts: all
-  roles: [redis, nats]
+  roles: [settings, redis, nats]
 
 - name: ClickHouse (servers) and Keeper (every machine)
   hosts: all
-  roles: [clickhouse]
+  roles: [settings, clickhouse]
 
 - name: The switch's service and settings (one machine at a time, as a settings change restarts it)
   hosts: servers:witness
   serial: 1
-  roles: [switch]
+  roles: [settings, switch]
 
 - name: The TypeScript service and the screens over HTTPS (servers, one at a time so a settings change never restarts both;
     the release itself comes with deploy.yml)
   hosts: servers
   serial: 1
-  roles: [service, web]
+  roles: [settings, service, web]
 
 - name: SMS to voice, Asterisk on the servers (only with sms_voice_enabled; one at a time, as a change may restart it)
   hosts: servers
   serial: 1
-  roles: [asterisk]
+  roles: [settings, asterisk]
 
 - name: Monitoring (every machine; Prometheus, Alertmanager and Grafana on the witness)
   hosts: all
-  roles: [monitoring]
+  roles: [settings, monitoring]
 
 - name: Backups and traffic recording (servers)
   hosts: servers
-  roles: [backup, pcap]
+  roles: [settings, backup, pcap]

@@ -85,6 +85,10 @@ traffic: at about 150 million messages a month, look again at the disks or the m
 
    Keep the vault password and a copy of `vault_pgbackrest_cipher_pass` outside the servers: without it the backups
    cannot be read.
+
+   The settings every environment shares (versions, ports, retention, `smpp_cidrs`, `web_cidrs` …) are the defaults
+   in `roles/settings/defaults/main.yml`. To change one for this environment, set it in the inventory's
+   `group_vars/all/main.yml`: the inventory's value always wins (the role's are Ansible's lowest-precedence defaults).
 4. **Install:** `pip install ansible-core`, then
 
    ```sh
@@ -185,7 +189,7 @@ blocks nothing and reports what the policy would block to `POST /api/v1/csp-repo
 60 a minute per address in nginx, the API and the service). The TypeScript service logs one line per violation,
 e.g. `csp report: img-src blocked https://cdn.example/x.png on https://sms.example/admin/email-templates`; read them
 with `journalctl -u sms-service | grep "csp "`. When a week of normal use logs
-none, set `web_csp_enforce: true` in the inventory (`group_vars/all.yml` or the host) and run `site.yml`: the same
+none, set `web_csp_enforce: true` in the inventory (`group_vars/all/main.yml` or the host) and run `site.yml`: the same
 policy is then sent as `Content-Security-Policy` and enforced. Set it back to `false` to return to report-only.
 Changing the policy: edit `web_csp_policy` (production) and `deploy/nginx.conf` (the docker-compose trial instance,
 always report-only), then check the screens again.
