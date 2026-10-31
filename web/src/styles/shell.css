@@ -124,6 +124,16 @@ a.btn {
 .btn-primary:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent-fill) 88%, #000);
 }
+/* One filled accent button per page (§15.3): while the detail panel shows a form with its own Save, the page
+   header's accent button (New rule, New list…) is drawn outlined (design QA round 13). */
+.pane:has(.detail .btn-primary) .page-header .btn-primary {
+  background: var(--color-panel);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.pane:has(.detail .btn-primary) .page-header .btn-primary:hover:not(:disabled) {
+  background: var(--hover);
+}
 .btn-ghost {
   border-color: transparent;
   background: transparent;
