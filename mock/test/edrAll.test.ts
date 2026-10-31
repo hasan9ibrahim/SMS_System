@@ -13,6 +13,7 @@ import { usageLines } from "../src/billing/edrFigures.js";
 import { chWhere, outcomeJoin, runChList, type ChListDef } from "../src/lists/chEngine.js";
 import { edrList } from "../src/lists/edrDefs.js";
 import { edrsByIds } from "../src/api/observation.js";
+import { setDetailHorizonForTests } from "../src/reports/source.js";
 
 const ready = await dbReady();
 const edrStore = ready && (await chRows<{ n: string }>("SELECT count() FROM edr_all LIMIT 1")) !== null;
@@ -25,6 +26,7 @@ const at = (hms: string) => `${day} ${hms}`;
 const [a, b, c] = [randomUUID(), randomUUID(), randomUUID()];
 
 after(async () => {
+  setDetailHorizonForTests(null);
   if (edrStore) {
     await chQuery(`ALTER TABLE edr DELETE WHERE c_enterprise_id = ${ent} SETTINGS mutations_sync = 1`);
     await chQuery(`ALTER TABLE edr_receipt DELETE WHERE c_enterprise_id = ${ent} SETTINGS mutations_sync = 1`);
@@ -120,46 +122,75 @@ describe("switch-shaped EDRs: attempt rows plus outcome rows (backend step 11b)"
           cost_sys: 0.01,
         }),
         outcome(b, "10:00:05", { msg_status: "UNDELIV", c_msg_status: "UNDELIV", delivery_error: "001", delivery_delay_ms: 5000, msg_count: 1 }),
+        // The receipts themselves (003): per part from the vendor, and the one sent to the customer. They carry the
+        // same report columns and statuses but are not outcome rows; edr_all must leave them out (ClickHouse 009).
+        outcome(a, "10:00:02", { kind: "vendor", part_no: 1, msg_status: "DELIVRD", delivery_delay_ms: 2000, msg_count: 2 }),
+        outcome(a, "10:00:03", { kind: "vendor", part_no: 2, msg_status: "DELIVRD", delivery_delay_ms: 3000, msg_count: 2 }),
+        outcome(a, "10:00:03", { kind: "customer", c_msg_status: "DELIVRD", delivery_delay_ms: 3000, msg_count: 2 }),
+        outcome(b, "10:00:05", { kind: "vendor", msg_status: "UNDELIV", delivery_delay_ms: 5000, revenue_sys: 0.01 }),
+        outcome(b, "10:00:05", { kind: "customer", c_msg_status: "UNDELIV", delivery_delay_ms: 5000 }),
     ]);
   });
 
-  test("Master Report counts attempts once and deliveries, delay and money from the outcome rows", async () => {
-    const q = {
-      groupBy: ["customer"],
-      metrics: ["attempts", "successful", "submitted", "delivered", "reportedVendor", "billableCustomer", "revenueBase", "deliveryDelayS", "dlrCustomer"],
-      timezone: "UTC",
-      period: "custom",
-      from: `${day}T00:00:00Z`,
-      to: "2025-01-16T00:00:00Z",
-    } as unknown as MasterReportQuery;
-    const r = await runMasterReport(db(), q, { from: new Date(`${day}T00:00:00Z`), to: new Date("2025-01-16T00:00:00Z") });
-    const row = r.rows.find((x) => String(x.dims.customer?.id) === String(ent));
-    assert.ok(row, JSON.stringify(r.rows));
+  test("edr_all holds one row per attempt and per outcome; vendor and customer receipts are not outcomes", async () => {
+    const rows = await chQuery<{ kind: string; n: string }>(
+      `SELECT kind, count() AS n FROM edr_all WHERE c_enterprise_id = ${ent} GROUP BY kind ORDER BY kind`,
+    );
     assert.deepEqual(
-      { ...row.metrics },
-      {
-        ...row.metrics,
-        attempts: 3,
-        successful: 2,
-        submitted: 3,
-        delivered: 1,
-        reportedVendor: 2,
-        billableCustomer: 2,
-        revenueBase: 0.03,
-        deliveryDelayS: 3,
-        dlrCustomer: 50,
-      },
+      rows.map((r) => [r.kind, Number(r.n)]),
+      [
+        ["attempt", 3],
+        ["outcome", 2],
+      ],
     );
   });
 
-  test("invoice usage lines bill the messages and money of both rows", async () => {
-    const lines = await usageLines(db(), "customer", ent, day, day, "UTC", "EUR", false);
-    assert.ok(lines);
-    const msgs = lines.reduce((s, l) => s + Number(l.messages), 0);
-    const amount = lines.reduce((s, l) => s + Number(l.amount), 0);
-    assert.equal(msgs, 3); // A's 2 parts on delivery + B's 1 at submit
-    assert.equal(Math.round(amount * 1e6) / 1e6, 0.03);
-  });
+  // The day is older than the detailed months, so by default these read the long-term totals (ClickHouse 008); with
+  // the horizon moved before it they read edr_all, where the receipts must not count as outcome rows (009).
+  for (const [source, horizon] of [
+    ["edr_all", new Date("2025-01-01T00:00:00Z")],
+    ["long-term totals", null],
+  ] as const) {
+    test(`Master Report counts attempts once and deliveries, delay and money from the outcome rows (${source})`, async () => {
+      setDetailHorizonForTests(horizon);
+      const q = {
+        groupBy: ["customer"],
+        metrics: ["attempts", "successful", "submitted", "delivered", "reportedVendor", "billableCustomer", "revenueBase", "deliveryDelayS", "dlrCustomer"],
+        timezone: "UTC",
+        period: "custom",
+        from: `${day}T00:00:00Z`,
+        to: "2025-01-16T00:00:00Z",
+      } as unknown as MasterReportQuery;
+      const r = await runMasterReport(db(), q, { from: new Date(`${day}T00:00:00Z`), to: new Date("2025-01-16T00:00:00Z") });
+      const row = r.rows.find((x) => String(x.dims.customer?.id) === String(ent));
+      assert.ok(row, JSON.stringify(r.rows));
+      assert.deepEqual(
+        { ...row.metrics },
+        {
+          ...row.metrics,
+          attempts: 3,
+          successful: 2,
+          submitted: 3,
+          delivered: 1,
+          reportedVendor: 2,
+          billableCustomer: 2,
+          revenueBase: 0.03,
+          deliveryDelayS: 3,
+          dlrCustomer: 50,
+        },
+      );
+    });
+
+    test(`invoice usage lines bill the messages and money of both rows (${source})`, async () => {
+      setDetailHorizonForTests(horizon);
+      const lines = await usageLines(db(), "customer", ent, day, day, "UTC", "EUR", false);
+      assert.ok(lines);
+      const msgs = lines.reduce((s, l) => s + Number(l.messages), 0);
+      const amount = lines.reduce((s, l) => s + Number(l.amount), 0);
+      assert.equal(msgs, 3); // A's 2 parts on delivery + B's 1 at submit
+      assert.equal(Math.round(amount * 1e6) / 1e6, 0.03);
+    });
+  }
 
   const mine = (more: FilterCondition[] = []): ListQuery => ({
     filter: { logic: "and", conditions: [{ field: "customerEnterpriseId", op: "eq", value: ent }, ...more] },
