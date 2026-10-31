@@ -113,6 +113,8 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     tps: t.tps ?? "",
     category: name(categories, t.product_category_id),
     billingType: t.billing_type ?? "",
+    // S-4.7 (migration 101); a package from before it has none: as_sent on create.
+    tonNpiMode: t.ton_npi_mode ?? "",
   });
   out.push({
     entity: "customer_trunks",
@@ -121,7 +123,12 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   // Customer trunks carry no port (it follows the SSL type, migration 070); vendor trunks keep theirs.
   out.push({
     entity: "vendor_trunks",
-    rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "", port: t.port ?? "" })),
+    rows: vendorTrunks.map((t) => ({
+      ...trunk(t),
+      host: t.host ?? "",
+      port: t.port ?? "",
+      refuseInvalidSenders: t.refuse_invalid_senders === "f" ? "no" : t.refuse_invalid_senders === "t" ? "yes" : "",
+    })),
   });
   const sellers = new Map<string, string[]>();
   for (const l of ctrt) sellers.set(l.rate_table_id!, [...(sellers.get(l.rate_table_id!) ?? []), l.customer_trunk_id!]);

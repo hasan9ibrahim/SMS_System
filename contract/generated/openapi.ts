@@ -11389,7 +11389,14 @@ export type components = {
       revenueLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
       /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
       billingTimezone?: string | null;
+      tonNpiMode?: components["schemas"]["TonNpiMode"];
     };
+    /**
+     * @description TON / NPI (docs/SMPP_SCENARIOS.md S-4.7). `as_sent` (the default) keeps the source and destination TON / NPI as the message has them; an address unfit to send after translation is refused with 0x0A (a customer trunk) or passes the vendor over (a vendor trunk). `auto` sets them from the address after translation: on a customer trunk after its ingress translation, on a vendor trunk after its egress translation (what that vendor receives). Source: alphanumeric (anything but digits with an optional leading +) TON 5 / NPI 0, still at most 11 printable ASCII characters; + then digits TON 1 / NPI 1 without the +; 9 or more digits TON 1 / NPI 1; 3-8 digits (a short code) TON 3 / NPI 0. Destination: a full international number (8-15 digits, an optional leading + taken off) TON 1 / NPI 1, anything else as it is. A translation rule that sets Sender or Destination TON / NPI wins over auto for that field. The capability filter (allowed TON / NPI), the sender check and the PDU sent all use the values auto sets.
+     * @default as_sent
+     * @enum {string}
+     */
+    TonNpiMode: "as_sent" | "auto";
     /** @description Customer trunk form (§5.4) with session affinity (§13.1) and revenue limit (§13.26). No port: it follows sslType (v0.93.0). */
     CustomerTrunkInput: WithRequired<
       components["schemas"]["CustomerTrunkFields"],
@@ -11504,14 +11511,19 @@ export type components = {
       /** @description Data codings the vendor accepts. null = Any (no restriction, the default for a new trunk). */
       allowedDataCodings?: (0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 13 | 14)[] | null;
       rerouteOn?: ("EXPIRED" | "DELETED" | "UNDELIV" | "UNKNOWN" | "REJECTD")[];
-      /** @description Source TON values the vendor accepts. null = Any (no restriction; the default for a new trunk). */
+      /** @description Source TON values the vendor accepts. null = Any (no restriction; the default for a new trunk). When the message's TON / NPI is not in the lists, the vendor gets the single equivalent the lists take instead of being passed over (S-4.7): an alphanumeric sender 5 / 0, an international number (a sender of 9 or more digits or + then digits, a destination of 8-15 digits) 1 / 1. */
       allowedSrcTon?: number[] | null;
-      /** @description Destination TON values the vendor accepts. null = Any (no restriction; default [1]). */
+      /** @description Destination TON values the vendor accepts. null = Any (no restriction; the default for a new trunk since migration 081). When the message's TON / NPI is not in the lists, the vendor gets the single equivalent the lists take instead of being passed over (S-4.7): an alphanumeric sender 5 / 0, an international number (a sender of 9 or more digits or + then digits, a destination of 8-15 digits) 1 / 1. */
       allowedDstTon?: number[] | null;
-      /** @description Source NPI values the vendor accepts. null = Any (no restriction; the default for a new trunk). */
+      /** @description Source NPI values the vendor accepts. null = Any (no restriction; the default for a new trunk). See allowedSrcTon for the equivalent tried before the vendor is passed over. */
       allowedSrcNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[] | null;
-      /** @description Destination NPI values the vendor accepts. null = Any (no restriction; default [1]). */
+      /** @description Destination NPI values the vendor accepts. null = Any (no restriction; the default for a new trunk since migration 081). See allowedDstTon for the equivalent tried before the vendor is passed over. */
       allowedDstNpi?: (0 | 1 | 3 | 4 | 6 | 8 | 9 | 10 | 14 | 18)[] | null;
+      /**
+       * @description Refuse invalid senders (docs/SMPP_SCENARIOS.md S-2.10, S-4.7). On (the default): a sender a handset cannot show (alphanumeric over 11 characters or not printable ASCII, a number over 20 digits), as it would reach this vendor, is not sent to it and the next vendor is tried. Off: this vendor takes such a sender as it is (up to the 20 characters a submit_sm source_addr holds). A message is refused with 0x0A only when every vendor it could go to refuses it for its sender; a TON / NPI outside SMPP or no sender is refused at intake whatever this says.
+       * @default true
+       */
+      refuseInvalidSenders: boolean;
       /** @description The longest message the vendor takes. null = Any length (the default for a new trunk). */
       maxMsgLen?: number | null;
       /** @description The vendor accepts long messages in several parts. Default true. */
@@ -11533,6 +11545,7 @@ export type components = {
       costLimitPeriod?: components["schemas"]["LimitPeriod"] | null;
       /** @description Billing time zone of the trunk (§13.31); null = the enterprise's. */
       billingTimezone?: string | null;
+      tonNpiMode?: components["schemas"]["TonNpiMode"];
     };
     /** @description Vendor trunk form (§5.5) with cost limit (§13.26). */
     VendorTrunkInput: WithRequired<

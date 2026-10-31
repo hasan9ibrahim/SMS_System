@@ -51,7 +51,9 @@ import { customerPrice, priced } from "./linePrice.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { csvText } from "../csvSafe.js";
-import { runTrunkRules } from "./translationRules.js";
+import { runTrunkTranslation } from "./translationRules.js";
+import { withTonNpiMode, type TonNpiMode } from "../routing/tonNpi.js";
+import type { CapabilityInput } from "./egress.js";
 import { compilePattern } from "../routing/pattern.js";
 import { natural, textCoding, type MessageForm } from "../routing/coding.js";
 
@@ -1135,22 +1137,45 @@ async function checkTestInput(db: Db, input: RouteTestRequest): Promise<FieldErr
 /**
  * The customer trunk's ingress translation, run first as the switch does (intake: translation, HLR, rate, route): the
  * route rules see the translated sender, receiver and content (team trial round 12: a content change by an ingress
- * rule did not show in the simulator).
+ * rule did not show in the simulator). A trunk set to auto TON / NPI then fixes them (S-4.7): the Test form has none,
+ * so with auto the vendors' capability filter checks the values auto sets (`tonNpi`).
  */
 async function ingressOf(
   pool: pg.Pool,
   input: RouteTestRequest,
-): Promise<{ input: RouteTestRequest; ingress: TranslationTestResult | null }> {
-  if (!input.customerTrunkId) return { input, ingress: null };
-  const r = await runTrunkRules(pool, "customer", input.customerTrunkId, {
-    sender: input.sender ?? "",
-    receiver: input.receiver,
-    text: input.content ?? "",
-  });
-  if (!r || !r.steps.length) return { input, ingress: null };
-  const ingress: TranslationTestResult = { before: r.before, after: r.after, blocked: r.blocked, steps: r.steps };
-  const receiver = /^[0-9]{5,15}$/.test(r.after.receiver) ? r.after.receiver : input.receiver;
-  return { input: { ...input, sender: r.after.sender, receiver, content: r.after.text }, ingress };
+): Promise<{
+  input: RouteTestRequest;
+  ingress: TranslationTestResult | null;
+  tonNpi: Omit<CapabilityInput, "form">;
+}> {
+  if (!input.customerTrunkId) return { input, ingress: null, tonNpi: {} };
+  const [t, { rows }] = await Promise.all([
+    runTrunkTranslation(pool, "customer", input.customerTrunkId, {
+      sender: input.sender ?? "",
+      receiver: input.receiver,
+      text: input.content ?? "",
+    }),
+    pool.query("SELECT ton_npi_mode FROM customer_trunks WHERE id = $1", [input.customerTrunkId]),
+  ]);
+  const mode = (rows[0]?.ton_npi_mode ?? "as_sent") as TonNpiMode;
+  if (!t || (!t.result.steps.length && mode !== "auto")) return { input, ingress: null, tonNpi: {} };
+  const r = t.result;
+  const ingress: TranslationTestResult | null = r.steps.length
+    ? { before: r.before, after: r.after, blocked: r.blocked, steps: r.steps }
+    : null;
+  const sent = withTonNpiMode(mode, r.after, t.pinned);
+  const receiver = /^[0-9]{5,15}$/.test(sent.receiver) ? sent.receiver : input.receiver;
+  return {
+    input: { ...input, sender: sent.sender, receiver, content: r.after.text },
+    ingress,
+    tonNpi: {
+      senderTon: sent.senderTon,
+      senderNpi: sent.senderNpi,
+      destTon: sent.destTon,
+      destNpi: sent.destNpi,
+      pinned: t.pinned,
+    },
+  };
 }
 
 export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
@@ -1161,7 +1186,7 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     if (!rule) return notFound(reply, id);
     const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
-    const { input, ingress } = await ingressOf(pool, raw);
+    const { input, ingress, tonNpi } = await ingressOf(pool, raw);
     const m = await messageContext(pool, input, listIdsOf([rule]));
     const dynamic = rule.routeType === "dynamic" || (rule.routeType === "qbr" && rule.vendors.length === 0);
     const ids = dynamic
@@ -1177,10 +1202,10 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
-      testMessage(input),
+      testMessage(input, tonNpi),
       (mm) => decide(withProfile, mm, options),
       (d) => d.vendor,
-      { form },
+      { form, ...tonNpi },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
@@ -1267,7 +1292,7 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
-    const { input, ingress } = await ingressOf(pool, raw);
+    const { input, ingress, tonNpi } = await ingressOf(pool, raw);
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(pool, input, listIdsOf(rules));
     const options = await vendorOptions(pool, m.mccmnc, null);
@@ -1276,10 +1301,10 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
-      testMessage(input),
+      testMessage(input, tonNpi),
       (mm) => routeThrough(rules, mm, options),
       (r) => r.decision?.vendor,
-      { form },
+      { form, ...tonNpi },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
@@ -1287,19 +1312,21 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
 
 /**
  * The message as the customer sent it, for Deny Multipart and the vendors' capability filter (§6.3, §5.5): the Test
- * form has no coding or TON / NPI, so the text goes in the coding it needs (GSM, else UCS-2) and TON / NPI are not
- * checked.
+ * form has no coding or TON / NPI, so the text goes in the coding it needs (GSM, else UCS-2) and TON / NPI are checked
+ * only as a translation rule or auto TON / NPI sets them (S-4.7).
  */
 const testForm = (raw: RouteTestRequest): MessageForm => ({
   text: raw.content ?? "",
   dataCoding: textCoding(raw.content ?? ""),
 });
 
-/** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form). */
-const testMessage = (input: RouteTestRequest) => ({
+/** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form, unless auto set them). */
+const testMessage = (input: RouteTestRequest, tonNpi: Omit<CapabilityInput, "form"> = {}) => ({
   sender: input.sender ?? "",
   receiver: input.receiver ?? "",
   text: input.content ?? "",
+  senderTon: tonNpi.senderTon ?? null,
+  senderNpi: tonNpi.senderNpi ?? null,
 });
 
 /**

@@ -42,11 +42,28 @@ export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | nu
  * Like chRows, but throws (with ClickHouse's message) instead of answering null; for screens that list EDRs. `read`:
  * a screen's read, stopped by ClickHouse at the timeout too (readSettings); a timeout either way is a ChTimeout.
  */
+/**
+ * Every statement sends this (ClickHouse 010, S-7.3): an EDR insert ClickHouse drops as an identical block is dropped
+ * by the views too, so the hourly figures and long-term totals never count a row the EDR tables do not hold.
+ */
+const WRITE_SETTINGS = "&deduplicate_blocks_in_dependent_materialized_views=1";
+
+/**
+ * One row per bus key (ClickHouse 010, S-7.3), for reads that list single EDR rows: a row the switch wrote twice shows
+ * once until the nightly repair (jobs/edrRepair.ts) removes the copy. Rows without a key (written before 010, and the
+ * fake data's) are all kept. `t`: the table's alias in the query, if it needs one.
+ */
+export function onePerRowKey(t = ""): string {
+  const c = (col: string) => (t ? `${t}.${col}` : col);
+  return `LIMIT 1 BY ${c("row_key")}, if(${c("row_key")} = '', ${c("_part")}, ''), if(${c("row_key")} = '', ${c("_part_offset")}, 0)`;
+}
+
 export async function chQuery<T>(sql: string, timeoutMs = 30_000, opts: { read?: boolean } = {}): Promise<T[]> {
   let res: Response;
   let text: string;
   try {
-    res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON${opts.read ? readSettings(timeoutMs) : ""}`, {
+    const url = `${CH_URL}/?database=${CH_DB}&default_format=JSON${opts.read ? readSettings(timeoutMs) : WRITE_SETTINGS}`;
+    res = await fetch(url, {
       method: "POST",
       headers: { authorization: AUTH },
       body: sql,
@@ -72,6 +89,27 @@ export async function chQuery<T>(sql: string, timeoutMs = 30_000, opts: { read?:
   }
   // INSERT and ALTER answer with an empty body.
   return text ? (JSON.parse(text) as { data: T[] }).data : [];
+}
+
+/** Runs a statement (an INSERT … SELECT) to its end and answers how many rows it wrote (ClickHouse's summary). */
+export async function chWrite(sql: string, timeoutMs = 120_000): Promise<number> {
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${CH_URL}/?database=${CH_DB}&wait_end_of_query=1${WRITE_SETTINGS}`, {
+      method: "POST",
+      headers: { authorization: AUTH },
+      body: sql,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    text = await res.text();
+  } catch (err) {
+    if ((err as Error).name === "TimeoutError") throw new ChTimeout(`no answer within ${timeoutMs / 1000} s`);
+    throw new ChUnavailable(String((err as Error).message ?? err));
+  }
+  if (!res.ok) throw new ChError(text.trim());
+  const summary = JSON.parse(res.headers.get("x-clickhouse-summary") ?? "{}") as { written_rows?: string };
+  return Number(summary.written_rows ?? 0);
 }
 
 /** Streams a query's output (e.g. FORMAT CSVWithNames) for exports. */

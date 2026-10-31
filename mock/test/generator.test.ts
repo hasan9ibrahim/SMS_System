@@ -182,6 +182,27 @@ describe("rate history (spec §6.2, §13.32)", () => {
   test("every vendor trunk has exactly one vendor table", () => {
     for (const v of world.vendorTrunks) assert.equal(world.rateTableById.get(v.rateTableId)?.vendorTrunkId, v.id);
   });
+
+  test("most vendors take any destination TON / NPI; some trunks fix TON / NPI automatically (§5.5, S-4.7)", () => {
+    const vendors = readCsv(dirA, "vendor_trunks");
+    const anyDst = vendors.filter((v) => v.allowed_dst_ton === "" && v.allowed_dst_npi === "").length;
+    const onlyIntl = vendors.filter((v) => v.allowed_dst_ton === "{1}" && v.allowed_dst_npi === "{1}").length;
+    assert.equal(anyDst + onlyIntl, vendors.length);
+    assert.ok(anyDst > vendors.length * 0.8, `${anyDst} of ${vendors.length} take any destination TON / NPI`);
+    assert.ok(onlyIntl > 0, "a few still take international numbers only");
+    for (const table of ["vendor_trunks", "customer_trunks"]) {
+      const modes = readCsv(dirA, table).map((t) => t.ton_npi_mode);
+      assert.ok(
+        modes.every((m) => m === "as_sent" || m === "auto"),
+        table,
+      );
+      const auto = modes.filter((m) => m === "auto").length;
+      assert.ok(auto > 0 && auto < modes.length / 2, `${table}: ${auto} of ${modes.length} on auto`);
+    }
+    // Most refuse senders a handset cannot show (the default); a few take them.
+    const takeAll = vendors.filter((v) => v.refuse_invalid_senders === "f").length;
+    assert.ok(takeAll > 0 && takeAll < vendors.length / 10, `${takeAll} of ${vendors.length} take any sender`);
+  });
 });
 
 describe("fake data only (CLAUDE.md rule 1)", () => {

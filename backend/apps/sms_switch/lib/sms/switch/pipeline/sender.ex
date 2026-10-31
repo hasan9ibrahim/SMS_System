@@ -729,6 +729,9 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
+  # The addresses and TON / NPI as the vendor's egress translation left them, fixed when the vendor trunk is set to auto
+  # TON / NPI (`Router.egress/2`), else as ingress left them (fixed when the customer trunk is on auto), else as sent
+  # (S-4.7).
   defp fields(msg, route, coding) do
     f = msg.fields
     i = msg.ingress

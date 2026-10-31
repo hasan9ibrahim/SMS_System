@@ -515,6 +515,15 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(tls.record.port, 2776, "a TLS trunk binds on 2776");
     await ok("undoChange", call("POST", `/changes/${tls.change.id}/undo`, {}));
     assert.equal((await ok("getCustomerTrunk", call("GET", `/customer-trunks/${id}`))).port, 2775);
+
+    // TON / NPI as sent unless set to auto (S-4.7, migration 101).
+    assert.equal(back.tonNpiMode, "as_sent");
+    const auto = await ok(
+      "updateCustomerTrunk",
+      call("PUT", `/customer-trunks/${id}`, { ...input, tonNpiMode: "auto" }),
+    );
+    assert.equal(auto.record.tonNpiMode, "auto");
+    assert.ok(auto.change.diff.some((d: { field: string }) => d.field === "tonNpiMode"));
   });
 
   test("vendor trunk owns a buy rate table; HTTP needs a URL", async () => {
@@ -557,6 +566,36 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
       }),
     );
     assert.deepEqual(restricted.record.allowedDataCodings, [0, 8]);
+    // TON / NPI: as sent unless the trunk is set to auto (S-4.7); one change, undone like any other (§13.10).
+    assert.equal(saved.record.tonNpiMode, "as_sent");
+    const auto = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, tonNpiMode: "auto" }),
+    );
+    assert.equal(auto.record.tonNpiMode, "auto");
+    assert.deepEqual(
+      auto.change.diff.map((d: { field: string }) => d.field),
+      ["tonNpiMode"],
+    );
+    await ok("undoChange", call("POST", `/changes/${auto.change.id}/undo`, {}));
+    assert.equal((await ok("getVendorTrunk", call("GET", `/vendor-trunks/${saved.record.id}`))).tonNpiMode, "as_sent");
+    const unknownMode = await call("PUT", `/vendor-trunks/${saved.record.id}`, {
+      ...base,
+      password: undefined,
+      tonNpiMode: "fix",
+    });
+    assert.equal(unknownMode.statusCode, 400, "only as_sent or auto");
+    // Refuse invalid senders: on unless switched off (S-2.10, S-4.7).
+    assert.equal(saved.record.refuseInvalidSenders, true);
+    const takesAll = await ok(
+      "updateVendorTrunk",
+      call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, refuseInvalidSenders: false }),
+    );
+    assert.equal(takesAll.record.refuseInvalidSenders, false);
+    assert.deepEqual(
+      takesAll.change.diff.map((d: { field: string }) => d.field),
+      ["refuseInvalidSenders"],
+    );
     const anyAgain = await ok(
       "updateVendorTrunk",
       call("PUT", `/vendor-trunks/${saved.record.id}`, { ...base, password: undefined, allowedDataCodings: null }),

@@ -367,11 +367,32 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   },
   customer_trunks: {
     table: "customer_trunks",
-    columns: ["host_ips", "ssl_type", "protocol", "tps", "product_category_id", "billing_type", "username", "password"],
+    columns: [
+      "host_ips",
+      "ssl_type",
+      "protocol",
+      "tps",
+      "product_category_id",
+      "billing_type",
+      "username",
+      "password",
+      "ton_npi_mode",
+    ],
   },
   vendor_trunks: {
     table: "vendor_trunks",
-    columns: ["host", "port", "username", "password", "protocol", "tps", "product_category_id", "billing_type"],
+    columns: [
+      "host",
+      "port",
+      "username",
+      "password",
+      "protocol",
+      "tps",
+      "product_category_id",
+      "billing_type",
+      "ton_npi_mode",
+      "refuse_invalid_senders",
+    ],
   },
   rate_tables: { table: "rate_tables", columns: ["product_category_id"] },
   route_rules: {
@@ -613,6 +634,8 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       tps,
       bind_type: "TR",
       max_connections: 2,
+      // TON / NPI as sent or auto (S-4.7); left out on an update keeps the trunk's.
+      ton_npi_mode: r.tonNpiMode?.trim().toLowerCase() || (m.action === "create" ? "as_sent" : undefined),
     };
     if (kind === "customer") {
       let username = r.username?.trim();
@@ -658,6 +681,12 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
         p.issue(entity, line, "host", "No host in the file: the trunk cannot bind until one is set", "warning");
       v.username = r.username?.trim() || (m.action === "create" ? "not-set" : undefined);
       v.password = r.password?.trim() || (m.action === "create" ? "not-set" : undefined);
+      // On unless the file says no (S-2.10, S-4.7); left out on an update keeps the trunk's.
+      v.refuse_invalid_senders = r.refuseInvalidSenders?.trim()
+        ? r.refuseInvalidSenders.trim().toLowerCase() !== "no"
+        : m.action === "create"
+          ? true
+          : undefined;
     }
     if (m.action !== "create") {
       if (!r.port?.trim()) delete v.port;

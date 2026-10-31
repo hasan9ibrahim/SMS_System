@@ -15,6 +15,9 @@ const f = (
   allowed: opts.allowed ?? [],
   credential: !!opts.credential,
 });
+// S-4.7: a trunk's TON / NPI as sent, or set from the address after its translation.
+const TON_NPI_HELP =
+  "as_sent (default) keeps them as the message has them; auto sets them from the address after translation.";
 const EXT = f(
   "externalId",
   "External ID",
@@ -118,6 +121,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("tps", "TPS", "Messages per second.", { required: true }),
       f("category", "Product category", "Name of an existing category."),
       f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
+      f("tonNpiMode", "TON / NPI", TON_NPI_HELP, { allowed: ["as_sent", "auto"] }),
     ],
   },
   {
@@ -140,6 +144,13 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("tps", "TPS", "", { required: true }),
       f("category", "Product category", "Name of an existing category.", { required: true }),
       f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
+      f("tonNpiMode", "TON / NPI", TON_NPI_HELP, { allowed: ["as_sent", "auto"] }),
+      f(
+        "refuseInvalidSenders",
+        "Refuse invalid senders",
+        "yes (default): a sender a handset cannot show is not sent to this vendor; no: it takes such senders.",
+        { allowed: ["yes", "no"] },
+      ),
     ],
   },
   {
@@ -555,6 +566,7 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     tps: ["Throughput", "Max TPS"],
     category: ["Product", "Category"],
     billingType: ["Billed on", "Charge on"],
+    tonNpiMode: ["TON/NPI", "TON NPI mode", "TON/NPI mode", "Auto TON/NPI"],
   },
   vendor_trunks: {
     externalId: ["ID", "Trunk ID", "Vendor trunk ID"],
@@ -568,6 +580,7 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     tps: ["Throughput", "Max TPS"],
     category: ["Product", "Category"],
     billingType: ["Billed on", "Charge on"],
+    tonNpiMode: ["TON/NPI", "TON NPI mode", "TON/NPI mode", "Auto TON/NPI"],
   },
   rate_tables: {
     externalId: ["ID", "Table ID", "Rate table ID"],
@@ -624,6 +637,9 @@ export const CHOICE_SYNONYMS: Record<string, string[]> = {
   submit: ["Submitted", "Submit SM"],
   reported: ["Report", "Reports"],
   delivery: ["Delivered", "DLR"],
+  // Trunk TON / NPI (S-4.7).
+  as_sent: ["As sent", "Keep"],
+  auto: ["Automatic", "Auto fix", "Auto (fix after translation)"],
   // Translation rules and number lists (team trial round 12).
   ingress: ["In", "Incoming", "Customer side", "Customer"],
   egress: ["Out", "Outgoing", "Vendor side", "Vendor"],

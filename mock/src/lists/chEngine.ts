@@ -12,7 +12,7 @@ import type {
   ListQuery,
 } from "@sms/contract";
 import type pg from "pg";
-import { chQuery } from "../edr.js";
+import { chQuery, onePerRowKey } from "../edr.js";
 import type { VisItem } from "../visibility/policy.js";
 import { viewChDef } from "../visibility/edr.js";
 import { encodeCursor, readCursor, runList, searchPattern, type ListDef, type ListPage } from "./engine.js";
@@ -73,6 +73,11 @@ export interface ChListDef<Row> {
   mapRow: (row: Record<string, unknown>, names: NameMaps) => Row;
   /** The enterprise of each side, as SQL and as the row's field, for visibility (§13.17). */
   owners?: { customer: { sql: string; key: string }; vendor?: { sql: string; key: string } };
+  /**
+   * The table's rows carry the switch's bus key (`row_key`, ClickHouse 010): a row written twice (S-7.3) is listed
+   * once until the nightly repair removes the copy. The total still counts the copy.
+   */
+  rowKey?: boolean;
 }
 
 export type NameMaps = Map<string, Map<number, string>>;
@@ -423,8 +428,10 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
         }),
   ]);
   const more = ids.length > limit;
-  const pageIds = ids.slice(0, limit);
-  const last = pageIds[pageIds.length - 1];
+  const last = ids[Math.min(ids.length, limit) - 1];
+  // A row written twice (S-7.3) comes twice with the same sort values and ID, side by side: listed once (the page is
+  // one row short; the next page starts after the copies).
+  const pageIds = ids.slice(0, limit).filter((r, i, all) => i === 0 || r.id !== all[i - 1]!.id);
   let rows: Record<string, unknown>[] = [];
   if (pageIds.length) {
     const times = pageIds.map((r) => r.t).sort();
@@ -434,7 +441,7 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
       // column of every row (7 s at 5 M EDRs instead of 0.4 s).
       `SELECT ${chSelect(d)}, toString(${def.idSql}) AS _id FROM ${def.table}
         PREWHERE ${def.idSql} IN (${pageIds.map((r) => lit(r.id)).join(",")})
-        WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}`,
+        WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}${def.rowKey ? ` ${onePerRowKey()}` : ""}`,
       LIST_TIMEOUT_MS,
       { read: true },
     );
@@ -471,11 +478,12 @@ export async function withOutcomes(
     if (o.merge === "or") return `max(${o.sql}) AS ${f}`;
     return `argMaxIf(${o.sql}, receipt_time, ${when}) AS ${f}, countIf(${when}) AS _has_${f}`;
   });
+  // An outcome row written twice (S-7.3) is counted once: its money is added, not doubled (ClickHouse 010).
   const out = await chQuery<Record<string, unknown>>(
     `SELECT toString(edr_id) AS _id, ${agg.join(", ")}
-       FROM edr_receipt
-      PREWHERE edr_id IN (${rows.map((r) => lit(String(r._id ?? r.id))).join(",")})
-      WHERE kind = 'outcome' AND start_time BETWEEN ${lit(from)} AND ${lit(to)}
+       FROM (SELECT * FROM edr_receipt
+              PREWHERE edr_id IN (${rows.map((r) => lit(String(r._id ?? r.id))).join(",")})
+              WHERE kind = 'outcome' AND start_time BETWEEN ${lit(from)} AND ${lit(to)} ${onePerRowKey()})
       GROUP BY edr_id`,
     LIST_TIMEOUT_MS,
     { read: true },
@@ -508,8 +516,10 @@ export function outcomeJoin(def: ChListDef<unknown>, columns: string[], where: s
     return `argMaxIf(${o.sql}, receipt_time, ${when}) AS o_${f}, countIf(${when}) AS o_has_${f}`;
   });
   return {
-    from: `${def.table} LEFT JOIN (SELECT edr_id, ${agg.join(", ")} FROM edr_receipt
-      WHERE kind = 'outcome' AND edr_id IN (SELECT edr_id FROM ${def.table} WHERE ${where}) GROUP BY edr_id) AS o USING edr_id`,
+    // Outcome rows written twice (S-7.3) once.
+    from: `${def.table} LEFT JOIN (SELECT edr_id, ${agg.join(", ")} FROM (SELECT * FROM edr_receipt
+      WHERE kind = 'outcome' AND edr_id IN (SELECT edr_id FROM ${def.table} WHERE ${where}) ${onePerRowKey()})
+      GROUP BY edr_id) AS o USING edr_id`,
     expr: (f: string) => {
       const c = def.columns[f]!;
       if (!c.outcome) return c.sql;

@@ -308,8 +308,17 @@ describe("migration center", { skip }, () => {
           fileName: "vt.csv",
           mappingId: ref("vendor_trunks"),
           content: csv([
-            ["Vendor Trunk ID", "Enterprise Name", "Vendor Trunk Name", "Host", "TPS", "Product Category"],
-            ["V1", ent, `LEG_V_${run}`, "smsc.example.net", "50", "DIRECT"],
+            [
+              "Vendor Trunk ID",
+              "Enterprise Name",
+              "Vendor Trunk Name",
+              "Host",
+              "TPS",
+              "Product Category",
+              "TON/NPI",
+              "Refuse invalid senders",
+            ],
+            ["V1", ent, `LEG_V_${run}`, "smsc.example.net", "50", "DIRECT", "Automatic", "no"],
           ]),
         },
         {
@@ -452,6 +461,14 @@ describe("migration center", { skip }, () => {
       `LEG_C_${run}`,
     ]);
     assert.deepEqual(ips[0].ips, ["192.0.2.10/31", "192.0.2.12/31", "198.51.100.0/24"]);
+    // TON / NPI (S-4.7): "Automatic" in the file is auto; a file without the column leaves a new trunk as sent.
+    const { rows: modes } = await db().query(
+      `SELECT (SELECT ton_npi_mode FROM customer_trunks WHERE name = $1) AS c,
+              (SELECT ton_npi_mode FROM vendor_trunks WHERE name = $2) AS v,
+              (SELECT refuse_invalid_senders FROM vendor_trunks WHERE name = $2) AS refuse`,
+      [`LEG_C_${run}`, `LEG_V_${run}`],
+    );
+    assert.deepEqual([modes[0].c, modes[0].v, modes[0].refuse], ["as_sent", "auto", false]);
     assert.equal(new Date(lines[0].valid_to).toISOString(), "2026-06-01T00:00:00.000Z");
     const { rows: refs } = await db().query("SELECT entity, external_id FROM migration_refs WHERE import_id = $1", [
       dry.id,
@@ -825,18 +842,39 @@ describe("migration center", { skip }, () => {
   });
 
   test("a package from this system dry-runs to skips: nothing is duplicated", async () => {
-    const x = await ok(
-      "createMigrationExport",
-      call("POST", "/migration/exports", {
-        includeCredentials: false,
-        withPasswords: false,
-        rateLines: "none",
-        password: "long-enough-password",
-      }),
-      201,
-    );
-    madeExports.push(x.id);
-    await runningExports.get(x.id);
+    const exportPackage = async () => {
+      const x = await ok(
+        "createMigrationExport",
+        call("POST", "/migration/exports", {
+          includeCredentials: false,
+          withPasswords: false,
+          rateLines: "none",
+          password: "long-enough-password",
+        }),
+        201,
+      );
+      madeExports.push(x.id);
+      await runningExports.get(x.id);
+      return x;
+    };
+    const dryRun = async (exportId: number) => {
+      const dry = await ok(
+        "createMigrationImport",
+        call("POST", "/migration/imports", {
+          sourceSystem: `Twin ${run}`,
+          files: [],
+          packageExportId: exportId,
+          packagePassword: "long-enough-password",
+          trunksInactive: true,
+        }),
+        201,
+      );
+      madeImports.push(dry.id);
+      return dry;
+    };
+    const changed = (dry: { report: { entities: { create: number; update: number }[] } }) =>
+      dry.report.entities.some((e) => e.create + e.update > 0);
+    const x = await exportPackage();
     const wrong = await fails(
       "createMigrationImport",
       call("POST", "/migration/imports", {
@@ -849,18 +887,11 @@ describe("migration center", { skip }, () => {
       400,
     );
     assert.equal(wrong.errors[0].path, "/packagePassword");
-    const dry = await ok(
-      "createMigrationImport",
-      call("POST", "/migration/imports", {
-        sourceSystem: `Twin ${run}`,
-        files: [],
-        packageExportId: x.id,
-        packagePassword: "long-enough-password",
-        trunksInactive: true,
-      }),
-      201,
-    );
-    madeImports.push(dry.id);
+    let dry = await dryRun(x.id);
+    // Other test files share the database and add, then remove, rows (number list entries) while they run: one that
+    // went between the export and the dry run reads as new. A second export and dry run settles it; a real
+    // duplication shows both times.
+    if (changed(dry)) dry = await dryRun((await exportPackage()).id);
     for (const e of dry.report.entities) assert.equal(e.create + e.update, 0, `${e.entity}: ${JSON.stringify(e)}`);
     assert.equal(dry.report.canApply, false);
     assert.ok(dry.report.issues.some((i: { entity: string }) => i.entity === "package"));
