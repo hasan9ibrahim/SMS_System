@@ -130,7 +130,10 @@ test(
     );
     assert.deepEqual(both.map((r) => r.statusCode).sort(), [200, 400], both.map((r) => r.body).join(" | "));
     const loser = both.find((r) => r.statusCode === 400)!.json();
-    assert.ok(loser.errors.some((e: { path: string }) => e.path === "/emailCode"), JSON.stringify(loser));
+    assert.ok(
+      loser.errors.some((e: { path: string }) => e.path === "/emailCode"),
+      JSON.stringify(loser),
+    );
 
     // With 2FA on, the e-mailed code is not offered.
     await db().query("UPDATE users SET totp_enabled = true WHERE id = $1", [USER]);
