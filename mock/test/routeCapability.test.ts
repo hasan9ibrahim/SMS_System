@@ -26,7 +26,12 @@ interface Sim {
     } | null;
   };
 }
-const simulate = async (customerTrunkId: number, mccmnc: string, text: string): Promise<Sim> => {
+const simulate = async (
+  customerTrunkId: number,
+  mccmnc: string,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<Sim> => {
   const r = await app.inject({
     method: "POST",
     url: `${API_PREFIX}/route-simulator`,
@@ -40,6 +45,7 @@ const simulate = async (customerTrunkId: number, mccmnc: string, text: string): 
       destNpi: 1,
       text,
       dataCoding: 0,
+      ...extra,
     },
   });
   assert.equal(r.statusCode, 200, r.body);
@@ -47,14 +53,14 @@ const simulate = async (customerTrunkId: number, mccmnc: string, text: string): 
 };
 const LONG = "a".repeat(400); // three GSM parts
 
-/** Customer trunks and destinations they have a rate for. */
+/** Customer trunks (TON / NPI as sent) and destinations they have a rate for. */
 async function pairs(limit: number) {
   const { rows } = await db().query(
     `SELECT DISTINCT ON (t.id) t.id, l.mccmnc FROM customer_trunks t
        JOIN customer_trunk_rate_tables x ON x.customer_trunk_id = t.id
        JOIN rate_lines l ON l.rate_table_id = x.rate_table_id AND l.sender_id IS NULL AND NOT l.is_blocked
             AND l.valid_from <= now() AND (l.valid_to IS NULL OR l.valid_to > now()) AND length(l.mccmnc) = 5
-      WHERE t.deleted_at IS NULL AND t.status = 'active'
+      WHERE t.deleted_at IS NULL AND t.status = 'active' AND t.ton_npi_mode = 'as_sent'
       ORDER BY t.id, l.mccmnc LIMIT $1`,
     [limit],
   );
@@ -125,5 +131,58 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
       return;
     }
     assert.fail("no simulated message reached a rule with Deny Multipart in the seeded data");
+  });
+
+  test("a vendor on auto TON / NPI takes an international number sent with TON 0; a long sender still not (S-4.7)", async () => {
+    const CODE = "Your code is 1234";
+    for (const p of await pairs(60)) {
+      const first = await simulate(p.trunk, p.mccmnc, CODE);
+      const v = first.route.decision?.outcome === "route" ? first.route.decision.vendor!.vendorTrunkId : null;
+      if (v === null) continue;
+      // The vendor takes international destinations only, as sent; its own values come back after.
+      const { rows } = await db().query("SELECT allowed_dst_ton, ton_npi_mode FROM vendor_trunks WHERE id = $1", [v]);
+      const before = rows[0];
+      await db().query("UPDATE vendor_trunks SET allowed_dst_ton = '{1}', ton_npi_mode = 'as_sent' WHERE id = $1", [v]);
+      try {
+        const asSent = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0 });
+        const d = asSent.route.decision;
+        if (d?.ruleId !== first.route.decision!.ruleId) continue; // another rule took over
+        assert.notEqual(d.vendor?.vendorTrunkId, v, "as sent, destination TON 0 passes the vendor over");
+        assert.match(
+          d.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "",
+          /^cannot take the message: destination TON 0 is not allowed \(it takes 1\)/,
+        );
+
+        await db().query("UPDATE vendor_trunks SET ton_npi_mode = 'auto' WHERE id = $1", [v]);
+        const auto = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0 });
+        assert.equal(auto.route.decision?.vendor?.vendorTrunkId, v, "auto sends the international number with TON 1");
+
+        // Auto cannot fix the length of an alphanumeric sender: the vendor is still passed over (unless its own egress
+        // rules give it another sender).
+        const LONG_SENDER = "ABCDEFGHIJKLMN";
+        const long = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, senderId: LONG_SENDER, sourceTon: 1 });
+        const egress = await app.inject({
+          method: "POST",
+          url: `${API_PREFIX}/vendor-trunks/${v}/rules/test`,
+          payload: { message: { sender: LONG_SENDER, receiver: "447700900123", text: CODE } },
+        });
+        const keepsSender = (egress.json() as { after: { sender: string } }).after.sender === LONG_SENDER;
+        if (keepsSender && long.route.decision?.ruleId === first.route.decision!.ruleId) {
+          assert.notEqual(long.route.decision?.vendor?.vendorTrunkId, v);
+          assert.match(
+            long.route.decision!.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "",
+            /^cannot take the message: the sender "ABCDEFGHIJKLMN" is longer than 11 characters/,
+          );
+        }
+        return;
+      } finally {
+        await db().query("UPDATE vendor_trunks SET allowed_dst_ton = $2, ton_npi_mode = $3 WHERE id = $1", [
+          v,
+          before.allowed_dst_ton,
+          before.ton_npi_mode,
+        ]);
+      }
+    }
+    assert.fail("no routed vendor found in the seeded data");
   });
 });

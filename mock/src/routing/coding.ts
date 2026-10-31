@@ -10,6 +10,8 @@
 // Lengths are in the alphabet's own units (septets for 7-bit, escapes counting, UTF-16 units for UCS-2, bytes
 // otherwise); parts are 160 / 153 septets, 70 / 67 units, 140 / 134 bytes, never cutting an escape or a surrogate pair.
 
+import { senderProblem } from "./tonNpi.js";
+
 export type Alphabet = "gsm" | "ascii" | "latin1" | "ucs2" | "binary";
 
 // GSM 03.38 default alphabet, code 0x00..0x7F (0x1B is the escape to the extension table).
@@ -182,6 +184,8 @@ export interface VendorMessage {
   form: MessageForm;
   /** The text after the vendor's egress translation. */
   text: string;
+  /** The sender after the vendor's egress translation (and its auto TON / NPI); left out = not checked (S-4.7). */
+  sender?: string;
   senderTon?: number | null;
   senderNpi?: number | null;
   destTon?: number | null;
@@ -190,11 +194,13 @@ export interface VendorMessage {
 
 /**
  * Why the vendor cannot take the message as it would get it after its egress translation, or null when it can
- * (switch router.ex capable?/3, S-3.9, S-4.4): a source or destination TON / NPI it does not allow, a data coding it
- * does not allow that the text fits no other way, a multipart message it does not support, or longer than its Max Msg
- * Len. Checked in that order, as the switch does.
+ * (switch router.ex capable?/3, S-3.9, S-4.4, S-4.7): a sender unfit to send with its TON / NPI, a source or
+ * destination TON / NPI it does not allow, a data coding it does not allow that the text fits no other way, a
+ * multipart message it does not support, or longer than its Max Msg Len. Checked in that order, as the switch does.
  */
 export function incapable(caps: VendorCapabilities, msg: VendorMessage): string | null {
+  const unfit = msg.sender === undefined ? null : senderProblem(msg.sender, msg.senderTon, msg.senderNpi);
+  if (unfit) return unfit;
   const field: [string, number[] | null, number | null | undefined][] = [
     ["source TON", caps.allowedSrcTon, msg.senderTon],
     ["source NPI", caps.allowedSrcNpi, msg.senderNpi],

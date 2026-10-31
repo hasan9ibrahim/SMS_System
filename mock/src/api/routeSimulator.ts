@@ -10,11 +10,12 @@ import { PLATFORM_CURRENCY } from "../currency.js";
 import { withDb } from "../db.js";
 import { messageEncoding } from "../smpp.js";
 import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOptions } from "./routeRules.js";
-import { skipEgressBlocked } from "./egress.js";
+import { skipEgressBlocked, vendorView } from "./egress.js";
 import { natural, type MessageForm } from "../routing/coding.js";
 import { customerPrice, priced, vendorPrice } from "./linePrice.js";
 import { badInput } from "./switchTools.js";
-import { runTrunkRules } from "./translationRules.js";
+import { runTrunkTranslation } from "./translationRules.js";
+import { withTonNpiMode } from "../routing/tonNpi.js";
 import { production } from "../mode.js";
 import { switchTestSms } from "../switch/operations.js";
 
@@ -22,7 +23,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
   const b = request.body as RouteSimulatorInput;
   return withDb(reply, async (pool): Promise<RouteSimulatorResult | FastifyReply> => {
     const { rows: tr } = await pool.query(
-      `SELECT t.id, t.name, t.default_coding, e.name AS enterprise FROM customer_trunks t
+      `SELECT t.id, t.name, t.default_coding, t.ton_npi_mode, e.name AS enterprise FROM customer_trunks t
          JOIN enterprises e ON e.id = t.enterprise_id
         WHERE t.id = $1 AND t.deleted_at IS NULL`,
       [b.customerTrunkId],
@@ -41,15 +42,38 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       const prefix = String(dc[0].prefix);
       receiverIn = prefix + "1234567890123".slice(0, Math.max(4, 12 - prefix.length));
     }
-    const translation = (await runTrunkRules(pool, "customer", b.customerTrunkId, {
+    const ingress = (await runTrunkTranslation(pool, "customer", b.customerTrunkId, {
       sender: b.senderId ?? "",
       receiver: receiverIn,
       text: b.text ?? "",
       senderTon: b.sourceTon,
       senderNpi: b.sourceNpi,
     }))!;
-    const sender = translation.after.sender;
-    const receiver = translation.after.receiver.replace(/\D/g, "") || receiverIn;
+    const translation = ingress.result;
+    // S-4.7: a customer trunk set to auto fixes TON / NPI after its ingress translation, as the switch's intake does;
+    // routing and every vendor see the fixed sender and values. A field an ingress rule set stays as the rule left it.
+    const sent = withTonNpiMode(
+      tr[0].ton_npi_mode,
+      {
+        sender: translation.after.sender,
+        receiver: translation.after.receiver,
+        senderTon: translation.after.senderTon ?? b.sourceTon ?? null,
+        senderNpi: translation.after.senderNpi ?? b.sourceNpi ?? null,
+        destTon: translation.after.destTon ?? b.destTon ?? null,
+        destNpi: translation.after.destNpi ?? b.destNpi ?? null,
+      },
+      ingress.pinned,
+    );
+    const sender = sent.sender;
+    const receiver = sent.receiver.replace(/\D/g, "") || receiverIn;
+    // What the vendors' egress translation starts from (the message after ingress, S-4.8).
+    const afterIngress = {
+      sender,
+      receiver,
+      text: translation.after.text,
+      senderTon: sent.senderTon,
+      senderNpi: sent.senderNpi,
+    };
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(
       pool,
@@ -80,21 +104,16 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         ? await skipEgressBlocked(
             pool,
             m,
-            {
-              sender,
-              receiver,
-              text: translation.after.text,
-              senderTon: translation.after.senderTon,
-              senderNpi: translation.after.senderNpi,
-            },
+            afterIngress,
             (mm) => routeThrough(rules, mm, options),
             (r) => r.decision?.vendor,
             {
               form,
-              senderTon: translation.after.senderTon ?? b.sourceTon,
-              senderNpi: translation.after.senderNpi ?? b.sourceNpi,
-              destTon: translation.after.destTon ?? b.destTon,
-              destNpi: translation.after.destNpi ?? b.destNpi,
+              senderTon: sent.senderTon,
+              senderNpi: sent.senderNpi,
+              destTon: sent.destTon,
+              destNpi: sent.destNpi,
+              pinned: ingress.pinned,
             },
           )
         : { result: routeThrough(rules, m, options), skipped: [] };
@@ -145,23 +164,19 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     // message as ingress translation left it; shows what the vendor would receive.
     const egressId = forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
     const egressName = forcedVendor ? forcedVendor.name : (d?.vendor?.name ?? "");
-    const egress =
+    const view =
       egressId !== null && !translation.blocked
-        ? await runTrunkRules(pool, "vendor", egressId, {
-            sender,
-            receiver,
-            text: translation.after.text,
-            senderTon: translation.after.senderTon,
-            senderNpi: translation.after.senderNpi,
-          })
+        ? await vendorView(pool, egressId, afterIngress, sent, ingress.pinned)
         : null;
+    const egress = view?.egress ?? null;
     const vendorTranslation: RouteSimulatorResult["vendorTranslation"] =
       egress && egressId !== null ? { vendorTrunkId: egressId, vendorTrunk: egressName, result: egress } : null;
     // The vendor's cost as the switch prices it: its Sender ID lines match the sender it receives after its egress
-    // translation (§6.2, decided 2026-10-30); a blocked line means it takes no traffic there.
+    // translation (§6.2, decided 2026-10-30) and its auto TON / NPI (S-4.7); a blocked line means it takes no traffic
+    // there.
     const vendorPriced =
       egressId !== null && m.mccmnc && !egress?.blocked
-        ? await vendorPrice(pool, egressId, m.mccmnc, egress?.after.sender ?? sender)
+        ? await vendorPrice(pool, egressId, m.mccmnc, view?.got.sender ?? sender)
         : null;
     const vp = priced(vendorPriced);
     if (forcedVendor && vp)
