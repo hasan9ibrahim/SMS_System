@@ -872,35 +872,47 @@ defmodule Sms.Switch.Customer.Session do
   end
 
   defp deliver_now(state, fields, tlvs, from) do
+    case refuse_deliver(state) do
+      nil -> write_deliver(state, fields, tlvs, from)
+      reason -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  # Why this session cannot take a deliver_sm now, or nil.
+  defp refuse_deliver(state) do
     cond do
       state.phase != :bound ->
-        {:reply, {:error, :closed}, state}
+        :closed
 
       state.bind == :tx ->
-        {:reply, {:error, :not_receiver}, state}
+        :not_receiver
 
       Enum.count(state.out, fn {_, e} -> e.command == :deliver_sm end) >=
           state.settings.outbound_window ->
-        {:reply, {:error, :window_full}, state}
+        :window_full
 
       state.slow_until != nil and now() < state.slow_until ->
-        {:reply, {:error, :slow}, state}
+        :slow
 
       true ->
-        {seq, state} = next_sequence(state)
+        nil
+    end
+  end
 
-        # S-1.4: TLVs only to a client that speaks 3.4 or later; a 3.3 client reads the receipt from its text.
-        tlvs = if state.interface_version >= 0x34, do: tlvs, else: []
-        pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
+  defp write_deliver(state, fields, tlvs, from) do
+    {seq, state} = next_sequence(state)
 
-        case Pdu.encode(pdu) do
-          {:ok, bytes} ->
-            write(state, bytes)
-            {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
+    # S-1.4: TLVs only to a client that speaks 3.4 or later; a 3.3 client reads the receipt from its text.
+    tlvs = if state.interface_version >= 0x34, do: tlvs, else: []
+    pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
 
-          {:error, reason} ->
-            {:reply, {:error, {:invalid_pdu, reason}}, state}
-        end
+    case Pdu.encode(pdu) do
+      {:ok, bytes} ->
+        write(state, bytes)
+        {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
+
+      {:error, reason} ->
+        {:reply, {:error, {:invalid_pdu, reason}}, state}
     end
   end
 

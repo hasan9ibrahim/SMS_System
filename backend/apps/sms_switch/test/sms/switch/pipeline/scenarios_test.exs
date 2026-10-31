@@ -7,6 +7,7 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
   alias Sms.Core.Bus.Local
   alias Sms.Switch.Pipeline
   alias Sms.Switch.Test.{Client, CustomerCase, PipelineConfig}
+  alias Sms.Switch.Throttle
 
   @dest "4915112345678"
 
@@ -91,7 +92,7 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
 
   # The trunk's overflow buffer places in use (the local count: these tests run without Redis).
   defp buffer_count(key) do
-    case :ets.lookup(Sms.Switch.Throttle, {:buffer, key}) do
+    case :ets.lookup(Throttle, {:buffer, key}) do
       [{_, n}] -> n
       [] -> 0
     end
@@ -173,9 +174,9 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
     end
 
     test "a drain that finds its buffer empty clears places lost with a server" do
-      start_supervised!(Sms.Switch.Throttle)
+      start_supervised!(Throttle)
       start_supervised!({Pipeline.Buffers, discover_ms: 3_600_000})
-      assert Sms.Switch.Throttle.buffer_take("ct:42", 3)
+      assert Throttle.buffer_take("ct:42", 3)
       assert buffer_count("ct:42") == 1
       Pipeline.Buffers.kick("ct.42")
       # The drain stops after 5 s with nothing to do.
