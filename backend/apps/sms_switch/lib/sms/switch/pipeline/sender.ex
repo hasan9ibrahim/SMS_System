@@ -16,7 +16,9 @@ defmodule Sms.Switch.Pipeline.Sender do
       vendor, with new references; parts the vendor accepted before stay as that attempt's, with their cost (D2); a
       vendor with no bound connection is skipped (S-5.4);
     * when no vendor is left the message has failed: the customer gets a REJECTD receipt (UNKNOWN when the last
-      vendor may have it) if it asked for receipts.
+      vendor may have it) if it asked for receipts;
+    * a message whose validity period ended before a vendor took it is not sent: an EXPIRED receipt (S-2.13). A
+      vendor gets the validity period and scheduled time as absolute times in UTC.
 
   Every attempt that reached a vendor is an EDR row (`Sms.Switch.Pipeline.Edr`); a message sent is recorded
   (`Sms.Switch.Pipeline.Store`) so its receipts find it, and a receipt that came before its submit_sm_resp is picked
@@ -58,6 +60,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   }
 
   alias Sms.Switch.Smpp.Status
+  alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.{Throttle, Vendor}
 
   # How long a timed-out submit waits for a late answer (D4), and a sent message counts as in flight (S-5.16).
@@ -127,6 +130,34 @@ defmodule Sms.Switch.Pipeline.Sender do
     :ok
   end
 
+  # S-2.13: its validity period ended before a vendor took it: not sent, an EXPIRED receipt if the customer asked for
+  # one (a Delayed Submit customer gets the failure in its resp), not billed; the attempts before stay as they were. One
+  # more EDR row (attempt 0, EXPIRED).
+  defp expired(msg, rows) do
+    Logger.info("message #{msg.id} expired before a vendor took it (S-2.13)")
+    publish_rows(msg, rows, false)
+    edr_id = Edr.new_id()
+
+    row =
+      msg
+      |> Edr.attempt_row(%{
+        edr_id: edr_id,
+        no: 0,
+        final: true,
+        success: false,
+        vendor: nil,
+        command_status: 0
+      })
+      |> Map.put("c_msg_status", "EXPIRED")
+
+    _ = Edr.publish_attempt(row)
+
+    unless Delayed.notify(msg.id, {:error, Status.code(:esme_rsubmitfail)}),
+      do: Forwarder.switch_receipt(msg, edr_id, "EXPIRED", "000")
+
+    :ok
+  end
+
   # Cancelled by the customer while queued (S-2.15, D8): never sent, not billed, no receipt; one EDR row (attempt 0,
   # DELETED).
   defp cancelled(msg) do
@@ -155,6 +186,26 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp attempt(msg, route, no, tried, rows, held \\ nil) do
     vt = route.vendor_trunk_id
     tried = MapSet.put(tried, vt)
+
+    if expired?(msg, held) do
+      left_buffer(held, vt)
+      expired(msg, rows)
+    else
+      try_vendor(msg, route, no, tried, rows, held)
+    end
+  end
+
+  # S-2.13: checked before each vendor is tried (a re-route, a resend, the message leaving a vendor's queue); a message
+  # part-way through on a vendor finishes there.
+  defp expired?(_msg, %{job: %{done: [_ | _]}}), do: false
+
+  defp expired?(msg, _held) do
+    expires = Map.get(msg, :expires_at)
+    is_integer(expires) and System.os_time(:millisecond) >= expires
+  end
+
+  defp try_vendor(msg, route, no, tried, rows, held) do
+    vt = route.vendor_trunk_id
 
     case job(msg, route, held) do
       {:skip, reason} ->
@@ -656,8 +707,8 @@ defmodule Sms.Switch.Pipeline.Sender do
       destination_addr: e[:receiver] || i[:receiver],
       protocol_id: f[:protocol_id] || 0,
       priority_flag: f[:priority_flag] || 0,
-      schedule_delivery_time: f[:schedule_delivery_time] || "",
-      validity_period: f[:validity_period] || "",
+      schedule_delivery_time: vendor_time(msg, :scheduled_at, f[:schedule_delivery_time]),
+      validity_period: vendor_time(msg, :expires_at, f[:validity_period]),
       # Receipts are always asked of the vendor; the customer gets what it asked for (S-2.14).
       registered_delivery: 1,
       replace_if_present_flag: 0,
@@ -667,6 +718,14 @@ defmodule Sms.Switch.Pipeline.Sender do
   end
 
   defp first(values), do: Enum.find(values, 0, &(&1 != nil))
+
+  # S-2.12, S-2.13: as an absolute time in UTC, so a relative one never starts again at the vendor.
+  defp vendor_time(msg, key, raw) do
+    case Map.fetch(msg, key) do
+      {:ok, ms} -> SmppTime.absolute(ms)
+      :error -> raw || ""
+    end
+  end
 
   # ---------------------------------------------------------------- sending
 

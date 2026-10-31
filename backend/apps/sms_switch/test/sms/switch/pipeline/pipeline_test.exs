@@ -968,6 +968,52 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
     end
 
+    test "a validity period that ends before the next vendor is tried: not sent, an EXPIRED receipt (S-2.13)" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [submit_timeout_s: 1]})
+
+      FakeSmsc.set(s1, :submit, :silent)
+
+      # Valid for 1 s: vendor 1 does not answer within its 1 s Submit Timeout.
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        short_message: "short-lived",
+        registered_delivery: 1,
+        validity_period: "000000000001000R"
+      }
+
+      Client.send_pdu(client, Pdu.new(:submit_sm, fields, sequence: 2))
+      {_, resp, dlr} = resp_and_receipt(client)
+      assert resp.status == 0
+      assert dlr.fields.short_message =~ "stat:EXPIRED"
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = sent}, 2_000
+      # The vendor gets the validity as an absolute time in UTC, so it does not start again there.
+      assert sent.fields.validity_period =~ ~r/\A\d{12}000\+\z/
+      refute_received {:smsc, ^c2, %Pdu{command: :submit_sm}}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, last] = attempts()
+
+      assert %{"attempt_no" => 0, "c_msg_status" => "EXPIRED", "is_customer_billable" => 0} =
+               first
+
+      assert %{"attempt_no" => 1, "command_status" => -1, "is_final_attempt" => 0} = last
+    end
+
+    test "a relative validity goes to the vendor as the same moment, absolute in UTC (S-2.13)" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:second)
+
+      {_, %{status: 0}} =
+        submit(client, %{short_message: "valid 5 min", validity_period: "000000000500000R"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      {:ok, at} = Sms.Switch.Smpp.Time.parse(sent.fields.validity_period, 0)
+      assert_in_delta div(at, 1_000), before + 300, 3
+    end
+
     test "no answer within Submit Timeout: possibly sent, re-routed, the attempt recorded with status -1 (D4)" do
       %{client: client, smscs: [s1, _], conns: [c1, c2]} =
         start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [submit_timeout_s: 1]})
@@ -1243,7 +1289,18 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
         {"registered_delivery reserved receipt value 3",
          %{short_message: "a", registered_delivery: 3}, [], 0x07},
         {"esm_class message type a submit cannot have (SMSC receipt)",
-         %{short_message: "a", esm_class: 0x04}, [], 0x43}
+         %{short_message: "a", esm_class: 0x04}, [], 0x43},
+        # S-2.12, S-2.13.
+        {"schedule_delivery_time that is no date (month 13)",
+         %{short_message: "a", schedule_delivery_time: "261331120000000+"}, [], 0x61},
+        {"validity_period that does not read",
+         %{short_message: "a", validity_period: "261399120000000+"}, [], 0x62},
+        {"validity ending before the scheduled time",
+         %{
+           short_message: "a",
+           schedule_delivery_time: "000000010000000R",
+           validity_period: "000000003000000R"
+         }, [], 0x62}
       ]
 
       cases

@@ -4,7 +4,9 @@ defmodule Sms.Switch.Pipeline.Intake do
   `submit_sm_resp` (spec §2, §6, docs/BACKEND_PLAN.md §3.3). In memory, in this order:
 
     1. **checks**: the message body (short_message or message_payload, not both, S-2.8), the multipart header (UDH
-       or SAR, S-3.6), an empty message (0x01, D10), the addresses (0x0A / 0x0B, S-2.10);
+       or SAR, S-3.6), an empty message (0x01, D10), the addresses and their TON / NPI (0x0A / 0x0B / 0x48–0x51,
+       S-2.10), priority_flag, registered_delivery and esm_class, the scheduled time and validity period (0x61 /
+       0x62, S-2.12, S-2.13);
     2. **ingress translation**: the customer trunk's translation rules in their order (§6.4, §13.2); a block refuses
        the message (0x45);
     3. **destination and rate**: the longest dial code of the receiver (§6.1) and the customer's rate (§5.4); none →
@@ -51,6 +53,7 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
+  alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.Throttle
 
   # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
@@ -187,7 +190,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   # The checks of the message as sent; a part of a multipart message is then held for the rest (S-3.2).
   defp build(msg, pdu) do
     with {:ok, msg} <- body(msg, pdu),
-         {:ok, msg} <- addresses(msg) do
+         {:ok, msg} <- addresses(msg),
+         {:ok, msg} <- times(msg) do
       if msg.concat, do: {:part, msg}, else: {:ok, msg}
     end
   end
@@ -472,6 +476,24 @@ defmodule Sms.Switch.Pipeline.Intake do
 
       true ->
         {:ok, msg}
+    end
+  end
+
+  # S-2.12, S-2.13: the scheduled time and the end of the validity period as moments (`Sms.Switch.Smpp.Time`); a field
+  # that does not read is refused (0x61, 0x62), as is a validity period that ends before the message could go.
+  defp times(msg) do
+    f = msg.fields
+
+    with {:sched, {:ok, scheduled}} <-
+           {:sched, SmppTime.parse(f[:schedule_delivery_time], msg.received_at)},
+         {:expiry, {:ok, expires}} <-
+           {:expiry, SmppTime.parse(f[:validity_period], msg.received_at)},
+         {:expiry, true} <-
+           {:expiry, expires == nil or expires > max(scheduled || 0, msg.received_at)} do
+      {:ok, Map.merge(msg, %{scheduled_at: scheduled, expires_at: expires})}
+    else
+      {:sched, _} -> {:reject, :esme_rinvsched, :invalid_schedule_delivery_time, msg}
+      {:expiry, _} -> {:reject, :esme_rinvexpiry, :invalid_validity_period, msg}
     end
   end
 
