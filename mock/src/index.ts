@@ -27,6 +27,7 @@ import { startMailer } from "./jobs/mailer.js";
 import { startAutoInvoicing } from "./jobs/autoInvoices.js";
 import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
+import { startRouteRuleDraftSweep } from "./jobs/routeRuleDrafts.js";
 import { startSwitchJobs } from "./jobs/switchJobs.js";
 import { encryptStoredTotp } from "./admin/passwords.js";
 import { resetStuckImports } from "./api/migration.js";
@@ -81,6 +82,8 @@ whenLeader(() => {
   startCleanupJobs();
   startSecurityJobs();
   startFxRefresh();
+  // New rule drafts never saved, older than 24 hours, hourly (§6.3, §13.10).
+  startRouteRuleDraftSweep();
   // E-mail out of the outbox (jobs/mailer.ts); nothing is queued outside production.
   startMailer();
   if (production) {

@@ -10122,7 +10122,8 @@ export type paths = {
     put?: never;
     /**
      * Add a route rule (§6.3)
-     * @description Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27).
+     * @description Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27). The New rule
+     *     window adds its rule with `draft: true` (§6.3, §13.10): a draft that only the window's Save keeps.
      */
     post: operations["createRouteRule"];
     delete?: never;
@@ -10145,7 +10146,8 @@ export type paths = {
     get: operations["getRouteRule"];
     /**
      * Change a route rule
-     * @description Saves the whole record; the change lists only the fields that differ (§13.10).
+     * @description Saves the whole record; the change lists only the fields that differ (§13.10). `draft: false` (the New rule
+     *     window's Save) keeps a draft, also when no field differs.
      */
     put: operations["updateRouteRule"];
     post?: never;
@@ -10254,7 +10256,8 @@ export type paths = {
      * @description New rule opens one window at once on a draft: the rule is created turned off, and closing the window with ×
      *     discards it. Discard removes the rule and its change history as if it never existed. Only the user who added
      *     it, within 24 hours, while it has never been turned on and has carried no traffic; otherwise 409 (use
-     *     Delete, which archives, §13.29).
+     *     Delete, which archives, §13.29). A draft left behind (the page reloaded while the window was adding it) is
+     *     removed the same way by an hourly job once it is 24 hours old and was never saved (`draft`, §13.10).
      */
     post: operations["discardRouteRule"];
     delete?: never;
@@ -18624,7 +18627,10 @@ export type components = {
     RouteRuleInput: WithRequired<
       components["schemas"]["RouteRuleFields"],
       "name" | "priority" | "status" | "routeType"
-    >;
+    > & {
+      /** @description New rule window (§6.3, §13.10). On add, true makes the rule a draft: only the window's Save keeps it, with false on that update. Left out on an update, the rule stays as it is; a kept rule never becomes a draft again. A draft never saved is removed after 24 hours with its change history, as discard does. */
+      draft?: boolean;
+    };
     Named: {
       id: components["schemas"]["Id"];
       name: string;

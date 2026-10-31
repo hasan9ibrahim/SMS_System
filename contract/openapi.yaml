@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.124.0
+  version: 0.129.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -14895,7 +14895,8 @@ paths:
       operationId: createRouteRule
       summary: "Add a route rule (§6.3)"
       description: |
-        Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27).
+        Every field of the rule, including vendors, warm-up thresholds and number whitelists (§13.27). The New rule
+        window adds its rule with `draft: true` (§6.3, §13.10): a draft that only the window's Save keeps.
       requestBody:
         required: true
         content:
@@ -14943,7 +14944,8 @@ paths:
       operationId: updateRouteRule
       summary: "Change a route rule"
       description: |
-        Saves the whole record; the change lists only the fields that differ (§13.10).
+        Saves the whole record; the change lists only the fields that differ (§13.10). `draft: false` (the New rule
+        window's Save) keeps a draft, also when no field differs.
       parameters:
         - $ref: "#/components/parameters/RecordId"
       requestBody:
@@ -15107,7 +15109,8 @@ paths:
         New rule opens one window at once on a draft: the rule is created turned off, and closing the window with ×
         discards it. Discard removes the rule and its change history as if it never existed. Only the user who added
         it, within 24 hours, while it has never been turned on and has carried no traffic; otherwise 409 (use
-        Delete, which archives, §13.29).
+        Delete, which archives, §13.29). A draft left behind (the page reloaded while the window was adding it) is
+        removed the same way by an hourly job once it is 24 hours old and was never saved (`draft`, §13.10).
       parameters:
         - $ref: "#/components/parameters/RecordId"
       responses:
@@ -33463,6 +33466,14 @@ components:
     RouteRuleInput:
       allOf:
         - $ref: "#/components/schemas/RouteRuleFields"
+        - type: object
+          properties:
+            draft:
+              type: boolean
+              description: >-
+                New rule window (§6.3, §13.10). On add, true makes the rule a draft: only the window's Save keeps it,
+                with false on that update. Left out on an update, the rule stays as it is; a kept rule never becomes a
+                draft again. A draft never saved is removed after 24 hours with its change history, as discard does.
       required: [name, priority, status, routeType]
       unevaluatedProperties: false
 
