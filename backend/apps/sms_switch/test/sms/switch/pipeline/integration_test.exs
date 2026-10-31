@@ -46,9 +46,60 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
             :route_index,
             :translation,
             :lists,
-            :fx
+            :fx,
+            :voice
           ],
           do: assert(Map.has_key?(snapshot, key))
+
+      # SMS to voice (§8, migrations 105, 106): rules, gateways, and a recording read by its hash.
+      assert %{rules: rules, gateways: gateways} = snapshot.voice
+      assert is_list(rules) and is_map(gateways)
+
+      # No rule has this recording.
+      assert Loader.prompt_wav(String.duplicate("0", 64)) == :none
+    end
+
+    test "SMS to voice rows as the screens save them load, the gateway password decrypted (§8)" do
+      sha = Base.encode16(:crypto.hash(:sha256, "RIFF fake"), case: :lower)
+
+      # mock/src/admin/passwords.ts encryptSecret("JBSWY3DPEHPK3PXP", 12 bytes of 7) with the development key.
+      enc = "enc:v1:BwcHBwcHBwcHBwcHnkM7Xlb17VZPnaHIB/iX7T0BVfUuZBm6ZPujfnvqb2k="
+
+      # Committed (the loader reads in its own transaction) and removed at the end.
+      %{rows: [[gw]]} =
+        Repo.query!(
+          """
+          INSERT INTO voice_gateways (name, host, username, password_enc, transport, codecs, priority)
+          VALUES ('Fake voice switch', 'voice-gw1.example.net', 'fake-user', $1, 'tcp', '{ulaw}', -1000)
+          RETURNING id
+          """,
+          [enc]
+        )
+
+      %{rows: [[rule]]} =
+        Repo.query!(
+          """
+          INSERT INTO sms_voice_rules (sender_id, prefix, repeat_count, gateway_id, prompt_wav, prompt_wav_name,
+                                       prompt_wav_sha256)
+          VALUES ('Fake%', '4915', 3, $1, $2, 'fake.wav', $3) RETURNING id
+          """,
+          [gw, "RIFF fake", sha]
+        )
+
+      try do
+        assert {:ok, snapshot} = Loader.load_snapshot("EUR")
+
+        assert %{password: "JBSWY3DPEHPK3PXP", transport: :tcp, codecs: ["ulaw"]} =
+                 snapshot.voice.gateways[gw]
+
+        assert %{gateway_id: ^gw, repeat: 3, prefix: "4915", prompt: ^sha} =
+                 Enum.find(snapshot.voice.rules, &(&1.id == rule))
+
+        assert Loader.prompt_wav(sha) == {:ok, "RIFF fake"}
+      after
+        Repo.query!("DELETE FROM sms_voice_rules WHERE id = $1", [rule])
+        Repo.query!("DELETE FROM voice_gateways WHERE id = $1", [gw])
+      end
     end
   end
 
@@ -393,6 +444,72 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
 
       assert delivered >= 1 and billable >= 1
       assert Decimal.compare(Decimal.new(revenue), Decimal.new("0.05")) != :lt
+    end
+
+    test "every key of a call's rows (§8 SMS to voice, ClickHouse 011) is a column" do
+      PipelineConfig.put()
+      start_supervised!({Config.Server, loader: PipelineConfig})
+      CustomerCase.assert_eventually(&Config.ready?/0)
+
+      now = System.os_time(:millisecond)
+
+      full = %{
+        msg()
+        | sell: Config.sell_rate(1, "26201", now),
+          destination: Config.destination("4915112345678")
+      }
+
+      call = %{
+        edr_id: Edr.new_id(),
+        no: 1,
+        final: true,
+        success: true,
+        command_status: 0,
+        submit_time: now,
+        resp_time: now,
+        msg_count: 1,
+        customer_billable: true
+      }
+
+      answered =
+        Edr.voice_row(full, call, %{
+          gateway_id: 3,
+          answered: true,
+          cause: "NORMAL_CLEARING",
+          duration_ms: 9_000,
+          answered_at: now,
+          dial: "4915112345678",
+          caller_id: "4930000000",
+          status: "DELIVRD",
+          error: "000"
+        })
+
+      expired =
+        Edr.voice_row(
+          full,
+          %{call | edr_id: Edr.new_id(), no: 0, success: false, customer_billable: false},
+          %{gateway_id: 3, customer_status: "EXPIRED"}
+        )
+
+      for row <- [answered, expired] do
+        assert MapSet.subset?(keys(row), columns("edr")),
+               inspect(MapSet.difference(keys(row), columns("edr")))
+
+        assert :ok = EdrWriter.write("edr", [Map.delete(row, "row_key")])
+        assert count("edr", row["edr_id"]) == 1
+      end
+
+      {:ok, %{rows: [[route_type, v_trunk, answered_flag, cause, duration]]}} =
+        ClickHouse.query(
+          """
+          SELECT route_type, v_trunk_id, voice_answered, voice_hangup_cause, voice_duration_ms FROM edr
+           WHERE edr_id = {id:UUID}
+          """,
+          %{"id" => answered["edr_id"]}
+        )
+
+      assert {route_type, v_trunk, answered_flag, cause, duration} ==
+               {"voice", 0, 1, "NORMAL_CLEARING", 9_000}
     end
 
     defp keys(row), do: row |> Map.delete("row_key") |> Map.keys() |> MapSet.new()

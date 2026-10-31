@@ -7,8 +7,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   A row the switch cannot read (an unknown enum value) is left out and logged, never stopping the rest from loading.
   """
   require Logger
-  alias Sms.Core.Repo
+  alias Sms.Core.{Repo, Secret}
   alias Sms.Switch.Rules.{Pattern, Route, Translation, Values}
+  alias Sms.Switch.Voice
 
   @timeout 30_000
 
@@ -48,7 +49,12 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     (SELECT md5(coalesce(string_agg(t::text, ',' ORDER BY t.id), '')) FROM hlr_rule_targets t),
     (SELECT md5(coalesce(string_agg(s::text, ',' ORDER BY s.id), '')) FROM hlr_rule_trunk_settings s),
     (SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') FROM hlr_policies),
-    (SELECT md5(coalesce(string_agg(h::text, ',' ORDER BY h.hlr_provider_id), '')) FROM hlr_provider_stats h))
+    (SELECT md5(coalesce(string_agg(h::text, ',' ORDER BY h.hlr_provider_id), '')) FROM hlr_provider_stats h),
+    -- SMS to voice (§8, migrations 105, 106): the rules without their recordings (only the hash says one changed).
+    (SELECT md5(coalesce(string_agg(concat_ws(',', v.id, v.sender_id, v.receiver_id, v.prefix, v.repeat_count, v.mccmnc,
+            v.status, v.gateway_id, v.prompt_wav_sha256, v.updated_at, v.deleted_at), ';' ORDER BY v.id), ''))
+       FROM sms_voice_rules v),
+    (SELECT md5(coalesce(string_agg(g::text, ',' ORDER BY g.id), '')) FROM voice_gateways g))
   """
 
   @doc "A value that changes whenever anything in the snapshot changes."
@@ -237,7 +243,18 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       hlr_settings:
         "SELECT hlr_rule_id, customer_trunk_id, position, enabled FROM hlr_rule_trunk_settings",
       hlr_policies:
-        "SELECT id, entries FROM hlr_policies WHERE deleted_at IS NULL AND status = 'active'"
+        "SELECT id, entries FROM hlr_policies WHERE deleted_at IS NULL AND status = 'active'",
+      # SMS to voice (§8, docs/SMS_TO_VOICE.md): active rules in order of id, with the hash of their own recording only
+      # (the recording is read when its file is missing, `prompt_wav/1`); active gateways.
+      voice_rules: """
+      SELECT id, sender_id, receiver_id, prefix, repeat_count, mccmnc, gateway_id, prompt_wav_sha256
+        FROM sms_voice_rules WHERE deleted_at IS NULL AND status = 'active' ORDER BY id
+      """,
+      voice_gateways: """
+      SELECT id, name, host, port, transport, username, password_enc, from_domain, caller_id_mode, fixed_caller_id,
+             dial_prefix, codecs, max_calls, ring_timeout_s, retry_delay_s, priority
+        FROM voice_gateways WHERE deleted_at IS NULL AND status = 'active'
+      """
     ]
   end
 
@@ -276,7 +293,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       hlr: hlr(rows, customer_trunks),
       quality: quality,
       quality_dlr: quality_dlr,
-      fx: Map.new(elem(rows.fx, 1), fn [iso, rate] -> {iso, Decimal.to_float(rate)} end)
+      fx: Map.new(elem(rows.fx, 1), fn [iso, rate] -> {iso, Decimal.to_float(rate)} end),
+      voice: voice(rows)
     }
   end
 
@@ -674,6 +692,99 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
     rank = if position, do: {1, position}, else: {if(top, do: 0, else: 2), 0}
     enabled = if s, do: s.enabled != false, else: true
     {{rank, rule_id}, rule_id, enabled and hlr_rules[rule_id].active}
+  end
+
+  # ---------------------------------------------------------------- SMS to voice (§8)
+
+  defp voice(rows) do
+    gateways =
+      rows
+      |> dataset(:voice_gateways)
+      |> maps()
+      |> each_row("voice gateway", &voice_gateway/1)
+      |> Map.new(&{&1.id, &1})
+
+    rules =
+      rows
+      |> dataset(:voice_rules)
+      |> maps()
+      |> Enum.sort_by(& &1.id)
+      |> each_row("SMS to voice rule", &voice_rule/1)
+
+    %{rules: rules, gateways: gateways}
+  end
+
+  @sha256 ~r/\A[0-9a-f]{64}\z/
+
+  defp voice_rule(r) do
+    sha = r[:prompt_wav_sha256] && String.downcase(r.prompt_wav_sha256)
+
+    %{
+      id: r.id,
+      sender: Voice.Rules.like(r.sender_id),
+      receiver: Voice.Rules.like(r.receiver_id),
+      prefix: blank(r.prefix),
+      mccmnc: blank(r.mccmnc),
+      repeat: r.repeat_count |> max(1) |> min(5),
+      gateway_id: r[:gateway_id],
+      # The rule's own recording, by its hash (the file's name on disk); anything else plays the default phrase.
+      prompt: if(is_binary(sha) and Regex.match?(@sha256, sha), do: sha)
+    }
+  end
+
+  # Encrypted like the mailbox passwords (`Sms.Core.Secret`); one that does not decrypt (another MOCK_SECRET_KEY)
+  # leaves the gateway out, logged, rather than writing a wrong password to Asterisk.
+  defp voice_gateway(g) do
+    password =
+      case g.password_enc do
+        nil ->
+          nil
+
+        enc ->
+          Secret.reveal(enc) ||
+            raise(ArgumentError, "its password cannot be decrypted (MOCK_SECRET_KEY)")
+      end
+
+    %{
+      id: g.id,
+      name: g.name,
+      host: g.host,
+      port: g.port,
+      transport: enum!(g.transport, %{"udp" => :udp, "tcp" => :tcp, "tls" => :tls}),
+      username: blank(g.username),
+      password: password,
+      from_domain: blank(g.from_domain),
+      caller_id_mode: enum!(g.caller_id_mode, %{"sender" => :sender, "fixed" => :fixed}),
+      fixed_caller_id: blank(g.fixed_caller_id),
+      dial_prefix: g.dial_prefix || "",
+      codecs: g.codecs || [],
+      max_calls: g.max_calls,
+      ring_timeout_s: g.ring_timeout_s,
+      retry_delay_s: g.retry_delay_s,
+      priority: g.priority
+    }
+  end
+
+  defp blank(value) when value in [nil, ""], do: nil
+  defp blank(value), do: value
+
+  @prompt_wav """
+  SELECT prompt_wav FROM sms_voice_rules
+   WHERE prompt_wav_sha256 = $1 AND prompt_wav IS NOT NULL AND deleted_at IS NULL
+   LIMIT 1
+  """
+
+  @doc """
+  A rule's own recording by its SHA-256 (§8 SMS to voice: read only when its file is missing on this server,
+  `Sms.Switch.Voice.Files`): the WAV bytes, `:none`, or why it could not be read.
+  """
+  @spec prompt_wav(String.t()) :: {:ok, binary()} | :none | {:error, term()}
+  def prompt_wav(sha256) do
+    case query(@prompt_wav, [sha256]) do
+      {:ok, %{rows: [[wav]]}} -> {:ok, wav}
+      {:ok, %{rows: []}} -> :none
+      {:error, _} = error -> error
+    end
   end
 
   # ---------------------------------------------------------------- translation rules

@@ -14,7 +14,8 @@ defmodule Sms.Switch.Pipeline.Intake do
        0x0B (S-6.2);
     4. **routing**: the route rules and the egress-block skip (`Sms.Switch.Pipeline.Router`); no rule, a blocking rule
        or no vendor → 0x45 (decided Q15); every vendor refusing the sender (a handset cannot show it, S-2.10, S-4.7)
-       → 0x0A;
+       → 0x0A. A message an SMS-to-voice rule turns into a call (§8, S-6.9, `Sms.Switch.Voice`) is not routed: it
+       goes on its voice gateway's queue after the credit step (`Sms.Switch.Voice.Calls`);
     5. **credit**: `Sms.Switch.Pipeline.Credit`: checked and the message's cost held in one step until it is
        charged or its outcome releases it (§7, S-6.3);
     6. **stored**: the message goes on the durable bus (`sms.msg.accepted`, JetStream), and only then the resp is
@@ -59,6 +60,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   alias Sms.Switch.Smpp.{Pdu, Status}
   alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.Throttle
+  alias Sms.Switch.Voice
+  alias Sms.Switch.Voice.Calls
 
   # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
   @queued_s 86_400
@@ -212,10 +215,34 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # §8 SMS to voice (S-6.9): a message an SMS-to-voice rule turns into a call is not routed: its credit is held as one
+  # message at the customer's rate and it goes on its voice gateway's queue (`Sms.Switch.Voice`).
   defp send_now(msg) do
-    with {:ok, msg} <- route_now(msg),
-         :ok <- credit(msg),
-         do: stored_or_unreserved(msg)
+    case Voice.plan(msg) do
+      {:call, call} ->
+        msg = Voice.as_call(msg, call)
+        with :ok <- credit(msg), do: call_queued_or_unreserved(msg)
+
+      :sms ->
+        with {:ok, msg} <- route_now(msg),
+             :ok <- credit(msg),
+             do: stored_or_unreserved(msg)
+    end
+  end
+
+  # Stored on the gateway's queue: a buffered message gives its overflow buffer place back (a call waits for a line,
+  # not for the trunk's TPS), and a Delayed Submit customer gets its resp now (the call's outcome comes as a receipt).
+  defp call_queued_or_unreserved(msg) do
+    case Calls.enqueue(msg) do
+      :ok ->
+        leave_buffer(msg)
+        _ = Delayed.notify(msg.id, :ok)
+        :ok
+
+      {:error, _} = error ->
+        _ = Credit.impl().unreserve(msg)
+        error
+    end
   end
 
   # S-2.12 (decided 2026-10-31): a message scheduled ahead is checked as if it went now (a route, the credit without a
@@ -224,9 +251,16 @@ defmodule Sms.Switch.Pipeline.Intake do
   defp scheduled?(msg), do: Map.get(msg, :scheduled, false) and not is_map(msg[:internal])
 
   defp schedule(msg) do
-    with {:ok, _route} <- route_check(msg),
-         :ok <- credit_check(msg),
-         do: Scheduled.hold(msg)
+    case Voice.plan(msg) do
+      # A call at its time (§8): its credit checked as one message, no route needed; planned again when it goes.
+      {:call, call} ->
+        with :ok <- credit_check(Voice.as_call(msg, call)), do: Scheduled.hold(msg)
+
+      :sms ->
+        with {:ok, _route} <- route_check(msg),
+             :ok <- credit_check(msg),
+             do: Scheduled.hold(msg)
+    end
   end
 
   defp route_check(msg) do
@@ -246,21 +280,30 @@ defmodule Sms.Switch.Pipeline.Intake do
   @doc false
   # S-2.12: a scheduled message at its time, as the sender takes it: rated, routed (its TPS counted) and its credit held
   # now, on the customer trunk as it is now (prices and routes valid when it goes). The ingress translation and HLR
-  # answer stay those of its intake.
-  @spec release(map()) :: {:ok, map()} | {:reject, atom(), term(), map()}
+  # answer stay those of its intake. One an SMS-to-voice rule turns into a call now (§8) is `{:call, msg}`: rated and
+  # its credit held as one message, for the caller to put on its gateway's queue.
+  @spec release(map()) :: {:ok, map()} | {:call, map()} | {:reject, atom(), term(), map()}
   def release(msg) do
     case Config.ready?() && Config.customer_trunk(msg.trunk.id) do
       %{} = trunk ->
         msg = msg |> Map.put(:trunk, trunk) |> Map.put(:rated_at, System.os_time(:millisecond))
 
-        with {:ok, msg} <- rate(msg),
-             {:ok, msg} <- route_now(msg),
-             :ok <- credit(msg),
-             do: {:ok, Map.put(msg, :credit_held, true)}
+        with {:ok, msg} <- rate(msg), do: release_rated(msg, Voice.plan(msg))
 
       _ ->
         {:reject, :esme_rsubmitfail, :unknown_trunk, msg}
     end
+  end
+
+  defp release_rated(msg, {:call, call}) do
+    msg = Voice.as_call(msg, call)
+    with :ok <- credit(msg), do: {:call, Map.put(msg, :credit_held, true)}
+  end
+
+  defp release_rated(msg, :sms) do
+    with {:ok, msg} <- route_now(msg),
+         :ok <- credit(msg),
+         do: {:ok, Map.put(msg, :credit_held, true)}
   end
 
   # A message the bus could not take was never accepted: its credit hold goes back at once (§7).
