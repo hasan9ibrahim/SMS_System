@@ -32,10 +32,12 @@ const PUBLIC_OPS = new Set([
 
 /**
  * Writes that can move routes, costs or rates (team trial round 12: Rate lookup, Route rules costs and Route map kept
- * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes.
+ * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes. QA
+ * 2026-10-31: QBR vendor overrides (QBR routes), dial codes (the destination of a number), destinations and countries
+ * (names, all-networks codes, DLR targets) and product categories (vendor category limits) too.
  */
-const ROUTING_WRITES =
-  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr)/;
+export const ROUTING_WRITES =
+  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr|Qbr|DialCode|Destination|Countr|ProductCategor)/;
 
 /**
  * Values no handler can store (QA 2026-10-31): text with a NUL character (PostgreSQL refuses it) and whole numbers
