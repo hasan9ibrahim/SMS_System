@@ -28,6 +28,11 @@ export interface ColumnSql {
    */
   vis?: VisRule;
   rowKey?: string;
+  /**
+   * Decimals the row shows the value with (QA 2026-10-31): filters compare the value rounded so, so "−4.9" finds the
+   * row that shows −4.9; sorting keeps the exact value.
+   */
+  round?: number;
 }
 
 export interface ListDef<Row> {
@@ -167,8 +172,24 @@ function conditionSql(c: FilterCondition, field: FieldDescriptor, col: ColumnSql
         : field.type === "boolean"
           ? `${p(vs.map((v) => v === true || v === "true"))}::boolean[]`
           : `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
-  const subject = numeric || time || field.type === "boolean" ? x : `lower((${x})::text)`;
   const values = c.values ?? [];
+  // Shown rounded: compared rounded.
+  if (numeric && col.round !== undefined) {
+    const shown = `round((${x})::numeric, ${col.round})`;
+    return conditionSql(c, field, { sql: shown }, p);
+  }
+  // Times are shown to the millisecond and stored to the microsecond (QA 2026-10-31): a shown time is its whole
+  // millisecond, so an upper bound takes it in and "equals" matches the value on screen.
+  if (field.type === "datetime") {
+    const next = (v: unknown) => `(${p(v)}::timestamptz + interval '1 millisecond')`;
+    const within = (v: unknown) => `(${x} >= ${p(v)}::timestamptz AND ${x} < ${next(v)})`;
+    if (c.op === "eq") return within(c.value);
+    if (c.op === "neq") return `(${x} IS NULL OR NOT ${within(c.value)})`;
+    if (c.op === "between") return `(${x} >= ${p(values[0])}::timestamptz AND ${x} < ${next(values[1])})`;
+    if (c.op === "lte") return `${x} < ${next(c.value)}`;
+    if (c.op === "gt") return `${x} >= ${next(c.value)}`;
+  }
+  const subject = numeric || time || field.type === "boolean" ? x : `lower((${x})::text)`;
   switch (c.op) {
     case "eq":
       return `${subject} = ${value(c.value)}`;
