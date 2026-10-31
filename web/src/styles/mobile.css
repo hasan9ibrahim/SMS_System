@@ -134,6 +134,8 @@
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-panel);
   overflow: hidden;
+  /* A double-tap opens the card's row instead of zooming the page. */
+  touch-action: manipulation;
 }
 .gcard.active {
   background: var(--accent-soft);

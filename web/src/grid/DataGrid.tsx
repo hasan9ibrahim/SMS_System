@@ -372,6 +372,9 @@ function MobileSort({
   );
 }
 
+/** Two taps on a card within this time are a double-tap: it opens the row, as a double-click does on a desktop. */
+const DOUBLE_TAP_MS = 400;
+
 /** A row as a card on phones: the first column as the title, the next few as label and value. */
 function MobileCardInner<Row extends { id: number }>({
   row,
@@ -381,9 +384,22 @@ function MobileCardInner<Row extends { id: number }>({
   active,
   checked,
   onClick,
+  onDoubleClick,
   extraClass,
   masked,
 }: RowProps<Row>) {
+  // Touch browsers send no reliable dblclick, so the second of two quick taps (or clicks) opens the row (design QA
+  // round 13, §15.1).
+  const lastTap = useRef<number | null>(null);
+  const tap = (e: MouseEvent) => {
+    const prev = lastTap.current;
+    lastTap.current = e.timeStamp;
+    onClick(row, e);
+    if (prev !== null && e.timeStamp - prev < DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      onDoubleClick(row, e);
+    }
+  };
   const shown = cells.filter((c) => c.field.field !== "id");
   const [title, ...rest] = shown;
   const value = (c: (typeof cells)[number]) =>
@@ -400,7 +416,7 @@ function MobileCardInner<Row extends { id: number }>({
       style={{ transform: `translateY(${top}px)` }}
       role="row"
       aria-rowindex={index + 2}
-      onClick={(e) => onClick(row, e)}
+      onClick={tap}
     >
       <div className="gcard-title">{title ? value(title) : `#${row.id}`}</div>
       <div className="gcard-fields">
