@@ -2647,7 +2647,11 @@ export function mapRepush(r: Record<string, unknown>): RepushRequestRow {
 /** Network Status (§9.2): every live trunk with its bind status, customer and vendor side. */
 export const NETWORK_FROM = `(
     SELECT 'customer' AS side, t.id AS trunk_id, t.enterprise_id, e.name AS enterprise_name, t.name AS trunk_name,
-           t.max_connections, tb.status, tb.connections, tb.queue, tb.tps, tb.since, u.username AS changed_by,
+           -- Each client address may bind Max Connections times (team trial round 14): allowed now is that times the
+           -- addresses bound, at least one.
+           t.max_connections * GREATEST(1, (SELECT count(DISTINCT s.ip) FROM bind_sessions s
+                                             WHERE s.side = 'customer' AND s.trunk_id = t.id))::int AS max_connections,
+           tb.status, tb.connections, tb.queue, tb.tps, tb.since, u.username AS changed_by,
            coalesce((SELECT array_agg(DISTINCT host(s.ip) ORDER BY host(s.ip)) FROM bind_sessions s
                       WHERE s.side = 'customer' AND s.trunk_id = t.id), '{}') AS ips,
            -- Allowed IPs and any bound IP, each with its sessions now (team trial round 4).

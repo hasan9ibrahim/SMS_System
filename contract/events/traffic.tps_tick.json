@@ -19,7 +19,7 @@
         "properties": {
           "trunk": { "$ref": "common.json#/$defs/PartyRef" },
           "tps": { "type": "number", "minimum": 0 },
-          "tpsLimit": { "type": "number", "minimum": 0, "description": "Configured TPS; the UI shows % used, amber above 80 %, red at 100 %." },
+          "tpsLimit": { "type": "number", "minimum": 0, "description": "The trunk's TPS limit now (§5.4): TPS × Max Connections, and for a customer trunk × the client addresses bound now with a sending bind (at least one). The UI shows % used, amber above 80 %, red at 100 %." },
           "queueDepth": { "type": "integer", "minimum": 0, "description": "Overflow buffer depth" }
         }
       }

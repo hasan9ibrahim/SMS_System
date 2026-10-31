@@ -1,6 +1,7 @@
 defmodule Sms.Switch.Customer.ClusterTest do
-  # Two servers (spec §14, decisions Q12/Q13): Max Connections counts the binds on both (S-1.2), and a receipt finds
-  # its session on whichever server holds it (§13.1). The second server is a peer BEAM node.
+  # Two servers (spec §14, decisions Q12/Q13): Max Connections counts the binds on both (S-1.2), per client address
+  # (team trial round 14), and a receipt finds its session on whichever server holds it (§13.1). The second server is
+  # a peer BEAM node.
   use ExUnit.Case, async: false
   alias Sms.Switch.Customer.{Affinity, Sessions, Trunk}
   alias Sms.Switch.Test.Cluster
@@ -53,6 +54,54 @@ defmodule Sms.Switch.Customer.ClusterTest do
     wait_until(fn -> Sessions.cluster_count(7) == 1 end)
     {_, :ok} = Cluster.fake_session(trunk(2), meta("l3", :trx))
     send(local, :stop)
+  end
+
+  test "Max Connections counts per client address on both servers (team trial round 14)", %{
+    node: node
+  } do
+    a = {10, 0, 0, 1}
+    b = {10, 0, 0, 2}
+    {remote, :ok} = :erpc.call(node, Cluster, :fake_session, [trunk(1), meta("pa-r", :trx, a)])
+    # The address is full on the other server: refused here too.
+    {_, result} = Cluster.fake_session(trunk(1), meta("pa-l1", :trx, a))
+    assert result == {:error, :max_connections}
+    # Another address has its own Max Connections.
+    {local, :ok} = Cluster.fake_session(trunk(1), meta("pa-l2", :trx, b))
+    assert Sessions.cluster_count(7) == 2
+    assert Sessions.cluster_count(7, a) == 1 and Sessions.cluster_count(7, b) == 1
+    for pid <- [remote, local], do: send(pid, :stop)
+    wait_until(fn -> Sessions.cluster_count(7) == 0 end)
+  end
+
+  test "the TPS pool grows with the addresses sending on either server (team trial round 14)", %{
+    node: node
+  } do
+    t = %Trunk{trunk(2) | tps: 10}
+    assert Trunk.trunk_tps(t) == 20
+
+    {remote, :ok} =
+      :erpc.call(node, Cluster, :fake_session, [t, meta("tp-r", :tx, {10, 0, 0, 1})])
+
+    {local, :ok} = Cluster.fake_session(t, meta("tp-l", :trx, {10, 0, 0, 2}))
+    {same, :ok} = Cluster.fake_session(t, meta("tp-s", :tx, {10, 0, 0, 2}))
+    # A receive-only session sends nothing: its address adds nothing to the pool.
+    {rx, :ok} = Cluster.fake_session(t, meta("tp-rx", :rx, {10, 0, 0, 3}))
+    wait_until(fn -> Sessions.sending_addresses(7) == 2 end)
+    assert Trunk.trunk_tps(t) == 40
+    # The address still sends on its other session.
+    send(local, :stop)
+
+    wait_until(fn ->
+      :pg.get_members(:sms_customer_sessions, {:sender_ip, 7, {10, 0, 0, 2}}) == [same]
+    end)
+
+    assert Sessions.sending_addresses(7) == 2
+    send(same, :stop)
+    wait_until(fn -> Sessions.sending_addresses(7) == 1 end)
+    send(remote, :stop)
+    wait_until(fn -> Sessions.sending_addresses(7) == 0 end)
+    assert Trunk.trunk_tps(t) == 20
+    send(rx, :stop)
   end
 
   test "binds racing on both servers never exceed Max Connections", %{node: node} do

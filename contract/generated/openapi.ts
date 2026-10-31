@@ -11685,6 +11685,7 @@ export type components = {
       username?: string;
       /** @description SMPP password (system_id max 16, password max 9 characters in SMPP v3.4). Required on create (400 at `/password` without it, QA 2026-10-31); omit to keep. */
       password?: string;
+      /** @description Sessions (binds) each client IP address may open, on all servers together (§5.4, team trial round 14): with 2 and two addresses, each address may bind twice. Every address counts on its own, also inside a listed network. */
       maxConnections?: number;
       systemType?: string | null;
       sslType?: components["schemas"]["SslType"];
@@ -11698,6 +11699,7 @@ export type components = {
        */
       dlrSessionAffinity?: "strict" | "same_ip" | "same_trunk";
       dlrHoldHours?: number;
+      /** @description Messages per second per session. The trunk has one pool shared by all its sessions on all servers: TPS × Max Connections × the client addresses bound now with a sending bind (TX or TRX), at least one (§5.4, decision Q13, team trial round 14). Any session may use the whole pool; the business company limit applies on top. */
       tps?: number;
       overflowBuffer?: number;
       loopDetection?: boolean;
@@ -16172,6 +16174,7 @@ export type components = {
       }[];
       /** @description Bound sessions now. */
       connections: number;
+      /** @description Sessions allowed now. Vendor tab: the trunk's Max Connections. Customer tab: Max Connections × the client addresses bound now (at least one), as each address may bind Max Connections times. */
       maxConnections: number;
       /** @description online, offline or stopped (by a user). */
       status: string;

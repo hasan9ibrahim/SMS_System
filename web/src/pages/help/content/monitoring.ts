@@ -1196,7 +1196,7 @@ export const topics: HelpTopic[] = [
               { name: "Enterprise ID / Trunk ID", what: "The numbers of the enterprise and trunk." },
               { name: "Enterprise Name / Trunk Name", what: "Their names." },
               { name: "IP Address", what: "The IP addresses of the trunk." },
-              { name: "Number of Connections", what: "Open connections out of the maximum allowed, e.g. `2 / 4`." },
+              { name: "Number of Connections", what: "Open connections out of the maximum allowed now, e.g. `2 / 4`. On the Customer tab the maximum is Max connections per IP × the client IPs bound, as each IP may bind that many times." },
               {
                 name: "Queue",
                 what: "Vendor tab only: messages waiting to be sent to the vendor. Amber when above 200.",

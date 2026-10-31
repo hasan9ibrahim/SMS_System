@@ -580,7 +580,17 @@ export function CustomerTrunkFields({
           <SubHead>Credentials</SubHead>
           <UsernameField form={form} />
           <PasswordField form={form} isNew={isNew} passwordSet={passwordSet} trunk={trunk} />
-          <NumberField form={form} path="maxConnections" label="Max connections" required min={1} max={10} step={1} />
+          {/* Each client IP may bind this many times (team trial round 14, §5.4). */}
+          <NumberField
+            form={form}
+            path="maxConnections"
+            label="Max connections per IP"
+            required
+            min={1}
+            max={10}
+            step={1}
+            hint="Sessions each client IP may open"
+          />
           <TextField form={form} path="systemType" label="System type" maxLength={13} />
         </Section>
       )}
@@ -718,7 +728,7 @@ export function CustomerTrunkFields({
             min={1}
             max={100000}
             step={1}
-            hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS (${v.maxConnections ?? 1} sessions)`}
+            hint={`Trunk total: ${((v.tps ?? 0) * (v.maxConnections ?? 1)).toLocaleString("en-US")} TPS for each client IP bound (${v.maxConnections ?? 1} sessions per IP)`}
           />
           <NumberField form={form} path="overflowBuffer" label="Overflow buffer" min={0} step={1} suffix="messages" />
           <span />

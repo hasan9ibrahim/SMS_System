@@ -50,7 +50,7 @@ The switch acts as an SMSC (server) toward customers and as an ESME (client) tow
 - Bind modes: Transmitter (TX), Receiver (RX), Transceiver (TR/TRX); responses and receipts return on the session and IP that sent the request (§13.1). Customer trunks also offer AUTO (accept whatever the client binds); vendor trunks choose TX, RX or TR.
 - bind\_\* carries system\_id (Username), password, system\_type, interface\_version, addr\_ton, addr\_npi, address\_range — the last three are the vendor trunk's Bind Parameters (AddrTON, AddrNPI, AddrRange).
 - enquire\_link keep-alive with a configurable response timeout (EnquireLinkRespTimeOutSec); unbind/unbind\_resp on shutdown; generic\_nack for malformed PDUs.
-- Max Connections (1–10) limits concurrent binds per trunk; customer trunks whitelist the client Host Name (IP).
+- Max Connections (1–10) limits concurrent binds: per vendor trunk, and on a customer trunk per client IP address (each address the customer binds from may open that many; product owner 2026-10-31); customer trunks whitelist the client Host Name (IP).
 - TLS options on both sides: Non Secure, SSLv2, SSLv3, SSLv23, TLSv1, with an uploaded certificate (SSL File). A rebuild should add TLS 1.2/1.3.
 
 **Message PDUs**
@@ -262,14 +262,14 @@ Form (/customertrunk/add|edit|view/{id}):
 |  | Service Type Routing | Use SMPP service\_type as a routing key |
 | Connection | Host Name\* | Allowed client IP(s) |
 |  | Username\* / Password\* | SMPP system\_id / password |
-|  | Max Connections | 1–10 binds |
+|  | Max Connections | 1–10 binds per client IP address |
 |  | SystemType | Expected system\_type |
 |  | Port\* | Listener port |
 |  | SSLType / SSL File | Non Secure, SSLv2, SSLv3, SSLv23, TLSv1 + certificate |
 |  | DLR Push URL / MO Push URL | HTTP protocol only: callback URLs |
 |  | Delayed Submit | Off / On — respond submit\_sm\_resp only after vendor accepts |
 |  | Send Bind | Notify the customer of bind events |
-| Limitation | TPS\* | Max submits per second |
+| Limitation | TPS\* | Max submits per second per session; the trunk's pool is TPS × Max Connections × client IPs bound with a sending bind (at least one), shared by all its sessions |
 |  | Customer Overflow Buffer | Messages queued beyond TPS (e.g. 10,000) |
 |  | Loop Detection | Active / Inactive — block messages that return to the switch |
 |  | Default Coding | GSM 7 bit (0) or Latin1 8 bit (3), applied when data\_coding = 0 |
