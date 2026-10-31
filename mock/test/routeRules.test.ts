@@ -9,12 +9,16 @@ import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { refreshRouteTraffic } from "../src/api/routeTraffic.js";
+import { deleteTestRouteRules } from "./testRules.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
 const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
 if (ready) await refreshRouteTraffic();
 after(async () => {
+  // Every rule this run made goes, live or archived (QA 2026-10-31): Test rule, Levels, Edit, Warm, Clone (copy) and
+  // the others were left active and routed live traffic.
+  if (ready) await deleteTestRouteRules(run);
   await app.close();
   await closeDb();
 });
