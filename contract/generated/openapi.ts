@@ -22,6 +22,26 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/csp-reports": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Receive Content-Security-Policy violation reports (§14)
+     * @description Where the browser reports a page that broke the web server's Content-Security-Policy (its `report-uri` and `report-to`; deploy/ansible README, "Content-Security-Policy"). No sign-in: browsers post reports on their own. The older `report-uri` format (`application/csp-report`, one report) and the Reporting API (`application/reports+json`, a list) are both taken, and plain `application/json` with either shape. At most 64 KB per request and 60 requests a minute per client address (429 after); each violation is written to the service log as one compact line and nothing is stored. Not recorded in the Audit Trail.
+     */
+    post: operations["reportCspViolation"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/session": {
     parameters: {
       query?: never;
@@ -10722,6 +10742,47 @@ export type components = {
        */
       backend: "mock" | "elixir";
     };
+    /** @description One violation in the `report-uri` format (§14). Browsers differ in which members they send, so all are optional and unknown ones are allowed (and ignored). */
+    CspViolation: {
+      "document-uri"?: string;
+      referrer?: string;
+      "violated-directive"?: string;
+      "effective-directive"?: string;
+      "original-policy"?: string;
+      /** @enum {string} */
+      disposition?: "enforce" | "report";
+      "blocked-uri"?: string;
+      "source-file"?: string;
+      "line-number"?: number;
+      "column-number"?: number;
+      "status-code"?: number;
+      "script-sample"?: string;
+    };
+    /** @description A `report-uri` report (`application/csp-report`). */
+    CspReportBody: {
+      "csp-report": components["schemas"]["CspViolation"];
+    };
+    /** @description Reporting API reports (`application/reports+json`). Only `type: csp-violation` reports are logged; others are accepted and ignored. */
+    CspReportList: {
+      type: string;
+      age?: number;
+      url?: string;
+      user_agent?: string;
+      body: {
+        documentURL?: string;
+        referrer?: string | null;
+        blockedURL?: string | null;
+        effectiveDirective?: string;
+        originalPolicy?: string;
+        sourceFile?: string | null;
+        sample?: string | null;
+        /** @enum {string} */
+        disposition?: "enforce" | "report";
+        statusCode?: number;
+        lineNumber?: number | null;
+        columnNumber?: number | null;
+      };
+    }[];
     /**
      * @description Colour theme (§15.2); blue-grey added in team trial round 6.
      * @enum {string}
@@ -19881,6 +19942,59 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["Health"];
+        };
+      };
+    };
+  };
+  reportCspViolation: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/csp-report": components["schemas"]["CspReportBody"];
+        "application/reports+json": components["schemas"]["CspReportList"];
+        "application/json":
+          components["schemas"]["CspReportBody"] | components["schemas"]["CspReportList"];
+      };
+    };
+    responses: {
+      /** @description Received (logged) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["BadRequest"];
+      /** @description The request is over 64 KB */
+      413: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Not one of the report content types */
+      415: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
+        };
+      };
+      /** @description Too many reports from this address; try again in a minute */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["Problem"];
         };
       };
     };

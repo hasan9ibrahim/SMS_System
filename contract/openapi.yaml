@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.126.0
+  version: 0.132.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -87,6 +87,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+
+  /csp-reports:
+    post:
+      tags: [system]
+      operationId: reportCspViolation
+      summary: Receive Content-Security-Policy violation reports (§14)
+      description: >-
+        Where the browser reports a page that broke the web server's Content-Security-Policy (its `report-uri` and
+        `report-to`; deploy/ansible README, "Content-Security-Policy"). No sign-in: browsers post reports on their
+        own. The older `report-uri` format (`application/csp-report`, one report) and the Reporting API
+        (`application/reports+json`, a list) are both taken, and plain `application/json` with either shape. At most
+        64 KB per request and 60 requests a minute per client address (429 after); each violation is written to the
+        service log as one compact line and nothing is stored. Not recorded in the Audit Trail.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/csp-report:
+            schema:
+              $ref: "#/components/schemas/CspReportBody"
+          application/reports+json:
+            schema:
+              $ref: "#/components/schemas/CspReportList"
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/CspReportBody"
+                - $ref: "#/components/schemas/CspReportList"
+      responses:
+        "204":
+          description: Received (logged)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: The request is over 64 KB
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "415":
+          description: Not one of the report content types
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          description: Too many reports from this address; try again in a minute
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
 
   /session:
     post:
@@ -16917,6 +16968,117 @@ components:
           type: string
           enum: [mock, elixir]
           description: Which implementation answers the contract.
+
+    CspViolation:
+      type: object
+      description: >-
+        One violation in the `report-uri` format (§14). Browsers differ in which members they send, so all are
+        optional and unknown ones are allowed (and ignored).
+      properties:
+        document-uri:
+          type: string
+          maxLength: 4096
+        referrer:
+          type: string
+          maxLength: 4096
+        violated-directive:
+          type: string
+          maxLength: 1024
+        effective-directive:
+          type: string
+          maxLength: 1024
+        original-policy:
+          type: string
+          maxLength: 8192
+        disposition:
+          type: string
+          enum: [enforce, report]
+        blocked-uri:
+          type: string
+          maxLength: 4096
+        source-file:
+          type: string
+          maxLength: 4096
+        line-number:
+          type: integer
+          minimum: 0
+        column-number:
+          type: integer
+          minimum: 0
+        status-code:
+          type: integer
+          minimum: 0
+        script-sample:
+          type: string
+          maxLength: 1024
+
+    CspReportBody:
+      type: object
+      description: A `report-uri` report (`application/csp-report`).
+      required: [csp-report]
+      properties:
+        csp-report:
+          $ref: "#/components/schemas/CspViolation"
+
+    CspReportList:
+      type: array
+      description: >-
+        Reporting API reports (`application/reports+json`). Only `type: csp-violation` reports are logged; others are
+        accepted and ignored.
+      minItems: 1
+      maxItems: 100
+      items:
+        type: object
+        required: [type, body]
+        properties:
+          type:
+            type: string
+            maxLength: 64
+          age:
+            type: integer
+            minimum: 0
+          url:
+            type: string
+            maxLength: 4096
+          user_agent:
+            type: string
+            maxLength: 1024
+          body:
+            type: object
+            properties:
+              documentURL:
+                type: string
+                maxLength: 4096
+              referrer:
+                type: [string, "null"]
+                maxLength: 4096
+              blockedURL:
+                type: [string, "null"]
+                maxLength: 4096
+              effectiveDirective:
+                type: string
+                maxLength: 1024
+              originalPolicy:
+                type: string
+                maxLength: 8192
+              sourceFile:
+                type: [string, "null"]
+                maxLength: 4096
+              sample:
+                type: [string, "null"]
+                maxLength: 1024
+              disposition:
+                type: string
+                enum: [enforce, report]
+              statusCode:
+                type: integer
+                minimum: 0
+              lineNumber:
+                type: [integer, "null"]
+                minimum: 0
+              columnNumber:
+                type: [integer, "null"]
+                minimum: 0
 
     Theme:
       type: string

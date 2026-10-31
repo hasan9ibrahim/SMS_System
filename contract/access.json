@@ -12,7 +12,8 @@
     "changes",
     "portal",
     "lookups",
-    "password-setup"
+    "password-setup",
+    "csp-reports"
   ],
   "admin": [
     "change-history",
