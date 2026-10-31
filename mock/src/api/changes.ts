@@ -610,22 +610,29 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /** Change history list (§13.10) with record names, a summary and readable fields (team trial round 1). */
+/**
+ * The change history as `me` may see it: only changes of records on pages the user may open (backend step 10;
+ * administrators see every change), and only the changes of the people the user covers (team trial round 12,
+ * `changeScope`). The list and its export (§13.22) share it.
+ */
+export async function scopedChangeList(db: pg.Pool | pg.PoolClient, me: CurrentUser) {
+  const types = visibleEntityTypes(me);
+  const people = await changeScope(db, me);
+  const where = [
+    types === null ? null : `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])`,
+    people === null ? null : `c.user_id = ANY(ARRAY[${people.join(",")}]::bigint[])`,
+  ].filter((w): w is string => w !== null);
+  const def = listDefs.changes as ListDef<Change>;
+  return { def: where.length ? { ...def, baseWhere: where.join(" AND ") } : def, people };
+}
+
 export function queryChanges(request: FastifyRequest, reply: FastifyReply) {
   const query = request.body as ListQuery;
   const errors = checkListQuery(query, listFields.changes);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    // Only changes of records on pages the user may open (backend step 10); administrators see every change. Only
-    // the changes of the people the user covers (team trial round 12, `changeScope`).
     const me = await getCurrentUser();
-    const types = visibleEntityTypes(me);
-    const people = await changeScope(pool, me);
-    const where = [
-      types === null ? null : `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])`,
-      people === null ? null : `c.user_id = ANY(ARRAY[${people.join(",")}]::bigint[])`,
-    ].filter((w): w is string => w !== null);
-    const def = listDefs.changes as ListDef<Change>;
-    const scoped: ListDef<Change> = where.length ? { ...def, baseWhere: where.join(" AND ") } : def;
+    const { def: scoped, people } = await scopedChangeList(pool, me);
     try {
       const page = await runList(pool, scoped, query);
       const canUndo = (c: Change) =>

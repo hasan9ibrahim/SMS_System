@@ -77,12 +77,17 @@ export function queryRateTables(request: FastifyRequest, reply: FastifyReply) {
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
     const page = await runList(pool, rateTableList, query);
-    const figures = await trafficFigures(pool, page.rows);
-    page.rows = page.rows.map((r): RateTableRow => {
-      const f = figures.get(r.id);
-      return f ? { ...r, avgMarginPct: f.margin, moneyToday: f.money } : r;
-    });
+    page.rows = await addTrafficFigures(pool, page.rows);
     return page;
+  });
+}
+
+/** Today's money and margin on rate table rows (the Rate manager list and its export, §13.12, §13.22). */
+export async function addTrafficFigures(db: Db, rows: RateTableRow[]): Promise<RateTableRow[]> {
+  const figures = await trafficFigures(db, rows);
+  return rows.map((r): RateTableRow => {
+    const f = figures.get(r.id);
+    return f ? { ...r, avgMarginPct: f.margin, moneyToday: f.money } : r;
   });
 }
 
