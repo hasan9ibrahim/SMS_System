@@ -19,6 +19,7 @@ import { Button, Popover, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { codeChips, DestinationTree, useDestinationTree, type TreeCountry } from "../rates/DestinationTree";
 import { Icon } from "../../ui/Icon";
+import { repeatText } from "../switch/tools/toolsModel";
 import { messageEncoding, msgStatusTone, needsUcs2 } from "./monitorModel";
 
 const page = pageForPath("/routing/simulator")!;
@@ -149,6 +150,11 @@ function Result({ r }: { r: RouteSimulatorResult }) {
         <StatusDot tone={r.blocked ? "error" : "good"} />{" "}
         {r.blocked ? (
           <strong>{r.blocked}</strong>
+        ) : r.voiceCall ? (
+          <strong>
+            Phone call through {r.voiceCall.gateway} to {r.voiceCall.dialled} (no vendor) · cost{" "}
+            {money(r.vendorCost?.rate, r.vendorCost?.currency)} · margin {margin}
+          </strong>
         ) : forced ? (
           <strong>
             Sent straight to {forced.name} (routing skipped) · cost {money(forced.rate, forced.currency ?? undefined)}{" "}
@@ -213,50 +219,90 @@ function Result({ r }: { r: RouteSimulatorResult }) {
             </dd>
           </dl>
         </Step>
-        <Step
-          n={3}
-          title={d ? `Route rule #${d.ruleId}` : "Route rule"}
-          tone={!d || d.outcome !== "route" ? "error" : "good"}
-          summary={
-            forced
-              ? "skipped: the test went straight to a vendor"
-              : !d
-                ? "no rule matched"
-                : d.outcome === "route"
-                  ? `${d.vendor!.name} picked (${d.vendor!.decidedBy})`
-                  : d.outcome.replace("_", " ")
-          }
-          open
-        >
-          {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
-          {r.route.tried.some((x) => x.reason.startsWith("shadowed")) && (
-            <div className="rs-shadowed">
-              <strong className="small">Also match, never reached (rule #{d?.ruleId} decides first):</strong>
-              <ul>
-                {r.route.tried
-                  .filter((x) => x.reason.startsWith("shadowed"))
-                  .map((x) => (
-                    <li key={x.ruleId} className="small">
-                      <span className="num">#{x.ruleId}</span> {x.name} <span className="muted">· priority {x.priority}</span>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-          <details className="rs-more">
-            <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
-            <ol className="rs-tried">
-              {r.route.tried.map((x) => (
-                <li
-                  key={x.ruleId}
-                  className={x.matched ? "" : x.reason.startsWith("shadowed") ? "tone-warning" : "muted"}
-                >
-                  <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
-                </li>
-              ))}
-            </ol>
-          </details>
-        </Step>
+        {r.voiceCall ? (
+          // SMS to voice (§8): the switch calls before routing; no route rule or vendor is used.
+          <Step
+            n={3}
+            title={`SMS to voice rule #${r.voiceCall.ruleId}`}
+            tone="good"
+            summary={`a call through ${r.voiceCall.gateway}, not sent to a vendor`}
+            open
+          >
+            <dl className="kv">
+              <dt>Gateway</dt>
+              <dd>
+                {r.voiceCall.gateway}
+                {r.voiceCall.gatewayDefault && <span className="muted"> · default gateway</span>}
+              </dd>
+              <dt>Dials</dt>
+              <dd>
+                <span className="num">{r.voiceCall.dialled}</span>
+              </dd>
+              <dt>Caller ID</dt>
+              <dd>
+                {r.voiceCall.callerId ? (
+                  <span className="num">{r.voiceCall.callerId}</span>
+                ) : (
+                  <span className="muted">withheld</span>
+                )}
+              </dd>
+              <dt>Says</dt>
+              <dd>
+                {r.voiceCall.phrase} <span className="muted">· {repeatText(r.voiceCall.repeat)}</span>
+              </dd>
+              <dt>No answer</dt>
+              <dd>
+                rings {r.voiceCall.ringTimeoutS} s, one retry after {r.voiceCall.retryDelayS} s, then not delivered
+                and not charged
+              </dd>
+            </dl>
+          </Step>
+        ) : (
+          <Step
+            n={3}
+            title={d ? `Route rule #${d.ruleId}` : "Route rule"}
+            tone={!d || d.outcome !== "route" ? "error" : "good"}
+            summary={
+              forced
+                ? "skipped: the test went straight to a vendor"
+                : !d
+                  ? "no rule matched"
+                  : d.outcome === "route"
+                    ? `${d.vendor!.name} picked (${d.vendor!.decidedBy})`
+                    : d.outcome.replace("_", " ")
+            }
+            open
+          >
+            {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
+            {r.route.tried.some((x) => x.reason.startsWith("shadowed")) && (
+              <div className="rs-shadowed">
+                <strong className="small">Also match, never reached (rule #{d?.ruleId} decides first):</strong>
+                <ul>
+                  {r.route.tried
+                    .filter((x) => x.reason.startsWith("shadowed"))
+                    .map((x) => (
+                      <li key={x.ruleId} className="small">
+                        <span className="num">#{x.ruleId}</span> {x.name} <span className="muted">· priority {x.priority}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+            <details className="rs-more">
+              <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
+              <ol className="rs-tried">
+                {r.route.tried.map((x) => (
+                  <li
+                    key={x.ruleId}
+                    className={x.matched ? "" : x.reason.startsWith("shadowed") ? "tone-warning" : "muted"}
+                  >
+                    <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </Step>
+        )}
         {r.egressSkipped.length > 0 && (
           <Step n={4} title="Vendors skipped" tone="warning" summary={`${r.egressSkipped.length} blocked by their own rules`}>
             <dl className="kv">

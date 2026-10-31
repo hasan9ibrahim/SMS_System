@@ -53,6 +53,8 @@ import { trunkDependenciesOf } from "./trunks.js";
 import { vendorInvoiceDependencies } from "./vendorInvoices.js";
 import { inTransaction } from "./views.js";
 import { visibilityPolicySpec } from "./visibility.js";
+import { voiceRuleRestoreRefusal } from "./switchTools.js";
+import { voiceGatewayDependencies } from "./voiceGateways.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Row = Record<string, unknown>;
@@ -291,6 +293,15 @@ export const BULK_KINDS: Partial<Record<ListId, BulkKind>> = {
     table: "sms_voice_rules",
     plural: "SMS to voice rules",
     name: (r) => `SMS to voice rule ${r.id}`,
+    restoreRefuse: (db, id) => voiceRuleRestoreRefusal(db, id),
+  },
+  // Voice gateways (§8 SMS To Voice): refused while a rule names the gateway, as the single delete.
+  voice_gateways: {
+    entityType: "voice_gateway",
+    table: "voice_gateways",
+    plural: "voice gateways",
+    deps: (db, id) => voiceGatewayDependencies(db, id),
+    liveKey: lowerName,
   },
   edr_templates: { entityType: "edr_template", table: "edr_templates", plural: "EDR templates", liveKey: lowerName },
   scheduled_reports: {

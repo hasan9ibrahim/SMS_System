@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.132.0
+  version: 0.133.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -9425,7 +9425,8 @@ paths:
       operationId: querySmsVoiceRules
       summary: "List SMS to voice rules (server-side filter, sort and paging)"
       description: |
-        SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Updated By.
+        SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Gateway (the default
+        gateway when empty), Recording ("Default" or the file name), Updated By.
       requestBody:
         required: true
         content:
@@ -9454,9 +9455,9 @@ paths:
       operationId: createSmsVoiceRule
       summary: "Add an SMS to voice rule"
       description: |
-        Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the voice call
-        repeats the text, destination (MCCMNC) and status.
-        One undoable change.
+        Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the call says
+        the code, destination (MCCMNC), voice gateway (null = the default gateway), status and optionally the rule's own
+        recording. A gateway that is deleted or unknown answers 400. One undoable change.
       requestBody:
         required: true
         content:
@@ -9604,9 +9605,12 @@ paths:
     post:
       tags: [switch]
       operationId: testSmsVoiceRules
-      summary: "Which SMS to voice rule a message meets"
+      summary: "What the switch would do with a message: call or SMS"
       description: |
-        First active rule whose sender, receiver, prefix and destination match, with the text the call reads out.
+        The first active rule (by id) whose sender, receiver, prefix and destination match. With a 4 to 8 digit code in
+        the text and an active voice gateway, the call: gateway, number dialled, caller ID, the code and the phrase as
+        spoken with the repeat count, and which prompt plays. Otherwise why the message goes as an SMS. Nothing is
+        called.
       requestBody:
         required: true
         content:
@@ -9626,6 +9630,277 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /sms-voice-rules/recording-preview:
+    post:
+      tags: [switch]
+      operationId: previewSmsVoiceRecording
+      summary: "A recording as a call would play it"
+      description: |
+        Converts an uploaded WAV the way a rule's recording is stored (§8): any PCM WAV (8, 16 or 24-bit, mono or
+        stereo, any sample rate) becomes mono, 8 kHz, 16-bit PCM WAV, at most 1 MB (about 65 s). Nothing is stored;
+        the form plays the result before the rule is saved. Anything else (MP3, a compressed WAV, too long) answers
+        400 with a plain message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVoiceRecordingUpload"
+      responses:
+        "200":
+          description: The converted recording
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /sms-voice-rules/{id}/recording:
+    get:
+      tags: [switch]
+      operationId: downloadSmsVoiceRecording
+      summary: "A rule's own recording"
+      description: |
+        The stored WAV (mono, 8 kHz, 16-bit PCM) for the form's play button. 404 when the rule uses the default
+        phrase.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The recording
+          content:
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways/query:
+    post:
+      tags: [switch]
+      operationId: queryVoiceGateways
+      summary: "List voice gateways (server-side filter, sort and paging)"
+      description: |
+        Voice gateways (§8 SMS To Voice): the operator's voice switches the SMS-to-voice calls go to over SIP. Name,
+        host, port, transport, caller ID, dial prefix, codecs, limits, priority, status and the rules using each.
+        Hidden `archived` field = deleted gateways.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ListQuery"
+      responses:
+        "200":
+          description: One page of voice gateways
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewayPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways:
+    post:
+      tags: [switch]
+      operationId: createVoiceGateway
+      summary: "Add a voice gateway"
+      description: |
+        The password is write-only. A name already used answers 409. One undoable change.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceGatewayInput"
+      responses:
+        "201":
+          description: Created, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewaySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways/{id}:
+    get:
+      tags: [switch]
+      operationId: getVoiceGateway
+      summary: "One voice gateway"
+      description: |
+        Every field of the form; the password only as `passwordSet`.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: The voice gateway
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewayRow"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    put:
+      tags: [switch]
+      operationId: updateVoiceGateway
+      summary: "Change a voice gateway"
+      description: |
+        Saves the whole form; the change lists the fields that differ (a new password is logged as changed, never
+        stored in the history and not undone). A deleted gateway answers 400. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoiceGatewayInput"
+      responses:
+        "200":
+          description: Saved, with the change (null when nothing differed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewaySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways/{id}/dependencies:
+    get:
+      tags: [switch]
+      operationId: getVoiceGatewayDependencies
+      summary: "What uses a voice gateway (safe delete, §13.29)"
+      description: |
+        SMS-to-voice rules that name the gateway; they block deleting it, for administrators too.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Dependencies and whether they block archiving
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dependencies"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways/{id}/archive:
+    post:
+      tags: [switch]
+      operationId: archiveVoiceGateway
+      summary: "Delete (archive) a voice gateway (§13.29)"
+      description: |
+        It is never removed. Refused (409, with the dependencies) while an SMS-to-voice rule names it; choose another
+        gateway in those rules, or delete them, first. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArchiveRequest"
+      responses:
+        "200":
+          description: Archived, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewaySaved"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Blocked by rules that use the gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ArchiveBlocked"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /voice-gateways/{id}/restore:
+    post:
+      tags: [switch]
+      operationId: restoreVoiceGateway
+      summary: "Restore a voice gateway"
+      description: |
+        Administrators; a live gateway with the same name answers 409. One undoable change.
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: Restored, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoiceGatewaySaved"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "503":
           $ref: "#/components/responses/Unavailable"
 
@@ -26665,11 +26940,21 @@ components:
     SmsVoiceRuleInput:
       allOf:
         - $ref: "#/components/schemas/SmsVoiceRuleFields"
+        - type: object
+          properties:
+            recording:
+              description: >-
+                The rule's own recording (§8, product owner 2026-10-31): a WAV to store (converted to mono, 8 kHz,
+                16-bit PCM; see SmsVoiceRecordingUpload), or null to go back to the default phrase "Your verification
+                code is". Left out: the stored recording stays. Part of the same undoable change as the other fields.
+              oneOf:
+                - $ref: "#/components/schemas/SmsVoiceRecordingUpload"
+                - type: "null"
       unevaluatedProperties: false
 
     SmsVoiceRuleFields:
       type: object
-      required: [senderId, receiverId, prefix, repeat, mccmnc, status]
+      required: [senderId, receiverId, prefix, repeat, mccmnc, gatewayId, status]
       properties:
         senderId:
           type: [string, "null"]
@@ -26686,11 +26971,18 @@ components:
           type: integer
           minimum: 1
           maximum: 5
-          description: How many times the call reads the text.
+          description: How many times the call says the phrase with the code, one second apart.
         mccmnc:
           type: [string, "null"]
           pattern: "^[0-9]{5,6}$"
           description: Destination; null = any.
+        gatewayId:
+          description: >-
+            The voice gateway that places the calls; null = the active gateway with the lowest priority (also used
+            while the named gateway is inactive).
+          oneOf:
+            - $ref: "#/components/schemas/Id"
+            - type: "null"
         status:
           type: string
           enum: [active, inactive]
@@ -26699,13 +26991,21 @@ components:
       allOf:
         - $ref: "#/components/schemas/SmsVoiceRuleFields"
         - type: object
-          required: [id, destination, updatedBy, updatedAt, archivedAt]
+          required: [id, destination, gateway, recording, updatedBy, updatedAt, archivedAt]
           properties:
             id:
               $ref: "#/components/schemas/Id"
             destination:
               type: [string, "null"]
               description: Country and network of the MCCMNC.
+            gateway:
+              type: [string, "null"]
+              description: The named gateway's name; null when the rule uses the default gateway.
+            recording:
+              description: The rule's own recording; null = the default phrase.
+              oneOf:
+                - $ref: "#/components/schemas/SmsVoiceRecording"
+                - type: "null"
             updatedBy:
               type: [string, "null"]
             updatedAt:
@@ -26753,10 +27053,15 @@ components:
 
     SmsVoiceTestResult:
       type: object
-      required: [matched, rule, mccmnc, spoken, reason]
+      required: [outcome, matched, rule, mccmnc, code, call, smsReason, reason]
       properties:
+        outcome:
+          type: string
+          enum: [call, sms]
+          description: A phone call, or a normal SMS.
         matched:
           type: boolean
+          description: An active rule matches the sender, receiver, prefix and destination.
         rule:
           oneOf:
             - $ref: "#/components/schemas/SmsVoiceRuleRow"
@@ -26764,11 +27069,249 @@ components:
         mccmnc:
           type: [string, "null"]
           description: The receiver's destination by dial code.
-        spoken:
+        code:
           type: [string, "null"]
-          description: What the call reads out (digits spaced, repeated).
+          description: The first run of 4 to 8 digits in the text; null when there is none.
+        call:
+          description: The call that would be placed; null when the message goes as an SMS.
+          oneOf:
+            - $ref: "#/components/schemas/SmsVoiceCall"
+            - type: "null"
+        smsReason:
+          description: >-
+            Why it would go as an SMS: no active rule matches, no 4 to 8 digit code in the text, or no active voice
+            gateway; null for a call.
+          oneOf:
+            - type: string
+              enum: [no_rule, no_code, no_gateway]
+            - type: "null"
         reason:
           type: string
+          description: The outcome in a sentence.
+
+    SmsVoiceRecordingUpload:
+      type: object
+      additionalProperties: false
+      required: [name, contentBase64]
+      description: >-
+        A WAV file, base64 in JSON like other uploads: PCM, 8, 16 or 24-bit, mono or stereo, any sample rate, at most
+        10 MB as uploaded. Stored as mono, 8 kHz, 16-bit PCM (channels mixed, resampled), at most 1 MB (about 65 s).
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The file's name, shown in the list and the form.
+        contentBase64:
+          type: string
+          minLength: 1
+          maxLength: 14000000
+
+    SmsVoiceRecording:
+      type: object
+      required: [name, sha256, bytes, durationMs]
+      description: A rule's own recording, played in place of "Your verification code is"; the digits follow it.
+      properties:
+        name:
+          type: string
+          description: The uploaded file's name.
+        sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: Hex SHA-256 of the stored WAV; the switch names the sound file after it.
+        bytes:
+          type: integer
+          description: Size of the stored WAV.
+        durationMs:
+          type: integer
+
+    SmsVoiceCall:
+      type: object
+      required: [ruleId, gatewayId, gateway, gatewayDefault, dialled, callerId, code, prompt, promptName, phrase, repeat, ringTimeoutS, retryDelayS]
+      description: The call the switch would place for a message an SMS-to-voice rule takes (§8, docs/SMS_TO_VOICE.md).
+      properties:
+        ruleId:
+          $ref: "#/components/schemas/Id"
+        gatewayId:
+          $ref: "#/components/schemas/Id"
+        gateway:
+          type: string
+          description: The voice gateway's name.
+        gatewayDefault:
+          type: boolean
+          description: >-
+            The rule names no gateway, or its gateway is inactive or deleted: the active gateway with the lowest
+            priority places the call.
+        dialled:
+          type: string
+          description: The gateway's dial prefix and the receiver's digits.
+        callerId:
+          type: [string, "null"]
+          description: >-
+            What the called person sees: the sender when it is a number (digits, optional leading +) and the gateway
+            uses the sender, else the gateway's fixed caller ID; null when it has none (withheld).
+        code:
+          type: string
+          description: The first run of 4 to 8 digits in the text (after ingress translation).
+        prompt:
+          type: string
+          enum: [default, recording]
+          description: The default phrase "Your verification code is", or the rule's own recording.
+        promptName:
+          type: [string, "null"]
+          description: The recording's file name; null for the default phrase.
+        phrase:
+          type: string
+          description: >-
+            What the person hears once, e.g. "Your verification code is 4, 8, 2, 9." (with a recording, the file's
+            name in place of the default words).
+        repeat:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Times the phrase is said, one second apart.
+        ringTimeoutS:
+          type: integer
+        retryDelayS:
+          type: integer
+          description: One retry after this when the call is not answered.
+
+    VoiceGatewayCodec:
+      type: string
+      enum: [alaw, ulaw, g722, gsm]
+      description: "Asterisk codec names: alaw = G.711 A-law, ulaw = G.711 µ-law."
+
+    VoiceGatewayFields:
+      type: object
+      required: [name, host, port, transport, username, fromDomain, callerIdMode, fixedCallerId, dialPrefix, codecs, maxCalls, ringTimeoutS, retryDelayS, priority, status]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+          description: The voice switch's SIP host name or IP address.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          default: 5060
+        transport:
+          type: string
+          enum: [udp, tcp, tls]
+          default: udp
+        username:
+          type: [string, "null"]
+          maxLength: 100
+          description: SIP authentication user; null = the voice switch trusts our address.
+        fromDomain:
+          type: [string, "null"]
+          maxLength: 253
+          description: Domain in the SIP From header; null = the host.
+        callerIdMode:
+          type: string
+          enum: [sender, fixed]
+          default: sender
+          description: "sender: the message's sender when it is a number, else the fixed caller ID; fixed: always the fixed caller ID."
+        fixedCallerId:
+          type: [string, "null"]
+          pattern: "^\\+?[0-9]{3,20}$"
+          description: Required with callerIdMode fixed.
+        dialPrefix:
+          type: string
+          pattern: "^[0-9*#+]{0,20}$"
+          description: Put before the receiver number when dialling (the voice switch's routing prefix, often empty).
+        codecs:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/VoiceGatewayCodec"
+        maxCalls:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 10
+          description: Calls at once; more wait in a queue and go as calls end.
+        ringTimeoutS:
+          type: integer
+          minimum: 5
+          maximum: 120
+          default: 30
+        retryDelayS:
+          type: integer
+          minimum: 10
+          maximum: 3600
+          default: 60
+          description: One retry after this when a call is not answered; then the message is UNDELIV and not charged.
+        priority:
+          type: integer
+          minimum: 0
+          maximum: 9999
+          default: 1
+          description: A rule without a gateway uses the active gateway with the lowest priority.
+        status:
+          $ref: "#/components/schemas/RecordStatus"
+
+    VoiceGatewayInput:
+      allOf:
+        - $ref: "#/components/schemas/VoiceGatewayFields"
+        - type: object
+          required: [password]
+          properties:
+            password:
+              type: [string, "null"]
+              maxLength: 200
+              writeOnly: true
+              description: "Write-only. Null keeps the stored one; an empty string clears it."
+      unevaluatedProperties: false
+
+    VoiceGatewayRow:
+      allOf:
+        - $ref: "#/components/schemas/VoiceGatewayFields"
+        - type: object
+          required: [id, passwordSet, rules, updatedBy, updatedAt, archivedAt]
+          properties:
+            id:
+              $ref: "#/components/schemas/Id"
+            passwordSet:
+              type: boolean
+              description: The password is never returned (§13.22).
+            rules:
+              type: integer
+              description: Live SMS-to-voice rules that name this gateway.
+            updatedBy:
+              type: [string, "null"]
+            updatedAt:
+              $ref: "#/components/schemas/Timestamp"
+            archivedAt:
+              type: [string, "null"]
+              format: date-time
+
+    VoiceGatewayPage:
+      allOf:
+        - $ref: "#/components/schemas/ListPageMeta"
+        - type: object
+          required: [rows]
+          properties:
+            rows:
+              type: array
+              items:
+                $ref: "#/components/schemas/VoiceGatewayRow"
+
+    VoiceGatewaySaved:
+      type: object
+      required: [record, change]
+      properties:
+        record:
+          $ref: "#/components/schemas/VoiceGatewayRow"
+        change:
+          oneOf:
+            - $ref: "#/components/schemas/Change"
+            - type: "null"
 
     BroadcastAudienceInput:
       type: object
@@ -26915,7 +27458,7 @@ components:
     EdrRow:
       type: object
       description: "One message attempt with both legs (§9.1 EDR schema)."
-      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerDestination, vendorDestination, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeDecidedBy, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrErrorText, hlrCostSys]
+      required: [id, startTime, submitTime, submitRespTime, deliveryTime, type, businessCompanyId, productCategoryId, productCategory, customerEnterpriseId, customerEnterprise, customerTrunkId, customerTrunk, customerIp, customerPort, customerSessionId, customerBindType, protocol, customerMsgId, srcTon, srcNpi, dstTon, dstNpi, coding, vendorSrcTon, vendorSrcNpi, vendorDstTon, vendorDstNpi, vendorCoding, senderId, vendorSenderId, dnid, routedDnid, messageText, vendorMessageText, customerMccmnc, mcc, mnc, country, customerDestination, vendorDestination, customerBillingType, customerRateTableId, customerRate, customerCurrency, customerSysRate, translationRuleIds, customerMsgStatus, vendorEnterpriseId, vendorEnterprise, vendorTrunkId, vendorTrunk, vendorIp, vendorPort, vendorMsgId, vendorMccmnc, vendorBillingType, vendorRateTableId, vendorRate, vendorCurrency, vendorSysRate, vendorExRate, vendorTranslationRuleIds, routeRuleId, routeType, routeDecidedBy, voiceGatewayId, voiceGateway, voiceAnswered, voiceHangupCause, voiceDurationMs, dlrReroute, repushRequestId, attemptNo, isFinalAttempt, isSubmitSuccess, causeCode, causeText, msgStatus, deliveryError, customerDeliveryError, networkError, registeredDelivery, vendorRegisteredDelivery, msgCount, udh, deliveryDelaySeconds, isBuffered, isCustomerBillable, isVendorBillable, revenue, cost, revenueSys, costSys, hlrProviderId, hlrProvider, hlrFetchType, hlrIsPorted, hlrIsAccomplished, hlrErrorCode, hlrErrorText, hlrCostSys]
       properties:
         id:
           type: string
@@ -27085,9 +27628,31 @@ components:
             type: integer
         routeRuleId:
           type: integer
+        routeType:
+          type: string
+          description: >-
+            How the attempt was routed: static, dynamic (least cost), qbr (quality), block, or voice (an SMS-to-voice
+            call, §8: no vendor, vendor cost 0); empty when not routed.
         routeDecidedBy:
           type: string
           description: "whitelist, warmup, split … (§13.27)."
+        voiceGatewayId:
+          type: integer
+          description: The voice gateway that placed the call (route type voice); 0 = not a call.
+        voiceGateway:
+          type: [string, "null"]
+        voiceAnswered:
+          type: boolean
+          description: >-
+            The call was answered (DELIVRD, billed as one SMS); not answered after the retry is UNDELIV, not charged.
+        voiceHangupCause:
+          type: string
+          description: >-
+            How the call ended, Asterisk's cause name (NORMAL_CLEARING, NO_ANSWER, USER_BUSY, CONGESTION …); empty
+            when not a call.
+        voiceDurationMs:
+          type: integer
+          description: From answer to hangup; 0 when not answered.
         dlrReroute:
           type: boolean
           description: >-
@@ -27870,8 +28435,16 @@ components:
 
     RouteSimulatorResult:
       type: object
-      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms, vendorTranslation, egressSkipped]
+      required: [trunk, translation, sender, receiver, mccmnc, destination, encoding, customerRate, route, vendorCost, marginPct, blocked, testSms, vendorTranslation, egressSkipped, voiceCall]
       properties:
+        voiceCall:
+          description: >-
+            SMS to voice (§8): an active rule takes the message after ingress translation (with a 4 to 8 digit code in
+            the text), so the switch places this call instead of sending it to a vendor; the vendor cost is 0 and no
+            vendor is tried. Null otherwise, and when a vendor trunk is tested directly.
+          oneOf:
+            - $ref: "#/components/schemas/SmsVoiceCall"
+            - type: "null"
         egressSkipped:
           description: >-
             Vendors routing picked first whose own egress translation rules block the message; each is skipped
@@ -35318,7 +35891,7 @@ components:
     ListId:
       type: string
       description: A list page whose fields are described by `/meta/lists/{list}/fields`.
-      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces, portal_rates, portal_messages, rn_reports]
+      enum: [enterprises, users, changes, customer_trunks, vendor_trunks, rate_tables, rate_lines, destinations, route_rules, enterprise_report, product_categories, countries, dial_code_profiles, dial_codes, mo_numbers, route_map, rerating_requests, qbr_stats, number_lists, number_list_entries, translation_rules, hlr_providers, hlr_provider_rates, hlr_rules, hlr_policies, transactions, invoices, currencies, currency_rates, currency_rate_history, billing_cycles, enterprise_balances, invoice_requests, vendor_invoices, recon_rules, soa_reports, email_templates, email_logs, firewall_rules, firewall_filters, traffic_alerts, sms_voice_rules, voice_gateways, broadcasts, edrs, failed_edrs, edr_templates, edr_downloads, repush_requests, network_binds, signaling_captures, master_report, billing_report, scheduled_reports, daily_traffic_alerts, departments, access_groups, user_sessions, audit_log, business_companies, customer_portal_users, alert_rules, incidents, rate_notifications, rate_notification_lines, market_moves, lcr_profiles, lcr_changes, visibility_policies, visibility_assignments, visibility_grants, team_timeline, cleanup_findings, pcap_traces, portal_rates, portal_messages, rn_reports]
 
     FilterOperator:
       type: string

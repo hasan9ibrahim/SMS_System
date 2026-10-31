@@ -5956,7 +5956,8 @@ export type paths = {
     put?: never;
     /**
      * List SMS to voice rules (server-side filter, sort and paging)
-     * @description SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Updated By.
+     * @description SMS To Voice (§8): SmsVoiceID, Sender ID, Receiver ID, Prefix, Repeat, Destination, Gateway (the default
+     *     gateway when empty), Recording ("Default" or the file name), Updated By.
      */
     post: operations["querySmsVoiceRules"];
     delete?: never;
@@ -5976,9 +5977,9 @@ export type paths = {
     put?: never;
     /**
      * Add an SMS to voice rule
-     * @description Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the voice call
-     *     repeats the text, destination (MCCMNC) and status.
-     *     One undoable change.
+     * @description Sender ID and Receiver ID patterns (% and _ wildcards, empty = any), receiver prefix, how often the call says
+     *     the code, destination (MCCMNC), voice gateway (null = the default gateway), status and optionally the rule's own
+     *     recording. A gateway that is deleted or unknown answers 400. One undoable change.
      */
     post: operations["createSmsVoiceRule"];
     delete?: never;
@@ -6062,10 +6063,185 @@ export type paths = {
     get?: never;
     put?: never;
     /**
-     * Which SMS to voice rule a message meets
-     * @description First active rule whose sender, receiver, prefix and destination match, with the text the call reads out.
+     * What the switch would do with a message: call or SMS
+     * @description The first active rule (by id) whose sender, receiver, prefix and destination match. With a 4 to 8 digit code in
+     *     the text and an active voice gateway, the call: gateway, number dialled, caller ID, the code and the phrase as
+     *     spoken with the repeat count, and which prompt plays. Otherwise why the message goes as an SMS. Nothing is
+     *     called.
      */
     post: operations["testSmsVoiceRules"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/recording-preview": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * A recording as a call would play it
+     * @description Converts an uploaded WAV the way a rule's recording is stored (§8): any PCM WAV (8, 16 or 24-bit, mono or
+     *     stereo, any sample rate) becomes mono, 8 kHz, 16-bit PCM WAV, at most 1 MB (about 65 s). Nothing is stored;
+     *     the form plays the result before the rule is saved. Anything else (MP3, a compressed WAV, too long) answers
+     *     400 with a plain message.
+     */
+    post: operations["previewSmsVoiceRecording"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/sms-voice-rules/{id}/recording": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * A rule's own recording
+     * @description The stored WAV (mono, 8 kHz, 16-bit PCM) for the form's play button. 404 when the rule uses the default
+     *     phrase.
+     */
+    get: operations["downloadSmsVoiceRecording"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways/query": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * List voice gateways (server-side filter, sort and paging)
+     * @description Voice gateways (§8 SMS To Voice): the operator's voice switches the SMS-to-voice calls go to over SIP. Name,
+     *     host, port, transport, caller ID, dial prefix, codecs, limits, priority, status and the rules using each.
+     *     Hidden `archived` field = deleted gateways.
+     */
+    post: operations["queryVoiceGateways"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a voice gateway
+     * @description The password is write-only. A name already used answers 409. One undoable change.
+     */
+    post: operations["createVoiceGateway"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways/{id}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * One voice gateway
+     * @description Every field of the form; the password only as `passwordSet`.
+     */
+    get: operations["getVoiceGateway"];
+    /**
+     * Change a voice gateway
+     * @description Saves the whole form; the change lists the fields that differ (a new password is logged as changed, never
+     *     stored in the history and not undone). A deleted gateway answers 400. One undoable change.
+     */
+    put: operations["updateVoiceGateway"];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways/{id}/dependencies": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * What uses a voice gateway (safe delete, §13.29)
+     * @description SMS-to-voice rules that name the gateway; they block deleting it, for administrators too.
+     */
+    get: operations["getVoiceGatewayDependencies"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways/{id}/archive": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) a voice gateway (§13.29)
+     * @description It is never removed. Refused (409, with the dependencies) while an SMS-to-voice rule names it; choose another
+     *     gateway in those rules, or delete them, first. One undoable change.
+     */
+    post: operations["archiveVoiceGateway"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/voice-gateways/{id}/restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore a voice gateway
+     * @description Administrators; a live gateway with the same name answers 409. One undoable change.
+     */
+    post: operations["restoreVoiceGateway"];
     delete?: never;
     options?: never;
     head?: never;
@@ -15455,17 +15631,22 @@ export type components = {
       /** @description Addresses e-mailed by this check (only when it started firing). */
       emailed: string[];
     };
-    SmsVoiceRuleInput: components["schemas"]["SmsVoiceRuleFields"];
+    SmsVoiceRuleInput: components["schemas"]["SmsVoiceRuleFields"] & {
+      /** @description The rule's own recording (§8, product owner 2026-10-31): a WAV to store (converted to mono, 8 kHz, 16-bit PCM; see SmsVoiceRecordingUpload), or null to go back to the default phrase "Your verification code is". Left out: the stored recording stays. Part of the same undoable change as the other fields. */
+      recording?: components["schemas"]["SmsVoiceRecordingUpload"] | null;
+    };
     SmsVoiceRuleFields: {
       /** @description Pattern; % any characters, _ one; null = any sender. */
       senderId: string | null;
       receiverId: string | null;
       /** @description Receiver number prefix, e.g. a landline range. */
       prefix: string | null;
-      /** @description How many times the call reads the text. */
+      /** @description How many times the call says the phrase with the code, one second apart. */
       repeat: number;
       /** @description Destination; null = any. */
       mccmnc: string | null;
+      /** @description The voice gateway that places the calls; null = the active gateway with the lowest priority (also used while the named gateway is inactive). */
+      gatewayId: components["schemas"]["Id"] | null;
       /** @enum {string} */
       status: "active" | "inactive";
     };
@@ -15473,6 +15654,10 @@ export type components = {
       id: components["schemas"]["Id"];
       /** @description Country and network of the MCCMNC. */
       destination: string | null;
+      /** @description The named gateway's name; null when the rule uses the default gateway. */
+      gateway: string | null;
+      /** @description The rule's own recording; null = the default phrase. */
+      recording: components["schemas"]["SmsVoiceRecording"] | null;
       updatedBy: string | null;
       updatedAt: components["schemas"]["Timestamp"];
       /** Format: date-time */
@@ -15491,13 +15676,141 @@ export type components = {
       text: string;
     };
     SmsVoiceTestResult: {
+      /**
+       * @description A phone call, or a normal SMS.
+       * @enum {string}
+       */
+      outcome: "call" | "sms";
+      /** @description An active rule matches the sender, receiver, prefix and destination. */
       matched: boolean;
       rule: components["schemas"]["SmsVoiceRuleRow"] | null;
       /** @description The receiver's destination by dial code. */
       mccmnc: string | null;
-      /** @description What the call reads out (digits spaced, repeated). */
-      spoken: string | null;
+      /** @description The first run of 4 to 8 digits in the text; null when there is none. */
+      code: string | null;
+      /** @description The call that would be placed; null when the message goes as an SMS. */
+      call: components["schemas"]["SmsVoiceCall"] | null;
+      /** @description Why it would go as an SMS: no active rule matches, no 4 to 8 digit code in the text, or no active voice gateway; null for a call. */
+      smsReason: ("no_rule" | "no_code" | "no_gateway") | null;
+      /** @description The outcome in a sentence. */
       reason: string;
+    };
+    /** @description A WAV file, base64 in JSON like other uploads: PCM, 8, 16 or 24-bit, mono or stereo, any sample rate, at most 10 MB as uploaded. Stored as mono, 8 kHz, 16-bit PCM (channels mixed, resampled), at most 1 MB (about 65 s). */
+    SmsVoiceRecordingUpload: {
+      /** @description The file's name, shown in the list and the form. */
+      name: string;
+      contentBase64: string;
+    };
+    /** @description A rule's own recording, played in place of "Your verification code is"; the digits follow it. */
+    SmsVoiceRecording: {
+      /** @description The uploaded file's name. */
+      name: string;
+      /** @description Hex SHA-256 of the stored WAV; the switch names the sound file after it. */
+      sha256: string;
+      /** @description Size of the stored WAV. */
+      bytes: number;
+      durationMs: number;
+    };
+    /** @description The call the switch would place for a message an SMS-to-voice rule takes (§8, docs/SMS_TO_VOICE.md). */
+    SmsVoiceCall: {
+      ruleId: components["schemas"]["Id"];
+      gatewayId: components["schemas"]["Id"];
+      /** @description The voice gateway's name. */
+      gateway: string;
+      /** @description The rule names no gateway, or its gateway is inactive or deleted: the active gateway with the lowest priority places the call. */
+      gatewayDefault: boolean;
+      /** @description The gateway's dial prefix and the receiver's digits. */
+      dialled: string;
+      /** @description What the called person sees: the sender when it is a number (digits, optional leading +) and the gateway uses the sender, else the gateway's fixed caller ID; null when it has none (withheld). */
+      callerId: string | null;
+      /** @description The first run of 4 to 8 digits in the text (after ingress translation). */
+      code: string;
+      /**
+       * @description The default phrase "Your verification code is", or the rule's own recording.
+       * @enum {string}
+       */
+      prompt: "default" | "recording";
+      /** @description The recording's file name; null for the default phrase. */
+      promptName: string | null;
+      /** @description What the person hears once, e.g. "Your verification code is 4, 8, 2, 9." (with a recording, the file's name in place of the default words). */
+      phrase: string;
+      /** @description Times the phrase is said, one second apart. */
+      repeat: number;
+      ringTimeoutS: number;
+      /** @description One retry after this when the call is not answered. */
+      retryDelayS: number;
+    };
+    /**
+     * @description Asterisk codec names: alaw = G.711 A-law, ulaw = G.711 µ-law.
+     * @enum {string}
+     */
+    VoiceGatewayCodec: "alaw" | "ulaw" | "g722" | "gsm";
+    VoiceGatewayFields: {
+      name: string;
+      /** @description The voice switch's SIP host name or IP address. */
+      host: string;
+      /** @default 5060 */
+      port: number;
+      /**
+       * @default udp
+       * @enum {string}
+       */
+      transport: "udp" | "tcp" | "tls";
+      /** @description SIP authentication user; null = the voice switch trusts our address. */
+      username: string | null;
+      /** @description Domain in the SIP From header; null = the host. */
+      fromDomain: string | null;
+      /**
+       * @description sender: the message's sender when it is a number, else the fixed caller ID; fixed: always the fixed caller ID.
+       * @default sender
+       * @enum {string}
+       */
+      callerIdMode: "sender" | "fixed";
+      /** @description Required with callerIdMode fixed. */
+      fixedCallerId: string | null;
+      /** @description Put before the receiver number when dialling (the voice switch's routing prefix, often empty). */
+      dialPrefix: string;
+      codecs: components["schemas"]["VoiceGatewayCodec"][];
+      /**
+       * @description Calls at once; more wait in a queue and go as calls end.
+       * @default 10
+       */
+      maxCalls: number;
+      /** @default 30 */
+      ringTimeoutS: number;
+      /**
+       * @description One retry after this when a call is not answered; then the message is UNDELIV and not charged.
+       * @default 60
+       */
+      retryDelayS: number;
+      /**
+       * @description A rule without a gateway uses the active gateway with the lowest priority.
+       * @default 1
+       */
+      priority: number;
+      status: components["schemas"]["RecordStatus"];
+    };
+    VoiceGatewayInput: components["schemas"]["VoiceGatewayFields"] & {
+      /** @description Write-only. Null keeps the stored one; an empty string clears it. */
+      password: string | null;
+    };
+    VoiceGatewayRow: components["schemas"]["VoiceGatewayFields"] & {
+      id: components["schemas"]["Id"];
+      /** @description The password is never returned (§13.22). */
+      passwordSet: boolean;
+      /** @description Live SMS-to-voice rules that name this gateway. */
+      rules: number;
+      updatedBy: string | null;
+      updatedAt: components["schemas"]["Timestamp"];
+      /** Format: date-time */
+      archivedAt: string | null;
+    };
+    VoiceGatewayPage: components["schemas"]["ListPageMeta"] & {
+      rows: components["schemas"]["VoiceGatewayRow"][];
+    };
+    VoiceGatewaySaved: {
+      record: components["schemas"]["VoiceGatewayRow"];
+      change: components["schemas"]["Change"] | null;
     };
     BroadcastAudienceInput: {
       businessCompanyId: components["schemas"]["Id"];
@@ -15646,8 +15959,19 @@ export type components = {
       vendorExRate: number;
       vendorTranslationRuleIds: number[];
       routeRuleId: number;
+      /** @description How the attempt was routed: static, dynamic (least cost), qbr (quality), block, or voice (an SMS-to-voice call, §8: no vendor, vendor cost 0); empty when not routed. */
+      routeType: string;
       /** @description whitelist, warmup, split … (§13.27). */
       routeDecidedBy: string;
+      /** @description The voice gateway that placed the call (route type voice); 0 = not a call. */
+      voiceGatewayId: number;
+      voiceGateway: string | null;
+      /** @description The call was answered (DELIVRD, billed as one SMS); not answered after the retry is UNDELIV, not charged. */
+      voiceAnswered: boolean;
+      /** @description How the call ended, Asterisk's cause name (NORMAL_CLEARING, NO_ANSWER, USER_BUSY, CONGESTION …); empty when not a call. */
+      voiceHangupCause: string;
+      /** @description From answer to hangup; 0 when not answered. */
+      voiceDurationMs: number;
       /** @description This vendor attempt re-sends the message after the previous attempt's vendor returned a failed delivery receipt (S-5.11, D2): true on the re-send, false on the attempt that got the failed receipt (it keeps its own status). An attempt after a submit rejection or timeout is not a DLR re-route. */
       dlrReroute: boolean;
       /** @description 0 = not a repush. */
@@ -15992,6 +16316,8 @@ export type components = {
       bytes: number;
     };
     RouteSimulatorResult: {
+      /** @description SMS to voice (§8): an active rule takes the message after ingress translation (with a 4 to 8 digit code in the text), so the switch places this call instead of sending it to a vendor; the vendor cost is 0 and no vendor is tried. Null otherwise, and when a vendor trunk is tested directly. */
+      voiceCall: components["schemas"]["SmsVoiceCall"] | null;
       /** @description Vendors routing picked first whose own egress translation rules block the message; each is skipped and the next vendor tried (decided 2026-10-18). Empty when none was skipped or a vendor was tested directly. */
       egressSkipped: components["schemas"]["EgressSkip"][];
       /** @description Egress translation (§6.4, §13.2): the rules on the chosen vendor trunk run on the message as ingress translation left it, after routing; shows what the vendor would receive. Null when no vendor is chosen (blocked, no route). A vendor whose rules block the message is skipped (egressSkipped). */
@@ -19157,6 +19483,7 @@ export type components = {
       | "firewall_filters"
       | "traffic_alerts"
       | "sms_voice_rules"
+      | "voice_gateways"
       | "broadcasts"
       | "edrs"
       | "failed_edrs"
@@ -29260,6 +29587,267 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  previewSmsVoiceRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SmsVoiceRecordingUpload"];
+      };
+    };
+    responses: {
+      /** @description The converted recording */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "audio/wav": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+    };
+  };
+  downloadSmsVoiceRecording: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The recording */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "audio/wav": string;
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  queryVoiceGateways: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListQuery"];
+      };
+    };
+    responses: {
+      /** @description One page of voice gateways */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewayPage"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  createVoiceGateway: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VoiceGatewayInput"];
+      };
+    };
+    responses: {
+      /** @description Created, with the change */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewaySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVoiceGateway: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The voice gateway */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewayRow"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  updateVoiceGateway: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["VoiceGatewayInput"];
+      };
+    };
+    responses: {
+      /** @description Saved, with the change (null when nothing differed) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewaySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  getVoiceGatewayDependencies: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Dependencies and whether they block archiving */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Dependencies"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  archiveVoiceGateway: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        "application/json": components["schemas"]["ArchiveRequest"];
+      };
+    };
+    responses: {
+      /** @description Archived, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewaySaved"];
+        };
+      };
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      /** @description Blocked by rules that use the gateway */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/problem+json": components["schemas"]["ArchiveBlocked"];
+        };
+      };
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  restoreVoiceGateway: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: components["parameters"]["RecordId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Restored, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceGatewaySaved"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
       503: components["responses"]["Unavailable"];
     };
   };

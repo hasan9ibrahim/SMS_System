@@ -18,6 +18,7 @@ import { runTrunkTranslation } from "./translationRules.js";
 import { withTonNpiMode } from "../routing/tonNpi.js";
 import { production } from "../mode.js";
 import { switchTestSms } from "../switch/operations.js";
+import { decideVoice, loadVoiceConfig, simulateCall } from "../routing/smsVoice.js";
 
 export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as RouteSimulatorInput;
@@ -154,6 +155,18 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           .slice(0, 16)
           .replace("T", " ")} UTC`;
     }
+    // SMS to voice (§8, decided 2026-10-31): after ingress translation and before routing, a message an active rule
+    // takes (with a 4 to 8 digit code) is a call through a voice gateway, never a vendor attempt. Not for a message the
+    // customer side refuses, nor when a vendor trunk is tested directly.
+    const refused = translation.blocked || !m.mccmnc || customerBlocked || !customerRate;
+    const voiceCall =
+      !refused && !b.vendorTrunkId
+        ? await loadVoiceConfig(pool).then(
+            ({ rules: voiceRules, gateways }) =>
+              decideVoice(voiceRules, gateways, { sender, receiver, text: translation.after.text, mccmnc: m.mccmnc })
+                .call,
+          )
+        : null;
     // Straight to one vendor: priced below, once its egress translation gives the sender it receives.
     let forcedVendor: RouteSimulatorResult["forcedVendor"] = null;
     if (b.vendorTrunkId) {
@@ -166,7 +179,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     const d = route.decision;
     // Egress translation (§6.4, §13.2): the chosen vendor trunk's rules run after routing, on the
     // message as ingress translation left it; shows what the vendor would receive.
-    const egressId = forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
+    const egressId = voiceCall ? null : forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
     const egressName = forcedVendor ? forcedVendor.name : (d?.vendor?.name ?? "");
     const view =
       egressId !== null && !translation.blocked
@@ -185,7 +198,8 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     const vp = priced(vendorPriced);
     if (forcedVendor && vp)
       forcedVendor = { ...forcedVendor, rate: vp.rate, currency: vp.currency, platformRate: vp.platformRate };
-    const cost = vp?.platformRate ?? null;
+    // A call costs nothing on the vendor side: the operator's own voice switch.
+    const cost = voiceCall ? 0 : (vp?.platformRate ?? null);
     const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
     const sell = customerRate?.platformRate ?? null;
     const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
@@ -205,7 +219,9 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                 : forcedVendor.rate === null
                   ? `${forcedVendor.name} has no rate for the destination`
                   : null
-              : senderOnly && (!d || d.outcome === "no_vendor")
+              : voiceCall
+                ? null
+                : senderOnly && (!d || d.outcome === "no_vendor")
                 ? "Every vendor that could take the message refuses its sender (Refuse invalid senders); the switch refuses it at once (0x0A)"
                 : !d
                 ? "No route rule matches"
@@ -236,7 +252,22 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         .toString(16)
         .padStart(12, "0");
       if (blocked) testSms = { messageId, status: "REJECTD", detail: blocked };
-      else {
+      else if (voiceCall) {
+        // The test system places no call: answered about 80 % of the time, else UNDELIV after the retry.
+        const c = simulateCall();
+        const times = `${voiceCall.repeat} time${voiceCall.repeat === 1 ? "" : "s"}`;
+        testSms = c.answered
+          ? {
+              messageId,
+              status: "DELIVRD",
+              detail: `Called ${voiceCall.dialled} through ${voiceCall.gateway}: answered, code said ${times}, ${(c.durationMs / 1000).toFixed(1)} s (simulated)`,
+            }
+          : {
+              messageId,
+              status: "UNDELIV",
+              detail: `Called ${voiceCall.dialled} through ${voiceCall.gateway}: not answered (${c.hangupCause}), tried again after ${voiceCall.retryDelayS} s; not charged (simulated)`,
+            };
+      } else {
         const roll = Math.random();
         const status = roll < 0.85 ? "DELIVRD" : roll < 0.95 ? "UNDELIV" : "EXPIRED";
         testSms = {
@@ -263,6 +294,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       forcedVendor,
       vendorTranslation,
       egressSkipped,
+      voiceCall,
     };
   });
 }

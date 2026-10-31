@@ -81,6 +81,7 @@ export const ENTITY_PAGES: Readonly<Record<string, string>> = {
   user_totp: "users",
   vendor_invoice: "vendor-invoices",
   visibility_policy: "visibility",
+  voice_gateway: "sms-to-voice",
 };
 
 /** The current user's View check, for one request. */

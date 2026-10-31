@@ -10,6 +10,8 @@ import type { Profile } from "./profiles.js";
 import { Rng } from "./rng.js";
 import { json, type TableSink } from "./sink.js";
 import { DAY, type World } from "./world.js";
+import { encryptSecret } from "../admin/passwords.js";
+import { VOICE_GATEWAYS, VOICE_RULES } from "./voice.js";
 
 const FAILURES = [
   "SMTP connection timed out",
@@ -368,31 +370,42 @@ export async function generateSwitchExtras(world: World, rng: Rng, sink: TableSi
     });
   }
 
-  // ----- SMS to voice -----
-  const voice = [
-    { sender: "%OTP%", prefix: "4420", repeat: 2 },
-    { sender: "%VERIFY%", prefix: "4930", repeat: 2 },
-    { sender: null, prefix: "331", repeat: 3 },
-    { sender: "%BANK%", prefix: "97142", repeat: 2 },
-    { sender: null, prefix: "6562", repeat: 2 },
-    { sender: "%CODE%", prefix: "3491", repeat: 3 },
-    { sender: null, prefix: "1212555", repeat: 2 },
-    { sender: "%OTP%", prefix: "9122", repeat: 2 },
-    { sender: "%PIN%", prefix: "2341", repeat: 3 },
-    { sender: null, prefix: "6129", repeat: 2 },
-    { sender: "%AUTH%", prefix: "3120", repeat: 2 },
-    { sender: null, prefix: "48222", repeat: 2 },
-  ];
-  let voiceId = 1;
-  for (const v of voice)
+  // ----- SMS to voice (§8, decided 2026-10-31): voice gateways (fake hosts and credentials) and the rules -----
+  for (const g of VOICE_GATEWAYS)
+    await sink.insert("voice_gateways", {
+      id: g.id,
+      name: g.name,
+      host: g.host,
+      port: g.port,
+      transport: g.transport,
+      username: g.username,
+      // Fake secrets, encrypted with the dev-only key like any saved one (never returned by the API, §13.22).
+      password_enc: g.username ? encryptSecret(`fake-sip-${g.id}-${rng.hex(8)}`, Buffer.from(rng.hex(24), "hex")) : null,
+      from_domain: g.fromDomain,
+      caller_id_mode: g.callerIdMode,
+      fixed_caller_id: g.fixedCallerId,
+      dial_prefix: g.dialPrefix,
+      codecs: g.codecs,
+      max_calls: g.maxCalls,
+      ring_timeout_s: g.ringTimeoutS,
+      retry_delay_s: g.retryDelayS,
+      priority: g.priority,
+      status: g.active ? "active" : "inactive",
+      updated_by_id: rng.pick(noc).id,
+      inserted_at: new Date(world.anchor - rng.int(60, 300) * DAY),
+      updated_at: new Date(world.anchor - rng.int(0, 60) * DAY),
+      deleted_at: null,
+    });
+  for (const v of VOICE_RULES)
     await sink.insert("sms_voice_rules", {
-      id: voiceId++,
+      id: v.id,
       sender_id: v.sender,
       receiver_id: null,
       prefix: v.prefix,
       repeat_count: v.repeat,
       mccmnc: null,
-      status: rng.chance(0.85) ? "active" : "inactive",
+      gateway_id: v.gatewayId,
+      status: v.active ? "active" : "inactive",
       updated_by_id: rng.pick(noc).id,
       inserted_at: new Date(world.anchor - rng.int(30, 300) * DAY),
       updated_at: new Date(world.anchor - rng.int(0, 30) * DAY),

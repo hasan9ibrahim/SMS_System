@@ -8,7 +8,7 @@ import type { Change } from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { likeMatch, sanitiseHtml, spokenText } from "../src/api/switchTools.js";
+import { likeMatch, sanitiseHtml, spokenPhrase } from "../src/api/switchTools.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
@@ -55,7 +55,7 @@ describe("§8 helpers", () => {
     assert.ok(likeMatch("BANK_", "BANK1"));
     assert.ok(!likeMatch("BANK_", "BANK12"));
     assert.ok(likeMatch("a.b", "a.b") && !likeMatch("a.b", "axb"), "dots are literal");
-    assert.equal(spokenText("Code 4821", 2), "Code 4 8 2 1 … Code 4 8 2 1");
+    assert.equal(spokenPhrase("4821", 2), "Your verification code is 4, 8, 2, 1. (2 times)");
     const html = sanitiseHtml('<p onclick="x()">Hi</p><script>alert(1)</script><a href="javascript:evil()">x</a>');
     assert.ok(!/script|onclick|javascript/i.test(html), html);
     assert.ok(html.includes("<p>Hi</p>"));
@@ -300,6 +300,7 @@ describe("SMS to voice (§8)", { skip }, () => {
       prefix: null,
       repeat: 2,
       mccmnc: null,
+      gatewayId: null,
       status: "active",
     });
     assert.equal(empty.statusCode, 400);
@@ -311,6 +312,7 @@ describe("SMS to voice (§8)", { skip }, () => {
         prefix: "999",
         repeat: 3,
         mccmnc: null,
+        gatewayId: null,
         status: "active",
       }),
       201,
@@ -321,7 +323,9 @@ describe("SMS to voice (§8)", { skip }, () => {
     );
     assert.equal(hit.matched, true);
     assert.equal(hit.rule.id, created.record.id);
-    assert.equal(hit.spoken, "PIN 1 2 … PIN 1 2 … PIN 1 2");
+    // "PIN 12" has no 4 to 8 digit code: the rule matches but the message stays an SMS (§8).
+    assert.equal(hit.outcome, "sms");
+    assert.equal(hit.smsReason, "no_code");
     const miss = await ok(
       "testSmsVoiceRules",
       call("POST", "/sms-voice-rules/test", { senderId: "OTHER", receiver: "+99912345", text: "PIN 12" }),
@@ -335,6 +339,7 @@ describe("SMS to voice (§8)", { skip }, () => {
         prefix: "998",
         repeat: 3,
         mccmnc: null,
+        gatewayId: null,
         status: "active",
       }),
     );

@@ -232,6 +232,7 @@ export const EDR_SECTIONS: { key: string; label: string; fields: string[] }[] = 
       "vendorExRate",
       "vendorTranslationRuleIds",
       "routeRuleId",
+      "routeType",
       "routeDecidedBy",
       "dlrReroute",
       "repushRequestId",
@@ -281,6 +282,23 @@ export const EDR_SECTIONS: { key: string; label: string; fields: string[] }[] = 
     ],
   },
 ];
+
+/** SMS to voice (§8): the call an attempt of route type voice was; shown only for those. */
+export const EDR_VOICE_SECTION = {
+  key: "voice",
+  label: "Voice call",
+  fields: ["voiceGateway", "voiceAnswered", "voiceHangupCause", "voiceDurationMs"],
+};
+
+/** Route types as the screens name them; "voice" is an SMS-to-voice call (§8). */
+export const ROUTE_TYPE_LABEL: Record<string, string> = {
+  static: "Static",
+  dynamic: "Least cost",
+  qbr: "Quality",
+  block: "Block",
+  voice: "Voice",
+};
+export const routeTypeLabel = (v: string) => (v ? (ROUTE_TYPE_LABEL[v] ?? v) : "—");
 
 /** A field value as text for the detail panel. */
 export function fieldText(v: unknown): string {

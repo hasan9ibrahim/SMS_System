@@ -2,7 +2,7 @@
 // position and drafts survive switching tabs (§13.5). Errors stay inside their tab.
 import { Component, memo, type ErrorInfo, type ReactNode } from "react";
 import { useCan } from "../api/access";
-import { pageForPath } from "../nav/registry";
+import { accessOf, pageForPath } from "../nav/registry";
 import { PageRoutes } from "../pages/PageRoutes";
 import { TabProvider } from "./tabContext";
 import { useTabs, type Tab } from "./tabs";
@@ -38,7 +38,7 @@ class TabErrorBoundary extends Component<{ children: ReactNode }, { error: Error
 /** A page the user's access group (or own override) doesn't allow shows a notice instead (§11, trial round 2). */
 function AccessGuard({ path, children }: { path: string; children: ReactNode }) {
   const page = pageForPath(path.split("?")[0]!);
-  const allowed = useCan(page?.key ?? "home");
+  const allowed = useCan(page ? accessOf(page) : "home");
   if (allowed) return <>{children}</>;
   return (
     <div className="page">

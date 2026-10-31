@@ -5428,6 +5428,17 @@
   "alsoOn": []
  },
  {
+  "method": "GET",
+  "path": "/sms-voice-rules/{id}/recording",
+  "operationId": "downloadSmsVoiceRecording",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
   "method": "POST",
   "path": "/sms-voice-rules/{id}/restore",
   "operationId": "restoreSmsVoiceRule",
@@ -5442,6 +5453,17 @@
   "method": "POST",
   "path": "/sms-voice-rules/query",
   "operationId": "querySmsVoiceRules",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/recording-preview",
+  "operationId": "previewSmsVoiceRecording",
   "tag": "switch",
   "module": "sms-to-voice",
   "action": null,
@@ -6595,6 +6617,83 @@
   "action": null,
   "readChecked": true,
   "admin": true,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways",
+  "operationId": "createVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "add",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/voice-gateways/{id}",
+  "operationId": "getVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "PUT",
+  "path": "/voice-gateways/{id}",
+  "operationId": "updateVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/{id}/archive",
+  "operationId": "archiveVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "delete",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/voice-gateways/{id}/dependencies",
+  "operationId": "getVoiceGatewayDependencies",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/{id}/restore",
+  "operationId": "restoreVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/query",
+  "operationId": "queryVoiceGateways",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
   "alsoOn": []
  }
 ]

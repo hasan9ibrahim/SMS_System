@@ -1800,8 +1800,8 @@ export const topics: HelpTopic[] = [
     title: "SMS to voice",
     group: "Switch",
     summary:
-      "Turn matching SMS (for example one-time codes sent to landlines) into a voice call that reads the text out.",
-    keywords: ["sms to voice", "text to speech", "tts", "landline", "OTP", "voice call"],
+      "Turn matching one-time codes (for example to landlines) into a phone call that says the code, through one of our voice gateways.",
+    keywords: ["sms to voice", "voice call", "landline", "OTP", "verification code", "recording", "wav", "call"],
     sections: [
       {
         id: "overview",
@@ -1809,7 +1809,17 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "Some numbers cannot receive SMS, such as landlines. A rule here turns matching messages into a voice call that reads the text, with digits read one at a time so a code is easy to note down.",
+            text: "Some numbers cannot receive SMS, such as landlines. A rule here turns a matching message into a phone call: the switch calls the receiver through one of our [[voice-gateways|voice gateways]] and says “Your verification code is 4, 8, 2, 9.”, one digit at a time, as many times as the rule's **Repeat**.",
+          },
+          {
+            kind: "list",
+            title: "What happens to a matching message",
+            items: [
+              "The code is the first group of 4 to 8 digits in the text, after the customer trunk's translation rules. A message without one is sent as a normal SMS.",
+              "**Answered:** the customer gets a delivered receipt (if asked) and the message is billed at its normal SMS rate, as one SMS.",
+              "**Not answered** (no answer, busy, rejected): the call is tried once more after the gateway's **Retry After**. Still not answered: the receipt says not delivered and the message is not charged.",
+              "There is no vendor cost: the call goes to our own voice switch.",
+            ],
           },
         ],
       },
@@ -1825,15 +1835,23 @@ export const topics: HelpTopic[] = [
               { name: "Sender ID", what: "The Sender ID pattern, or “any”." },
               { name: "Receiver ID", what: "The receiver pattern, or “any”." },
               { name: "Prefix", what: "The number start the receiver must have, or “any”." },
-              { name: "Repeat", what: "How many times the call reads the text." },
+              { name: "Repeat", what: "How many times the call says the code." },
               { name: "Destination", what: "The network the receiver must be on, or “any”." },
+              {
+                name: "Gateway",
+                what: "The voice gateway that places the calls, or “Default” (the first active gateway).",
+              },
+              {
+                name: "Recording",
+                what: "“Default” for the standard words, or the file name of the rule's own recording.",
+              },
               { name: "Status", what: "Green Active or grey Inactive (row dimmed)." },
               { name: "Updated By", what: "Who saved it last." },
             ],
           },
           {
             kind: "text",
-            text: "The test box above the grid takes a Sender ID, a Receiver and a Message text; **Test** shows which rule matches (or “No active rule matches: sent as SMS”) and what the call would read. The detail panel has **Rule** (Edit, Delete) and **History**.",
+            text: "The test box above the grid takes a Sender ID, a Receiver and a Message text. **Test** answers **Phone call** with the gateway, the number dialled, the caller ID, the code and what the person hears (with the repeat count), or **Sent as SMS** with the reason: no active rule matches, no 4 to 8 digit code in the text, or no active voice gateway. The detail panel has **Rule** (Edit, Delete, and a player for the recording) and **History**.",
           },
         ],
       },
@@ -1859,13 +1877,28 @@ export const topics: HelpTopic[] = [
                 what: "Only receivers starting with these digits. Empty = any.",
                 values: "Up to 15 digits. Example: `4420` (London landlines).",
               },
-              { name: "Repeat", what: "How many times the call reads the text.", values: "1–5. Default 2." },
               {
                 name: "Destination",
                 what: "Only receivers on this network. Empty = any destination.",
                 values: "Search a network or country.",
               },
+              {
+                name: "Gateway",
+                what: "The voice gateway that places the calls. Empty = the first active gateway (the lowest priority). While the chosen gateway is inactive, the first active one is used.",
+                values: "Search a gateway by name.",
+              },
+              {
+                name: "Repeat",
+                what: "How many times the call says the code, one second apart.",
+                values: "1–5. Default 2.",
+              },
               { name: "Status", what: "Only active rules are used.", values: "Active (default) or Inactive." },
+              {
+                name: "Recording",
+                what: "Optional: the rule's own words, played in place of “Your verification code is”; the digits are still said after it. **Remove** goes back to the default words.",
+                values:
+                  "A WAV file (PCM, 8, 16 or 24-bit, mono or stereo, any sample rate), up to about 65 seconds. MP3 and compressed WAV files are refused.",
+              },
             ],
           },
         ],
@@ -1878,16 +1911,159 @@ export const topics: HelpTopic[] = [
             kind: "steps",
             items: [
               "Click **Add** and fill in the conditions. Leave a field empty to match anything.",
-              "Set **Repeat** and click **Add rule**.",
-              "In the test box, enter a sample sender, receiver and text and click **Test**.",
-              "Check which rule matched and what the call reads.",
+              "Pick a **Gateway**, or leave it empty for the default one, and set **Repeat**.",
+              "To use your own words, click **Upload WAV…** under Recording and listen to it with the player; it plays as callers will hear it.",
+              "Click **Add rule**.",
+              "In the test box, enter a sample sender, receiver and text with a code, and click **Test**.",
+              "Check the gateway, the number dialled, the caller ID and what the person hears.",
             ],
           },
           {
             kind: "tip",
             text: "Active rules are checked by SmsVoiceID; the first one where every filled-in condition matches is used.",
           },
+          {
+            kind: "tip",
+            text: "A recording is part of the rule: replacing or removing it is undone like any other change, from the toast or **History**.",
+          },
           { kind: "tip", text: "The test never places a call; it only shows what would happen." },
+          {
+            kind: "tip",
+            text: "On the test system no call is placed: calls are simulated and answered about 8 times in 10. They show in EDR search with route type **Voice**.",
+          },
+        ],
+      },
+    ],
+  },
+
+  // ------------------------------------------------------------------ voice gateways
+  {
+    id: "voice-gateways",
+    pageKey: "voice-gateways",
+    title: "Voice gateways",
+    group: "Switch",
+    summary:
+      "The voice switches SMS to voice calls go to: address, sign-in, caller ID, dial prefix, codecs and limits.",
+    keywords: ["voice gateway", "SIP", "voice switch", "caller ID", "codec", "trunk", "SMS to voice", "call"],
+    sections: [
+      {
+        id: "overview",
+        title: "What this page is for",
+        blocks: [
+          {
+            kind: "text",
+            text: "A voice gateway is one of our own voice switches. When an [[sms-to-voice|SMS to voice]] rule turns a message into a call, the switch places the call over SIP through the rule's gateway, or through the first active gateway (the lowest priority) when the rule names none. The same people who may open SMS to voice may open this page.",
+          },
+        ],
+      },
+      {
+        id: "layout",
+        title: "What you see on the page",
+        blocks: [
+          {
+            kind: "fields",
+            title: "Grid columns",
+            fields: [
+              { name: "ID", what: "The gateway's number." },
+              { name: "Name", what: "The gateway's name, as rules show it." },
+              { name: "Host · Port · Transport", what: "Where the calls go: SIP over UDP, TCP or TLS." },
+              { name: "Caller ID", what: "**Sender if numeric** or **Fixed**." },
+              { name: "Fixed Caller ID", what: "The number shown when the sender is not a number, or always." },
+              { name: "Max Calls", what: "Calls at once." },
+              { name: "Priority", what: "Rules without a gateway use the active one with the lowest priority." },
+              { name: "Status", what: "Green Active or grey Inactive (row dimmed)." },
+              { name: "Rules", what: "SMS to voice rules that name this gateway." },
+            ],
+          },
+          {
+            kind: "text",
+            text: "Hidden columns (Username, From Domain, Dial Prefix, Codecs, Ring Timeout, Retry Delay, Updated By) are in **Columns**. The detail panel has **Gateway** (Edit, Delete and every setting) and **History**.",
+          },
+        ],
+      },
+      {
+        id: "fields",
+        title: "Fields: voice gateway",
+        blocks: [
+          {
+            kind: "fields",
+            fields: [
+              { name: "Name", what: "The gateway's name.", values: "Required, up to 100 characters, unique." },
+              { name: "Status", what: "Only active gateways place calls.", values: "Active (default) or Inactive." },
+              { name: "Host", what: "The voice switch's host name or IP address.", values: "Required." },
+              { name: "Port", what: "Its SIP port.", values: "1–65535. Default 5060." },
+              { name: "Transport", what: "How SIP travels.", values: "UDP (default), TCP or TLS." },
+              { name: "From Domain", what: "The domain in the call's From header.", values: "Empty = the host." },
+              {
+                name: "Username · Password",
+                what: "The sign-in the voice switch asks for. Empty = it trusts our address. The password is never shown again: it says Stored, and a new one replaces it.",
+                values: "Moving the gateway to another host asks for the password again.",
+              },
+              {
+                name: "Caller ID",
+                what: "What the called person sees: **The sender when it is a number** (else the fixed caller ID), or **Always the fixed caller ID**.",
+                values: "Default: the sender when it is a number.",
+              },
+              {
+                name: "Fixed Caller ID",
+                what: "The number shown when the sender is a name, or always. Empty with a name as sender: the number is withheld.",
+                values: "Digits with an optional leading +. Required with Always the fixed caller ID.",
+              },
+              {
+                name: "Dial Prefix",
+                what: "Digits put before the receiver number, if the voice switch needs a routing prefix.",
+                values: "Usually empty.",
+              },
+              {
+                name: "Priority",
+                what: "Order for rules without a gateway: the lowest active one is used.",
+                values: "0–9999. Default 1.",
+              },
+              {
+                name: "Max Calls",
+                what: "Calls at once; more wait their turn and go as calls end.",
+                values: "1–1000. Default 10.",
+              },
+              {
+                name: "Ring Timeout",
+                what: "How long a call rings before it counts as not answered.",
+                values: "5–120 s. Default 30.",
+              },
+              {
+                name: "Retry After",
+                what: "When a call that was not answered is tried again (once).",
+                values: "10–3600 s. Default 60.",
+              },
+              {
+                name: "Codecs",
+                what: "The audio codecs offered to the voice switch.",
+                values: "G.711 A-law and µ-law by default; G.722 and GSM too.",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "how-to",
+        title: "How to add, change or delete a gateway",
+        blocks: [
+          {
+            kind: "steps",
+            items: [
+              "Click **Add**, enter the name, host and port, and the sign-in if the voice switch needs one.",
+              "Choose the caller ID, and set the priority if there are several gateways.",
+              "Click **Add gateway**. Rules without a gateway start using it when it is the active one with the lowest priority.",
+              "To test, use the test box on [[sms-to-voice|SMS to voice]]: it shows which gateway would call and the number dialled.",
+            ],
+          },
+          {
+            kind: "warning",
+            text: "A gateway that a rule names cannot be deleted, not even with an administrator override. The delete window lists the rules: choose another gateway in them, or delete them, first. To stop calls for a while, set the gateway Inactive: its rules then use the first active gateway.",
+          },
+          {
+            kind: "tip",
+            text: "Every save is undone from the toast or **History**, except a new password, which is never kept in the history.",
+          },
         ],
       },
     ],

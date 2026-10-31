@@ -307,6 +307,7 @@ const KIND_LISTS: Record<RecordKind, ListId> = {
   firewall_rule: "firewall_rules",
   traffic_alert: "traffic_alerts",
   sms_voice_rule: "sms_voice_rules",
+  voice_gateway: "voice_gateways",
   edr_template: "edr_templates",
   scheduled_report: "scheduled_reports",
   daily_traffic_alert: "daily_traffic_alerts",

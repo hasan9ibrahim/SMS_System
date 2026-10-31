@@ -14,7 +14,15 @@ export interface PageDef {
   step: string;
   /** One-line purpose, shown on placeholders and in Ctrl K. */
   summary: string;
+  /**
+   * The Admin › Access Groups page whose permissions open this one, when it has none of its own
+   * (contract/access.json: Voice gateways open with SMS to voice). Default: the page's own key.
+   */
+  access?: string;
 }
+
+/** The access-group page that decides whether the user may open the page (§11). */
+export const accessOf = (pg: PageDef): string => pg.access ?? pg.key;
 
 export type SectionKey =
   | "dashboard"
@@ -394,6 +402,20 @@ export const PAGES: PageDef[] = [
     "5.8",
     "Turn matching SMS into voice calls",
   ),
+  // The voice switches SMS-to-voice calls go to (§8, decided 2026-10-31); opened with SMS to voice's access.
+  {
+    ...p(
+      "switch",
+      "voice-gateways",
+      "Voice gateways",
+      "/switch/voice-gateways",
+      "phone",
+      "§8",
+      "5.8",
+      "Voice switches the SMS to voice calls go to",
+    ),
+    access: "sms-to-voice",
+  },
   p(
     "switch",
     "traffic-alerts",

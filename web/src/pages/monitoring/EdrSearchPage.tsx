@@ -22,6 +22,8 @@ import { problemText } from "../routing/dialogs";
 import { toBase64 } from "../switch/tools/toolsModel";
 import {
   EDR_SECTIONS,
+  EDR_VOICE_SECTION,
+  routeTypeLabel,
   EDR_SWITCH_FIELDS,
   fieldText,
   fmtSeconds,
@@ -598,7 +600,17 @@ function FieldList({ row, fields, names }: { row: EdrGridRow; fields: string[]; 
         <div key={f} className="kv-pair">
           <dt>{names.get(f) ?? f}</dt>
           <dd className={f === "messageText" ? "kv-text" : undefined}>
-            {f === "id" ? row.uuid : f.endsWith("Time") ? fmtSeconds(values[f] as string | null) : fieldText(values[f])}
+            {f === "id"
+              ? row.uuid
+              : f.endsWith("Time")
+                ? fmtSeconds(values[f] as string | null)
+                : f === "routeType"
+                  ? routeTypeLabel(row.routeType)
+                  : f === "voiceDurationMs"
+                    ? row.voiceDurationMs
+                      ? row.voiceDurationMs.toLocaleString("en-US")
+                      : "—"
+                    : fieldText(values[f])}
           </dd>
         </div>
       ))}
@@ -663,8 +675,25 @@ export function EdrSearchPage() {
         senderId: { width: 130 },
         dnid: { width: 140, render: (r) => <span className="num">{r.dnid}</span> },
         customerMccmnc: { width: 120, render: (r) => <span className="num">{r.customerMccmnc}</span> },
-        vendorEnterprise: { width: 200, render: (r) => r.vendorEnterprise ?? muted("not routed") },
-        vendorTrunk: { width: 170, render: (r) => r.vendorTrunk ?? muted("—") },
+        vendorEnterprise: {
+          width: 200,
+          render: (r) => r.vendorEnterprise ?? muted(r.routeType === "voice" ? "voice call" : "not routed"),
+        },
+        vendorTrunk: { width: 170, render: (r) => r.vendorTrunk ?? muted(r.voiceGateway ?? "—") },
+        routeType: { width: 120, render: (r) => routeTypeLabel(r.routeType) },
+        voiceGateway: { width: 150, render: (r) => r.voiceGateway ?? muted("—") },
+        voiceAnswered: {
+          width: 110,
+          render: (r) => (r.routeType === "voice" ? (r.voiceAnswered ? "Answered" : "Not answered") : muted("—")),
+        },
+        voiceHangupCause: { width: 170, render: (r) => r.voiceHangupCause || muted("—") },
+        voiceDurationMs: {
+          width: 130,
+          align: "right",
+          render: (r) => (
+            <span className="num">{r.voiceDurationMs ? r.voiceDurationMs.toLocaleString("en-US") : "—"}</span>
+          ),
+        },
         vendorMsgId: {
           width: 150,
           // One ID per part for a long message, comma separated (team trial round 2).
@@ -745,7 +774,11 @@ export function EdrSearchPage() {
           </>
         ),
         sections: [
-          ...EDR_SECTIONS.map((s) => ({
+          // A call instead of a vendor attempt (SMS to voice, §8) shows what the call did.
+          ...(r.routeType === "voice"
+            ? [EDR_SECTIONS[0]!, EDR_VOICE_SECTION, ...EDR_SECTIONS.slice(1)]
+            : EDR_SECTIONS
+          ).map((s) => ({
             key: s.key,
             label: s.label,
             content: <FieldList row={r} fields={s.fields} names={names} />,
