@@ -8,11 +8,15 @@ defmodule Sms.Switch.Customer.Sessions do
       by trunk + client IP and by trunk, so a receipt can find its session on whichever server it lives
       (`Sms.Switch.Customer.Affinity`).
 
-  `register/2` enforces Max Connections across every server (S-1.2): it holds a cluster-wide lock for the trunk,
-  counts the trunk's sessions on every reachable node, and registers only below the limit, so two binds racing on
-  two servers cannot both take the last slot.
+  `register/2` enforces Max Connections across every server (S-1.2), for each client address (team trial round 14:
+  every address the customer binds from may open Max Connections sessions, also inside an allowed network): it holds
+  a cluster-wide lock for the trunk, counts the trunk's sessions from that address on every reachable node, and
+  registers only below the limit, so two binds racing on two servers cannot both take the last slot.
+
+  Every sending session (TX or TRX) also joins `{:sender_ip, trunk_id, ip}`, which `Sms.Switch.Customer.Senders`
+  follows to count the addresses a trunk sends from (the trunk's TPS pool, `Trunk.trunk_tps/1`).
   """
-  alias Sms.Switch.Customer.Trunk
+  alias Sms.Switch.Customer.{Senders, Trunk}
 
   @registry Sms.Switch.Customer.Registry
   @scope :sms_customer_sessions
@@ -35,13 +39,15 @@ defmodule Sms.Switch.Customer.Sessions do
   def child_specs do
     [
       {Registry, keys: :duplicate, name: @registry},
-      %{id: @scope, start: {:pg, :start_link, [@scope]}}
+      %{id: @scope, start: {:pg, :start_link, [@scope]}},
+      {Senders, scope: @scope}
     ]
   end
 
   @doc """
-  Registers the calling session process for `trunk` if the trunk has fewer than Max Connections sessions across the
-  cluster. Returns `{:error, :max_connections}` otherwise, or `{:error, :lock_failed}` if the lock was not obtained.
+  Registers the calling session process for `trunk` if the trunk has fewer than Max Connections sessions from the
+  session's client address across the cluster. Returns `{:error, :max_connections}` otherwise, or
+  `{:error, :lock_failed}` if the lock was not obtained.
   """
   @spec register(Trunk.t(), meta()) :: :ok | {:error, :max_connections | :lock_failed}
   def register(%Trunk{id: id, max_connections: max}, meta) do
@@ -51,11 +57,12 @@ defmodule Sms.Switch.Customer.Sessions do
       :global.trans(
         {{__MODULE__, id}, self()},
         fn ->
-          if cluster_count(id) >= max do
+          if cluster_count(id, meta.ip) >= max do
             {:error, :max_connections}
           else
             {:ok, _} = Registry.register(@registry, {:trunk, id}, meta)
             join_receiver_groups(meta)
+            join_sender_group(meta)
             :ok
           end
         end,
@@ -74,12 +81,28 @@ defmodule Sms.Switch.Customer.Sessions do
 
   defp join_receiver_groups(_meta), do: :ok
 
+  defp join_sender_group(%{bind: bind} = meta) when bind in [:tx, :trx],
+    do: :ok = :pg.join(@scope, {:sender_ip, meta.trunk_id, meta.ip}, self())
+
+  defp join_sender_group(_meta), do: :ok
+
   @doc "The number of sessions of a trunk on every reachable node."
   @spec cluster_count(pos_integer()) :: non_neg_integer()
   def cluster_count(trunk_id) do
     remote = :erpc.multicall(Node.list(), __MODULE__, :local_count, [trunk_id], 2_000)
     sum_counts(remote, local_count(trunk_id))
   end
+
+  @doc "The number of sessions of a trunk from one client address on every reachable node (its Max Connections)."
+  @spec cluster_count(pos_integer(), :inet.ip_address()) :: non_neg_integer()
+  def cluster_count(trunk_id, ip) do
+    remote = :erpc.multicall(Node.list(), __MODULE__, :local_count, [trunk_id, ip], 2_000)
+    sum_counts(remote, local_count(trunk_id, ip))
+  end
+
+  @doc "The number of client addresses a trunk has bound with a sending bind (TX or TRX), on every server."
+  @spec sending_addresses(pos_integer()) :: non_neg_integer()
+  defdelegate sending_addresses(trunk_id), to: Senders, as: :count
 
   # A node that does not answer in time (or has no switch running) counts as 0.
   defp sum_counts([], acc), do: acc
@@ -92,6 +115,11 @@ defmodule Sms.Switch.Customer.Sessions do
   @doc false
   @spec local_count(pos_integer()) :: non_neg_integer()
   def local_count(trunk_id), do: Registry.count_match(@registry, {:trunk, trunk_id}, :_)
+
+  @doc false
+  @spec local_count(pos_integer(), :inet.ip_address()) :: non_neg_integer()
+  def local_count(trunk_id, ip),
+    do: Enum.count(local(trunk_id), fn {_pid, meta} -> meta.ip == ip end)
 
   @doc "The sessions bound on this node, with their details."
   @spec local() :: [{pid(), meta()}]

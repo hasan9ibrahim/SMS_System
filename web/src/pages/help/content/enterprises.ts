@@ -1246,8 +1246,8 @@ export const topics: HelpTopic[] = [
                 values: "`2775` when SSL is None, `2776` for any TLS.",
               },
               {
-                name: "Max connections",
-                what: "How many sessions (binds) the customer may open at the same time. Required.",
+                name: "Max connections per IP",
+                what: "How many sessions (binds) each client IP may open at the same time, on all servers together. With 2 and two allowed IPs, each IP may bind twice. Every address counts on its own, also inside an allowed network. Required.",
                 values: "1–10. Default 2.",
               },
               {
@@ -1366,7 +1366,7 @@ export const topics: HelpTopic[] = [
             fields: [
               {
                 name: "TPS per session",
-                what: "Maximum messages per second on each session. Required. The hint shows the trunk total: TPS per session × Max connections, e.g. 50 × 2 sessions = 100 TPS.",
+                what: "Messages per second for each session. Required. The trunk has one pool shared by all its sessions: TPS × Max connections for each client IP bound with a sending bind (TX or TR), e.g. 50 TPS × 2 sessions × 2 IPs = 200 TPS. Any session may use the whole pool. The hint shows the total for one IP.",
                 values: "1–100,000. Default 50.",
               },
               {
@@ -1844,7 +1844,7 @@ export const topics: HelpTopic[] = [
           {
             kind: "list",
             items: [
-              "A customer binds with **Username (system_id)** and **Password** from one of the **Allowed host IPs**, up to **Max connections** sessions.",
+              "A customer binds with **Username (system_id)** and **Password** from one of the **Allowed host IPs**, up to **Max connections per IP** sessions from each address.",
               "Each message is checked against the trunk's translation and HLR rules, then priced with the first matching **Rate tables** entry and routed by route rules (or sent straight to the **Express vendor trunk**).",
               "The chosen vendor trunk must accept the message (data coding, TON/NPI, length, multipart); otherwise routing skips it.",
               "Replies always go back on the session that sent the request. Receipts follow **Receipt routing** and wait up to **Hold receipts for** when the customer is not bound.",

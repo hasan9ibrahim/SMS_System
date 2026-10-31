@@ -3,10 +3,11 @@ defmodule Sms.Switch.Customer.Trunk do
   The settings of one SMPP customer trunk that the customer side needs (spec §5.4, §13.1), as loaded from
   `customer_trunks` by `Sms.Switch.Customer.Loader`.
 
-  `tps` is per session (bind), so the trunk's shared limit across both servers is `tps × max_connections`
-  (migration 034, decision Q13). `company_tps_limit` is the business company's limit on top (S-2.4), `nil` for none.
+  `tps` is per session (bind), so the trunk's shared limit across both servers is `tps × max_connections` (migration
+  034, decision Q13) for each client address bound with a sending bind, at least one: Max Connections counts per
+  address (team trial round 14). `company_tps_limit` is the business company's limit on top (S-2.4), `nil` for none.
   """
-  alias Sms.Switch.Customer.IpRange
+  alias Sms.Switch.Customer.{IpRange, Senders}
   alias Sms.Switch.Throttle
 
   @enforce_keys [:id, :username, :password]
@@ -58,11 +59,15 @@ defmodule Sms.Switch.Customer.Trunk do
           delayed_submit: boolean()
         }
 
-  @doc "The trunk's TPS limit shared by all its sessions on every server."
+  @doc """
+  The trunk's TPS limit shared by all its sessions on every server: TPS × Max Connections × the client addresses it
+  sends from now (`Sms.Switch.Customer.Senders`), at least one, so buffered and scheduled messages still go out when
+  no session is bound.
+  """
   @spec trunk_tps(t()) :: integer()
-  def trunk_tps(%__MODULE__{tps: tps, max_connections: max})
+  def trunk_tps(%__MODULE__{id: id, tps: tps, max_connections: max})
       when is_integer(tps) and is_integer(max),
-      do: tps * max
+      do: tps * max * max(Senders.count(id), 1)
 
   @doc "The TPS counters a submit on this trunk must fit in (`Sms.Switch.Throttle`): the trunk's, then the company's."
   @spec tps_counters(t()) :: [Sms.Switch.Throttle.counter()]

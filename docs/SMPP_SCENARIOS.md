@@ -25,7 +25,7 @@ Terms:
 | ID | Scenario | Required behaviour | Test |
 | --- | --- | --- | --- |
 | S-1.1 | Bind with wrong password, unknown system_id, or IP not on the whitelist | bind_resp with 0x0E (invalid password), 0x0F (invalid system_id) or 0x0D (bind failed). No session is created. Every failure is audited. After N failures in M minutes from one IP, block that IP temporarily | Each case returns the right code; the IP block lifts after the cool-down |
-| S-1.2 | More binds than Max Connections | Extra bind gets 0x05 (already bound) or 0x0D; existing sessions are untouched | Bind max+1: the last one is refused |
+| S-1.2 | More binds than Max Connections | Max Connections counts per client IP address on a customer trunk (product owner 2026-10-31). Extra bind from that address gets 0x05 (already bound) or 0x0D; existing sessions are untouched; another address has its own Max Connections | Bind max+1 from one address: the last one is refused; a bind from a second address is accepted |
 | S-1.3 | Bind type not allowed for the trunk (e.g. RX on a TX-only trunk) | 0x0D; AUTO accepts TX, RX and TRX | Matrix of trunk setting × bind type |
 | S-1.4 | interface_version 0x33, 0x34 or 0x50 | 3.4 behaviour for all. TLVs only when version ≥ 0x34. Reply with sc_interface_version | One bind per version |
 | S-1.5 | Client stops answering enquire_link | After EnquireLinkRespTimeOutSec, close the session. In-flight receipts follow §13.1 hold rules | Simulator stops replying: session closes on time |

@@ -286,9 +286,18 @@ export async function loadFromStores(opts: { feed?: boolean; stats?: boolean } =
   };
   // Only live trunks of live enterprises send traffic: an archived enterprise's trunks stay
   // silent even if one was left active (§13.29).
+  // The TPS limit is the trunk's pool (§5.4, decision Q13): TPS × Max Connections, and for a customer trunk × the
+  // client addresses bound now with a sending bind, at least one, as each address may bind Max Connections times
+  // (team trial round 14).
   const liveTrunks = (table: string) =>
     db().query(
-      `SELECT t.id, t.name, t.enterprise_id, t.tps FROM ${table} t JOIN enterprises e ON e.id = t.enterprise_id
+      `SELECT t.id, t.name, t.enterprise_id, t.tps * t.max_connections${
+        table === "customer_trunks"
+          ? ` * GREATEST(1, (SELECT count(DISTINCT b.ip) FROM bind_sessions b
+                WHERE b.side = 'customer' AND b.trunk_id = t.id AND b.bind_type IN ('TX', 'TR')))`
+          : ""
+      } AS tps_limit
+         FROM ${table} t JOIN enterprises e ON e.id = t.enterprise_id
         WHERE t.deleted_at IS NULL AND t.status = 'active' AND e.deleted_at IS NULL`,
     );
   const [{ rows: ct }, { rows: vt }, { rows: ents }, { rows: codes }] = await Promise.all([
@@ -348,7 +357,7 @@ export async function loadFromStores(opts: { feed?: boolean; stats?: boolean } =
     const s = cBy.get(Number(r.id));
     const n = s ? Number(s.n) : 0;
     const share = n / cTotal;
-    const limit = Number(r.tps);
+    const limit = Number(r.tps_limit);
     // Floors scale with the platform, so quiet trunks never add up to more than the platform itself.
     const base = s
       ? Math.min(limit * 0.85, Math.max(TOTAL_TPS / 6000, share * TOTAL_TPS))
@@ -395,7 +404,7 @@ export async function loadFromStores(opts: { feed?: boolean; stats?: boolean } =
         name: r.name as string,
         enterpriseId: Number(r.enterprise_id),
         enterpriseName: entName.get(Number(r.enterprise_id)) ?? `#${r.enterprise_id}`,
-        limit: Number(r.tps),
+        limit: Number(r.tps_limit),
         weight: n / vTotal,
         tps: 0,
         cost: s && n ? s.cost / n : 0.024,

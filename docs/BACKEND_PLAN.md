@@ -83,7 +83,7 @@ event bus on NATS JetStream with an in-memory test adapter, health check, `mix c
 `backend` (see `backend/README.md`). Step 1 (SMPP 3.4 PDUs) done: every 3.4 command and TLV, strict framing
 (S-1.8, S-1.9), a precise status for every malformed PDU and the same sequence in the answer (S-1.10), fuzzed. Step 2
 (customer side) done: binds with every check in S-1.1–S-1.4 and TLS 1.0–1.3 (S-1.17), Max Connections across both
-servers, keep-alive, windows with backpressure, one shared TPS limit per trunk and per business company in Redis (Q13),
+servers (per client address since team trial round 14), keep-alive, windows with backpressure, one shared TPS limit per trunk and per business company in Redis (Q13),
 answers only on the arriving session and receipts by DLR Session Affinity (§13.1), drain and graceful unbind on stop. Decided with it:
 ports 2775 plain / 2776 TLS; failed binds handled by the Firewall screen's filters and Banned / Trusted lists (§8);
 trunk passwords stored encrypted (reversible, staff still see and change them) before real data. Step 3 (vendor

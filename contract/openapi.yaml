@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.133.0
+  version: 0.134.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18848,6 +18848,10 @@ components:
           type: integer
           minimum: 1
           maximum: 10
+          description: >-
+            Sessions (binds) each client IP address may open, on all servers together (§5.4, team trial round 14): with 2
+            and two addresses, each address may bind twice. Every address counts on its own, also inside a listed
+            network.
         systemType:
           type: [string, "null"]
           maxLength: 13
@@ -18875,6 +18879,11 @@ components:
           type: integer
           minimum: 1
           maximum: 100000
+          description: >-
+            Messages per second per session. The trunk has one pool shared by all its sessions on all servers: TPS ×
+            Max Connections × the client addresses bound now with a sending bind (TX or TRX), at least one (§5.4,
+            decision Q13, team trial round 14). Any session may use the whole pool; the business company limit applies
+            on top.
         overflowBuffer:
           type: integer
           minimum: 0
@@ -28120,6 +28129,9 @@ components:
           description: "Bound sessions now."
         maxConnections:
           type: integer
+          description: >-
+            Sessions allowed now. Vendor tab: the trunk's Max Connections. Customer tab: Max Connections × the client
+            addresses bound now (at least one), as each address may bind Max Connections times.
         status:
           type: string
           description: "online, offline or stopped (by a user)."

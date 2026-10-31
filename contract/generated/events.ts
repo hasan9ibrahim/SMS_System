@@ -445,7 +445,7 @@ export interface TrunkTps {
   trunk: PartyRef;
   tps: number;
   /**
-   * Configured TPS; the UI shows % used, amber above 80 %, red at 100 %.
+   * The trunk's TPS limit now (§5.4): TPS × Max Connections, and for a customer trunk × the client addresses bound now with a sending bind (at least one). The UI shows % used, amber above 80 %, red at 100 %.
    */
   tpsLimit: number;
   /**
