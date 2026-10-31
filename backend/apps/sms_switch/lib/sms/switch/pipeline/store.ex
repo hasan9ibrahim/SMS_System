@@ -299,18 +299,34 @@ defmodule Sms.Switch.Pipeline.Store do
   def claim_group_timeout(key), do: match?({:ok, 1}, run(["ZREM", "rgt", key]))
 
   @doc """
-  The duplicate filter (D6): records `id` under the message's fingerprint for `ttl_s`, or returns the id of the same
-  message seen within the window.
+  The duplicate filter (D6): claims the message's fingerprint for message `id` while it is decided (for at most
+  `ttl_s`, a minute at most), or returns the message that has it: `{:duplicate, id}` once that one was taken
+  (`confirm_fingerprint/4`), `{:pending, id}` while it is still being decided.
   """
   @spec claim_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
-          :new | {:duplicate, String.t()} | {:error, term()}
+          :new | {:duplicate, String.t()} | {:pending, String.t()} | {:error, term()}
   def claim_fingerprint(trunk_id, fingerprint, id, ttl_s) do
-    case run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "NX", "GET", "EX", ttl_s]) do
+    case run([
+           "SET",
+           "dup:#{trunk_id}:#{fingerprint}",
+           "p:" <> id,
+           "NX",
+           "GET",
+           "EX",
+           min(ttl_s, 60)
+         ]) do
       {:ok, nil} -> :new
+      {:ok, "p:" <> first} -> {:pending, first}
       {:ok, first} -> {:duplicate, first}
       error -> error
     end
   end
+
+  @doc "The message that claimed the fingerprint was taken: its copies get its id for the window, `ttl_s` (D6)."
+  @spec confirm_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
+          :ok | {:error, term()}
+  def confirm_fingerprint(trunk_id, fingerprint, id, ttl_s),
+    do: ok(run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "XX", "GET", "EX", ttl_s]))
 
   @doc "Forgets a fingerprint (its message was refused, so a resend is a new message)."
   @spec release_fingerprint(integer(), String.t()) :: :ok | {:error, term()}

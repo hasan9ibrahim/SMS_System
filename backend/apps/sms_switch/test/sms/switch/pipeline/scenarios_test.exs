@@ -444,4 +444,57 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       assert {sent.fields.data_coding, sent.fields.short_message} == {3, <<"na", 0xEF, "ve">>}
     end
   end
+
+  # A credit check that takes its time, then refuses (as a balance just used up would).
+  defmodule SlowRefusal do
+    @behaviour Sms.Switch.Pipeline.Credit
+    @impl true
+    def check(_msg) do
+      Process.sleep(300)
+      {:error, :esme_rsubmitfail}
+    end
+  end
+
+  defp with_credit(module) do
+    env = Application.get_env(:sms_switch, Pipeline, [])
+    Application.put_env(:sms_switch, Pipeline, Keyword.put(env, :credit, module))
+    on_exit(fn -> Application.put_env(:sms_switch, Pipeline, env) end)
+  end
+
+  describe "duplicate filter while the first copy is decided (D6, S-2.7)" do
+    test "a copy that comes while the first is refused is decided on its own, never answered with the first's id" do
+      with_credit(SlowRefusal)
+
+      %{client: client, conn: conn} =
+        start_all(
+          config: [customer_trunks: [PipelineConfig.customer_trunk(duplicate_window_s: 60)]]
+        )
+
+      send_submit(client, %{short_message: "same"}, [], 2)
+      send_submit(client, %{short_message: "same"}, [], 3)
+      {statuses, _client} = resps(client, 2)
+      assert statuses == [0x45, 0x45]
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a copy that comes while the first is decided gets the first's id once it is taken" do
+      %{client: client, conn: conn} =
+        start_all(
+          config: [customer_trunks: [PipelineConfig.customer_trunk(duplicate_window_s: 60)]]
+        )
+
+      send_submit(client, %{short_message: "once"}, [], 2)
+      send_submit(client, %{short_message: "once"}, [], 3)
+
+      {ids, _client} =
+        Enum.map_reduce(1..2, client, fn _, client ->
+          {client, pdu} = recv_until(client, &(&1.command == :submit_sm_resp))
+          {{pdu.status, pdu.fields.message_id}, client}
+        end)
+
+      assert [{0, id}, {0, id}] = ids
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+  end
 end

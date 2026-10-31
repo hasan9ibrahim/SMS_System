@@ -55,6 +55,9 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
   @queued_s 86_400
+  # How long a copy waits for the first message's decision, and how often it looks (D6).
+  @pending_wait_ms 2_000
+  @pending_poll_ms 25
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
@@ -222,16 +225,34 @@ defmodule Sms.Switch.Pipeline.Intake do
           do: refuse_filtered(msg, fingerprint, :esme_rsubmitfail, :loop),
           else: go(kind, msg, fingerprint)
 
+      :undecided ->
+        Logger.info("copy of a message still being decided on trunk #{msg.trunk.id}: 0x58 (D6)")
+        unread(msg, :esme_rthrottled)
+
       {:error, reason} ->
         Logger.error("duplicate filter unavailable, message taken: #{inspect(reason)}")
         go(kind, msg, nil)
     end
   end
 
-  defp go(:part, msg, _fingerprint), do: Reassembly.hold(msg)
+  # A part is answered once held; one not held gives its fingerprint back, so its resend is held.
+  defp go(:part, msg, fingerprint) do
+    case Reassembly.hold(msg) do
+      {:ok, _, _} = ok ->
+        confirm_fingerprint(msg, fingerprint)
+        ok
+
+      error ->
+        forget_fingerprint(msg, fingerprint)
+        error
+    end
+  end
 
   defp go(:ok, msg, fingerprint) do
-    reply = if Delayed.delayed?(msg), do: delayed(msg), else: answer(msg, process(msg))
+    reply =
+      if Delayed.delayed?(msg),
+        do: delayed(msg, fingerprint),
+        else: answer(msg, stored(msg, fingerprint))
 
     case reply do
       {:ok, _, _} = ok ->
@@ -243,11 +264,16 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # Decided and stored: from now on its copies get its id (D6).
+  defp stored(msg, fingerprint) do
+    with :ok <- process(msg), do: confirm_fingerprint(msg, fingerprint)
+  end
+
   # S-2.18, D11: stored as usual, then the resp waits for the vendor's outcome.
-  defp delayed(msg) do
+  defp delayed(msg, fingerprint) do
     :ok = Delayed.join(msg.id)
 
-    case process(msg) do
+    case stored(msg, fingerprint) do
       :ok ->
         Delayed.await(msg.id)
 
@@ -270,12 +296,41 @@ defmodule Sms.Switch.Pipeline.Intake do
     :ok
   end
 
+  defp confirm_fingerprint(_msg, nil), do: :ok
+
+  defp confirm_fingerprint(msg, fingerprint) do
+    _ =
+      Store.confirm_fingerprint(msg.trunk.id, fingerprint, msg.id, msg.trunk[:duplicate_window_s])
+
+    :ok
+  end
+
   defp duplicate(msg, fingerprint) do
     case msg.trunk[:duplicate_window_s] || 0 do
       0 -> :new
-      window -> Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+      window -> claim(msg, fingerprint, window, now_ms() + @pending_wait_ms)
     end
   end
+
+  # D6: a copy that comes while the first is still being decided (rated, routed, its credit or HLR checked) waits for
+  # the decision: the first's id once it was taken, a new message if it was refused. Still undecided after
+  # `@pending_wait_ms`: 0x58, and the client sends it again later.
+  defp claim(msg, fingerprint, window, deadline) do
+    case Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window) do
+      {:pending, _first} ->
+        if now_ms() < deadline do
+          Process.sleep(@pending_poll_ms)
+          claim(msg, fingerprint, window, deadline)
+        else
+          :undecided
+        end
+
+      other ->
+        other
+    end
+  end
+
+  defp now_ms, do: System.monotonic_time(:millisecond)
 
   defp loop?(%{trunk: %{loop_detection: true}} = msg) do
     f = msg.fields
