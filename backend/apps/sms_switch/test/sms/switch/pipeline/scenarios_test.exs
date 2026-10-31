@@ -223,9 +223,15 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
     test "a receipt for an IP with no session never blocks the trunk's other held receipts" do
       %{client: client} = start_all()
       now = System.os_time(:millisecond)
+
+      # The bind's own drain must not read the list between the two holds and keep the lock while this run is
+      # skipped (the second receipt would then wait for the next sweep): both are held under the lock, so whichever
+      # run takes it next sees both.
+      assert_eventually(fn -> Pipeline.Store.lock_held(1, 60) end)
       # Oldest first: one for a client IP with no session now, then one for the IP that is bound.
       hold(held_data("other-ip", {10, 1, 2, 3}), now)
       hold(held_data("bound-ip", {127, 0, 0, 1}), now + 1)
+      :ok = Pipeline.Store.unlock_held(1)
 
       run = Task.async(fn -> Pipeline.Held.run(1) end)
       assert {_, %Pdu{} = dlr} = recv_until(client, &(&1.command == :deliver_sm), 1_500)
