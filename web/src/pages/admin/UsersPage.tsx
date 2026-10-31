@@ -552,6 +552,8 @@ export function UsersPage() {
     <ListScreen<UserRow>
       list="users"
       page={page}
+      // Ctrl K: /admin/users?user=<id> selects that user and opens the detail (functional QA round 13).
+      deepLink="user"
       historyScope={{ entityTypes: ["user", "user_password", "user_totp"] }}
       primary={{ label: "Add user", icon: "plus", onClick: () => void openDialog(null) }}
       rowActions={(r) => [

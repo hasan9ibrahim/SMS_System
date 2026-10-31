@@ -803,6 +803,8 @@ export function RouteRulesPage() {
       columns={columns}
       detail={detail}
       selectId={selectId}
+      // Ctrl K, Team report and Cleanup links: /routing/rules?rule=<id> opens that rule (functional QA round 13).
+      deepLink="rule"
       section={sectionState}
       // The rule's own actions: E edit, D duplicate, the vendor popup, on/off, delete (§6.3, §13.29).
       rowActions={(r) => [
