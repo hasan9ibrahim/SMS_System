@@ -723,6 +723,8 @@ export const messageList = (enterpriseId: number): ChListDef<PortalMessageRow> =
   search: ["senderId", "receiver", "messageId"],
   searchNumbers: ["senderId", "receiver"],
   idSql: "edr_id",
+  // A message the switch wrote twice is listed once (ClickHouse 010, S-7.3).
+  rowKey: true,
   mapRow: (r, names) => {
     const v = edrValues(listFields.portal_messages.fields, MESSAGE_COLUMNS, r, names) as Record<string, unknown>;
     return {

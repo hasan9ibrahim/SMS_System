@@ -15,7 +15,7 @@ import type {
   TroubleTicketPreviewInput,
 } from "@sms/contract";
 import { withDb } from "../db.js";
-import { chQuery, ChError, ChTimeout, ChUnavailable } from "../edr.js";
+import { chQuery, ChError, ChTimeout, ChUnavailable, onePerRowKey } from "../edr.js";
 import { chSelect, lit, nameMaps, runChList, withOutcomes, type ChListDef } from "../lists/chEngine.js";
 import {
   EDR_TEMPLATE_FROM,
@@ -88,7 +88,7 @@ function queryCh<Row>(fields: ListFields, def: ChListDef<Row>) {
 export const queryEdrs = queryCh(listFields.edrs, edrList);
 export const queryFailedEdrs = queryCh(listFields.failed_edrs, failedEdrList);
 
-/** Selected EDRs by UUID with the given columns (plus the IDs a ticket or repush needs). */
+/** Selected EDRs by UUID with the given columns (plus the IDs a ticket or repush needs); a row written twice once. */
 export async function edrsByIds(pool: pg.Pool, ids: string[], columns: string[]): Promise<EdrRow[]> {
   const def = edrList as ChListDef<unknown>;
   const want = [
@@ -97,7 +97,7 @@ export async function edrsByIds(pool: pg.Pool, ids: string[], columns: string[])
   const [rows, names] = await Promise.all([
     chQuery<Record<string, unknown>>(
       `SELECT ${chSelect(def, want)} FROM edr WHERE edr_id IN (${ids.map((id) => lit(id)).join(",")})
-        ORDER BY start_time`,
+        ORDER BY start_time ${onePerRowKey()}`,
     ),
     nameMaps(pool, def),
   ]);
@@ -399,7 +399,7 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
       const inList = ids.map((id) => lit(id)).join(",");
       const eligible = await chQuery<{ id: string }>(
         // Delivered per the attempt row or the switch's outcome row (backend step 11b).
-        `SELECT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'
+        `SELECT DISTINCT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'
            AND edr_id NOT IN (SELECT edr_id FROM edr_receipt WHERE kind = 'outcome' AND edr_id IN (${inList}) AND msg_status = 'DELIVRD')`,
       );
       const me = await getCurrentUser();
@@ -424,6 +424,8 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
         const cols = await edrColumnList();
         const override: Record<string, string> = {
           edr_id: "generateUUIDv4()",
+          // The new attempt's own key, as the switch gives it (ClickHouse 010): its new id and attempt number.
+          row_key: "concat(toString(edr_id), ':', toString(attempt_no))",
           // Two minutes after the old attempt, so the generated EDR period (which the reports and
           // traffic alerts read up to its last EDR) stays as it is; the switch uses the send time.
           start_time: "src.start_time + toIntervalSecond(120)",
@@ -450,7 +452,7 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
         const select = cols.map((c) => (override[c] ? `${override[c]} AS ${c}` : `src.${c} AS ${c}`)).join(", ");
         await chQuery(
           `INSERT INTO edr (${cols.join(", ")}) SELECT ${select} FROM edr AS src
-            WHERE src.edr_id IN (${eligible.map((r) => lit(r.id)).join(",")})`,
+            WHERE src.edr_id IN (${eligible.map((r) => lit(r.id)).join(",")}) ${onePerRowKey("src")}`,
         );
         await chQuery(
           `ALTER TABLE edr UPDATE is_final_attempt = 0 WHERE edr_id IN (${eligible.map((r) => lit(r.id)).join(",")})`,
