@@ -308,7 +308,8 @@ function NewRuleDialog({ done, from }: { done: (id: number | null) => void; from
     settled.current = true;
     abandoned.current = true;
     const draft = idRef.current;
-    if (draft !== null) await discard.mutateAsync(draft).catch((e) => toast({ tone: "error", message: problemText(e) }));
+    if (draft !== null)
+      await discard.mutateAsync(draft).catch((e) => toast({ tone: "error", message: problemText(e) }));
     done(null);
   };
   const saveRule = async () => {

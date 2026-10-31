@@ -75,8 +75,11 @@ interface TabsState {
   duplicate: (id: string) => void;
   togglePin: (id: string) => void;
   move: (id: string, toIndex: number) => void;
-  /** `step`: a step for Back even on the same page (a list opening one of its records in place, ?list=12). */
-  setPath: (id: string, path: string, opts?: { step?: boolean }) => void;
+  /**
+   * `step`: a step for Back even on the same page (a list opening one of its records in place, ?list=12). `moved`:
+   * the page lives at a new address now, so the old one is no step for Back.
+   */
+  setPath: (id: string, path: string, opts?: { step?: boolean; moved?: boolean }) => void;
   setTitle: (id: string, title: string) => void;
   setDirty: (id: string, dirty: boolean) => void;
   setAlert: (id: string, alert: boolean) => void;
@@ -392,7 +395,8 @@ export const useTabs = create<TabsState>((set, get) => ({
 
   setPath: (id, path, opts = {}) => {
     const from = get().tabs.find((t) => t.id === id)?.path;
-    if (from !== undefined && from !== path) set({ back: pushBack(get().back, id, from, path, opts.step) });
+    if (from !== undefined && from !== path && !opts.moved)
+      set({ back: pushBack(get().back, id, from, path, opts.step) });
     set({
       tabs: get().tabs.map((t) => {
         if (t.id !== id || t.path === path) return t;

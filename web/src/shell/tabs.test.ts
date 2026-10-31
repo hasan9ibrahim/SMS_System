@@ -164,6 +164,15 @@ test("a record's title goes when the tab leaves the record, also for its own lis
   assert.equal(title(rule), "Route rules");
 });
 
+test("a page that moved: the tab takes the new address and title, no step for Back (functional QA round 13)", () => {
+  const tab = s().open("/routing/re-rating", { newTab: true });
+  assert.equal(s().tabs.find((t) => t.id === tab)!.title, "Page");
+  s().setPath(tab, "/rates/re-rating", { moved: true });
+  const moved = s().tabs.find((t) => t.id === tab)!;
+  assert.deepEqual([moved.path, moved.title], ["/rates/re-rating", "Re-rating"]);
+  assert.equal(canGoBack(s(), tab), false);
+});
+
 test("closing the tab in view goes back to the tab used before it (team trial round 12)", () => {
   const a = s().open("/rates", { newTab: true });
   s().open("/routing/rules", { newTab: true });
