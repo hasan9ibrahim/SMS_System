@@ -359,6 +359,23 @@ defmodule Sms.Switch.Vendor.SessionTest do
       assert {:error, :throttled} in results
     end
 
+    test "a submit no connection takes (window full) gives its TPS place back (S-5.1)", %{
+      smsc: smsc,
+      port: port
+    } do
+      FakeSmsc.set(smsc, :submit, :silent)
+      start_vendor([trunk(port, window_size: 1, tps: 3, submit_timeout_s: 5)])
+      await_bound(1, 1)
+      Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+      task = Task.async(fn -> submit() end)
+      assert_receive {:smsc, _, %Pdu{command: :submit_sm}}, 1_000
+
+      # The window is full: polled as the sender would, never answered :throttled for places it did not use.
+      results = for _ <- 1..6, do: submit()
+      assert Enum.all?(results, &(&1 == {:error, :window_full}))
+      Task.shutdown(task, :brutal_kill)
+    end
+
     test "unknown, inactive and unbound trunks", %{smsc: smsc, port: port} do
       FakeSmsc.set(smsc, :bind_status, 0x0D)
       start_vendor([trunk(port), trunk(port, id: 2, status: :inactive)])

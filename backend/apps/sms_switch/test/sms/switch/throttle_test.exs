@@ -23,4 +23,27 @@ defmodule Sms.Switch.ThrottleTest do
     for _ <- 1..3, do: Throttle.buffer_release(key)
     assert Enum.map(1..3, fn _ -> Throttle.buffer_take(key, 2) end) == [true, true, false]
   end
+
+  describe "TPS places" do
+    test "a submit given back frees its place in that second, never below zero", %{key: key} do
+      counters = [{:trunk, key, 2}]
+      second = System.os_time(:second) + 100
+
+      assert Enum.map(1..3, fn _ -> Throttle.acquire(counters, second) end) == [
+               :ok,
+               :ok,
+               {:error, :trunk}
+             ]
+
+      assert :ok = Throttle.release(counters, second)
+      assert Throttle.acquire(counters, second) == :ok
+      for _ <- 1..4, do: Throttle.release(counters, second)
+
+      assert Enum.map(1..3, fn _ -> Throttle.acquire(counters, second) end) == [
+               :ok,
+               :ok,
+               {:error, :trunk}
+             ]
+    end
+  end
 end

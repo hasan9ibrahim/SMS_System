@@ -25,7 +25,8 @@ defmodule Sms.Switch.Vendor do
   Sends a `submit_sm` (or `data_sm`) to vendor trunk `trunk_id` and waits for the vendor's response.
 
   The submit counts against the trunk's TPS limit shared by both servers (`tps × max_connections`), then goes to a
-  bound connection of the trunk, this server's first; a full window moves on to the next connection.
+  bound connection of the trunk, this server's first; a full window moves on to the next connection. A submit no
+  connection took gives its place in the limit back.
 
   Returns what `Sms.Switch.Vendor.Session.submit/5` returns, or, before anything is sent: `{:error, :unknown_trunk}`,
   `{:error, :trunk_inactive}`, `{:error, :no_connection}` (no bound connection: the bind is down, S-5.4),
@@ -39,15 +40,28 @@ defmodule Sms.Switch.Vendor do
   @spec submit(pos_integer(), :submit_sm | :data_sm, map(), list(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def submit(trunk_id, command, fields, tlvs \\ [], opts \\ []) do
+    second = System.os_time(:second)
+
     with {:ok, trunk} <- trunk(trunk_id),
          [_ | _] = pids <- connections(trunk_id, opts[:prefer]),
-         :ok <- throttle(trunk) do
-      try_submit(pids, command, fields, tlvs, opts)
+         :ok <- throttle(trunk, second) do
+      pids |> try_submit(command, fields, tlvs, opts) |> unsent(trunk, second)
     else
       [] -> {:error, :no_connection}
       {:error, _} = error -> error
     end
   end
+
+  # A submit no connection took (all full, closed, or it could not be encoded) gives its TPS place back, so a full
+  # window does not use up the second's places while the caller waits for room (S-5.1).
+  defp unsent({:error, reason} = error, trunk, second)
+       when reason in [:window_full, :no_connection, :not_transmitter] or
+              (is_tuple(reason) and elem(reason, 0) == :invalid_pdu) do
+    Throttle.release(Trunk.tps_counters(trunk), second)
+    error
+  end
+
+  defp unsent(result, _trunk, _second), do: result
 
   defp trunk(id) do
     case TrunkStore.get(id) do
@@ -57,8 +71,8 @@ defmodule Sms.Switch.Vendor do
     end
   end
 
-  defp throttle(trunk) do
-    case Throttle.acquire(Trunk.tps_counters(trunk)) do
+  defp throttle(trunk, second) do
+    case Throttle.acquire(Trunk.tps_counters(trunk), second) do
       :ok -> :ok
       {:error, _counter} -> {:error, :throttled}
     end
