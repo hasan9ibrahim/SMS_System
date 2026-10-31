@@ -195,7 +195,13 @@ export function PillSearch({
         onBlur={() => freeText && draft.trim() !== search && onSearch(draft.trim())}
       />
       <Popover anchor={barRef} open={open} onClose={() => setOpen(false)} className="pill-pop">
-        <div className="pill-card" onMouseDown={(e) => e.preventDefault()}>
+        <div
+          className="pill-card"
+          onMouseDown={(e) => e.preventDefault()}
+          // A click here would bubble through the portal to the bar, which opens the card again: "Any of (OR)…" left
+          // it open on top of the filter builder (design QA round 13).
+          onClick={(e) => e.stopPropagation()}
+        >
           {freeText && draft.trim() && (
             <button
               type="button"
