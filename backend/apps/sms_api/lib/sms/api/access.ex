@@ -74,6 +74,61 @@ defmodule Sms.Api.Access do
     end
   end
 
+  # Lists whose query is not at POST /{list}/query.
+  @list_queries %{"billing_report" => "/reports/billing/query"}
+
+  @doc """
+  The generic list calls under /lists/{list} (§13.22 export, §13.29 bulk delete and restore), open in the operation
+  table because their page is the list's (contract/access.json). Export: the page of the list's own query with its
+  Export action (a page without one: its Edit, else its View, as the contract generator falls back) and its View; a
+  list whose query is open (Change history) is scoped by the service. Bulk delete / restore: the access of the list's
+  own POST /{list}/{id}/archive or /restore. A list without that operation is the service's to refuse (400), so it
+  goes on unchecked only when there is nothing to check.
+  """
+  @spec check_list(pos_integer(), String.t(), :export | :delete | :restore) ::
+          :ok | {:error, Problem.t()}
+  def check_list(user_id, list, :export) do
+    path = Map.get(@list_queries, list, "/#{String.replace(list, "_", "-")}/query")
+
+    case Operations.find("POST", path) do
+      nil ->
+        {:error, Problem.new(404, "No such list", detail: "#{list} has no list query.")}
+
+      %{module: nil} ->
+        :ok
+
+      %{module: page} = op ->
+        access = of(user_id)
+        admin = Map.get(op, :admin, false)
+
+        if allowed?(access, page, "view", admin) and
+             allowed?(access, page, export_action(page), admin),
+           do: :ok,
+           else: {:error, not_allowed("export on #{page}")}
+    end
+  end
+
+  def check_list(user_id, list, kind) when kind in [:delete, :restore] do
+    case Operations.find(
+           "POST",
+           "/#{String.replace(list, "_", "-")}/0/#{if kind == :delete, do: "archive", else: "restore"}"
+         ) do
+      nil -> :ok
+      op -> check(user_id, op)
+    end
+  end
+
+  # The action an export needs on a page: Export, else the page's Edit, else its View (scripts/generate.mjs).
+  defp export_action(page) do
+    offered = Map.get(@access["pages"], page, [])
+
+    cond do
+      "export" in offered -> "export"
+      "edit" in offered -> "edit"
+      true -> "view"
+    end
+  end
+
   defp not_allowed(what),
     do:
       Problem.new(403, "Your access group does not allow this",
