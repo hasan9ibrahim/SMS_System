@@ -6,7 +6,7 @@
 //   <HistoryDrawer>        a record's or page's History list with Undo per change
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Change, ChangeField, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
+import type { Change, ChangeField, FilterCondition, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
 import { fetchListPage, useMe } from "../api/hooks";
 import { ask, confirmDialog, toast } from "../ui/feedback";
@@ -17,12 +17,15 @@ export interface HistoryScope {
   /** e.g. route_rule, rate_line, translation_rule, customer_trunk */
   entityTypes: string[];
   entityId?: number;
+  /** More conditions on the changes list, e.g. numberListId for one number list's entries (QA 2026-10-31, §6.4). */
+  conditions?: FilterCondition[];
 }
 
 export function scopeFilter(scope: HistoryScope | null, userId?: number): FilterGroup | undefined {
   const conditions: FilterGroup["conditions"] = [];
   if (scope?.entityTypes.length) conditions.push({ field: "entityType", op: "in", values: scope.entityTypes });
   if (scope?.entityId) conditions.push({ field: "entityId", op: "eq", value: scope.entityId });
+  if (scope?.conditions) conditions.push(...scope.conditions);
   if (userId) conditions.push({ field: "userId", op: "eq", value: userId });
   return conditions.length ? { logic: "and", conditions } : undefined;
 }

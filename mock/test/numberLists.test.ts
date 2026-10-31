@@ -1,5 +1,6 @@
-// Number lists (§6.4) against the seeded database, QA 2026-10-31: text columns sort case-insensitively (§13.25). Every
-// list this file makes is removed after, with its entries and changes.
+// Number lists (§6.4) against the seeded database, QA 2026-10-31: text columns sort case-insensitively (§13.25), and a
+// list's entries page has its own History and Undo (§13.10). Every list this file makes is removed after, with its
+// entries and changes.
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
@@ -71,5 +72,50 @@ describe("number lists (§6.4)", { skip }, () => {
         dir === "asc" ? want : want.reverse(),
       );
     }
+  });
+
+  test("History and Undo on a list's entries page see that list only (QA 2026-10-31, §13.10)", async () => {
+    const a = await newList(`qa-scope-${run}-a`, ["qa-a-1", "qa-a-2"]);
+    const b = await newList(`qa-scope-${run}-b`, ["qa-b-1"]);
+    const scoped = (list: number, more: object[] = []) =>
+      ok(
+        call("POST", "/changes/query", {
+          filter: {
+            logic: "and",
+            conditions: [
+              { field: "entityType", op: "in", values: ["number_list_entry"] },
+              { field: "numberListId", op: "eq", value: list },
+              ...more,
+            ],
+          },
+          limit: 50,
+        }),
+      );
+    assert.deepEqual(
+      (await scoped(a.id)).rows.map((c: { id: number }) => c.id),
+      [a.change!.id],
+    );
+    assert.deepEqual(
+      (await scoped(b.id)).rows.map((c: { id: number }) => c.id),
+      [b.change!.id],
+    );
+    // Undo last on list A (the page's Ctrl+Z): the user's latest change there, though B's is newer.
+    const me = (await ok(call("GET", "/me"))).id as number;
+    const last = await scoped(a.id, [
+      { field: "userId", op: "eq", value: me },
+      { field: "changeType", op: "not_in", values: ["undo"] },
+    ]);
+    assert.equal(last.rows[0]?.id, a.change!.id);
+    // Undoing it is part of the list's history too.
+    await ok(call("POST", `/changes/${a.change!.id}/undo`, {}));
+    const after = (await scoped(a.id)).rows as { changeType: string }[];
+    assert.deepEqual(
+      after.map((c) => c.changeType),
+      ["undo", "edit"],
+    );
+    const bad = await call("POST", "/changes/query", {
+      filter: { logic: "and", conditions: [{ field: "numberListId", op: "in", values: [a.id] }] },
+    });
+    assert.equal(bad.statusCode, 400, "numberListId takes eq only");
   });
 });

@@ -1337,6 +1337,13 @@ export const changeList: ListDef<Change> = {
     userId: { sql: "c.user_id" },
     undoOfId: { sql: "c.undo_of_id" },
     ip: { sql: "host(c.ip)" },
+    // Entry changes of one number list (QA 2026-10-31, §6.4): entries are archived, never deleted, so every change
+    // still finds its list.
+    numberListId: {
+      sql: "NULL",
+      where: (_op, c, p) => `(c.entity_type = 'number_list_entry' AND c.entity_ids && ARRAY(
+        SELECT ne.id FROM number_list_entries ne WHERE ne.number_list_id = ${p(Number(c.value))}::bigint))`,
+    },
   },
   search: ["note", "userName", "entityType"],
   idSql: "c.id",

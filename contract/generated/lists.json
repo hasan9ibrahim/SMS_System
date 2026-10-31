@@ -2433,6 +2433,17 @@
      "not_empty",
      "regex"
     ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "numberListId",
+    "label": "Number list ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq"
+    ]
    }
   ]
  },

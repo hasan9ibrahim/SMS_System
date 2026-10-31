@@ -3508,6 +3508,16 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "userId", label: "User ID", type: "integer", defaultOperator: "eq", hidden: true }),
       field({ field: "undoOfId", label: "Undo of", type: "integer", defaultOperator: "eq", hidden: true }),
       field({ field: "ip", label: "IP", type: "text", defaultOperator: "like", hidden: true }),
+      // The entry changes of one number list (QA 2026-10-31, §6.4): its entries page's History and Undo.
+      field({
+        field: "numberListId",
+        label: "Number list ID",
+        type: "integer",
+        defaultOperator: "eq",
+        operators: ["eq"],
+        sortable: false,
+        hidden: true,
+      }),
     ],
   },
   // Enterprise report (§10, §13.31): row keys, then the §10 metric columns. "(B)" = platform currency.

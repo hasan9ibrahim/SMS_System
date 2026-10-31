@@ -307,7 +307,9 @@ export type paths = {
     /**
      * Change history (server-side filter, sort and paging)
      * @description One row per save (§13.10). Filter on `entityType` + `entityId` for a record's
-     *     History tab, on `userId` for "My changes". Whose changes (team trial round 12): everyone's for
+     *     History tab, on `userId` for "My changes", on `numberListId` (eq) for the entry changes of one number list
+     *     (QA 2026-10-31, §6.4: `number_list_entry` changes whose entries belong to that list; the list's History and
+     *     Undo on its entries page). Whose changes (team trial round 12): everyone's for
      *     administrators and directors (the Management department), the people of their department for a
      *     department's manager, and else the user's own. Each row says whether the viewer may undo it (`canUndo`).
      */

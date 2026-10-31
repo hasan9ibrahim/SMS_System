@@ -333,7 +333,11 @@ function Entries({ id, back }: { id: number; back: () => void }) {
       list="number_list_entries"
       page={page}
       title={`Number list · ${l.name}`}
-      historyScope={{ entityTypes: ["number_list_entry"] }}
+      historyScope={{
+        entityTypes: ["number_list_entry"],
+        // This list's entries only (QA 2026-10-31, §6.4).
+        conditions: [{ field: "numberListId", op: "eq", value: id }],
+      }}
       queryScope={id}
       fetchPage={(body) => fetchListPage<NumberListEntry>("number_list_entries", withList(body))}
       rowActions={(r) => [
