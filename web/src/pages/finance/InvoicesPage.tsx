@@ -189,7 +189,7 @@ function GenerateDialog({ done }: { done: (rows: InvoiceRequestRow[] | null) => 
             path="timezone"
             label="Timezone"
             options={tzOptions(ref?.timezones ?? ["UTC"])}
-            placeholder="Each enterprise's billing time zone"
+            placeholder="Each enterprise's customer billing time zone"
             hint="Usage days are cut at midnight here"
           />
           <FormField label="Usage Start Date" required error={form.error("usageStart")}>

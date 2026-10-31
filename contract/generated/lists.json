@@ -2433,6 +2433,17 @@
      "not_empty",
      "regex"
     ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "numberListId",
+    "label": "Number list ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq"
+    ]
    }
   ]
  },
@@ -2764,7 +2775,7 @@
     ]
    },
    {
-    "sortable": true,
+    "sortable": false,
     "hidden": true,
     "field": "entityId",
     "label": "Record ID",
@@ -2773,11 +2784,6 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
@@ -9548,20 +9554,18 @@
     "hidden": false,
     "field": "customerTrunkCount",
     "label": "Customer trunks",
-    "type": "integer",
-    "defaultOperator": "gte",
+    "type": "text",
+    "defaultOperator": "like",
     "operators": [
+     "like",
+     "not_like",
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
-     "not_empty"
+     "not_empty",
+     "regex"
     ]
    },
    {
@@ -9569,20 +9573,18 @@
     "hidden": false,
     "field": "vendorTrunkCount",
     "label": "Vendor trunks",
-    "type": "integer",
-    "defaultOperator": "gte",
+    "type": "text",
+    "defaultOperator": "like",
     "operators": [
+     "like",
+     "not_like",
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
-     "not_empty"
+     "not_empty",
+     "regex"
     ]
    },
    {
@@ -13949,15 +13951,8 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
-     "not_in",
-     "empty",
-     "not_empty"
+     "not_in"
     ]
    }
   ]

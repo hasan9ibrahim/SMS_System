@@ -43,7 +43,8 @@ export function useTabNavigate() {
           popoutPath.getState().set(to);
           return;
         }
-        useTabs.getState().setPath(tab.id, to);
+        // `replace: false` asks for a step for Back even on the same page (a list opening a record in place).
+        useTabs.getState().setPath(tab.id, to, { step: opts.replace === false });
       },
     [tab, popout],
   );

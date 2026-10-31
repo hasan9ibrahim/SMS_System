@@ -8,12 +8,17 @@ defmodule Sms.Switch.Pipeline.Sender do
     * the message as that vendor's egress translation left it (S-4.8); a text a translation changed is encoded again,
       in UCS-2 when it no longer fits its alphabet (S-4.4); a message the switch must split goes as UDH parts (S-3.1,
       S-3.12) on one connection where possible (S-3.8); receipts are always asked of the vendor (S-2.14);
-    * a temporary refusal (0x58, 0x14, 0x08) is tried again on the same vendor, up to 3 times within seconds (S-5.3,
-      D2); the vendor's own TPS limit or a full window waits up to `:vendor_wait_ms` (S-5.1);
+    * a temporary refusal (0x58, 0x14, 0x08) is tried again on the same vendor with the same reference, up to 3 times
+      within seconds (S-5.3, D2); the vendor at its TPS limit or with its window full keeps the message in its
+      overflow buffer (S-5.1), and a later part waits up to `:vendor_wait_ms` for room. A sender worker never waits:
+      whatever must wait goes on in the vendor's own queue (`Sms.Switch.Pipeline.Buffers`, `resume/1`);
     * any other refusal, a Submit Timeout (possibly sent, D4) or a lost connection moves the message to the next
-      vendor; a vendor with no bound connection is skipped (S-5.4);
+      vendor, with new references; parts the vendor accepted before stay as that attempt's, with their cost (D2); a
+      vendor with no bound connection is skipped (S-5.4);
     * when no vendor is left the message has failed: the customer gets a REJECTD receipt (UNKNOWN when the last
-      vendor may have it) if it asked for receipts.
+      vendor may have it) if it asked for receipts;
+    * a message whose validity period ended before a vendor took it is not sent: an EXPIRED receipt (S-2.13). A
+      vendor gets the validity period and scheduled time as absolute times in UTC.
 
   Every attempt that reached a vendor is an EDR row (`Sms.Switch.Pipeline.Edr`); a message sent is recorded
   (`Sms.Switch.Pipeline.Store`) so its receipts find it, and a receipt that came before its submit_sm_resp is picked
@@ -35,7 +40,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   require Logger
   import Bitwise
   alias Sms.Core.Bus
-  alias Sms.Switch.Message.{Concat, Text}
+  alias Sms.Switch.Message.{Coding, Concat, Text}
 
   alias Sms.Switch.Pipeline.{
     Backlog,
@@ -55,6 +60,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   }
 
   alias Sms.Switch.Smpp.Status
+  alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.{Throttle, Vendor}
 
   # How long a timed-out submit waits for a late answer (D4), and a sent message counts as in flight (S-5.16).
@@ -124,6 +130,34 @@ defmodule Sms.Switch.Pipeline.Sender do
     :ok
   end
 
+  # S-2.13: its validity period ended before a vendor took it: not sent, an EXPIRED receipt if the customer asked for
+  # one (a Delayed Submit customer gets the failure in its resp), not billed; the attempts before stay as they were. One
+  # more EDR row (attempt 0, EXPIRED).
+  defp expired(msg, rows) do
+    Logger.info("message #{msg.id} expired before a vendor took it (S-2.13)")
+    publish_rows(msg, rows, false)
+    edr_id = Edr.new_id()
+
+    row =
+      msg
+      |> Edr.attempt_row(%{
+        edr_id: edr_id,
+        no: 0,
+        final: true,
+        success: false,
+        vendor: nil,
+        command_status: 0
+      })
+      |> Map.put("c_msg_status", "EXPIRED")
+
+    _ = Edr.publish_attempt(row)
+
+    unless Delayed.notify(msg.id, {:error, Status.code(:esme_rsubmitfail)}),
+      do: Forwarder.switch_receipt(msg, edr_id, "EXPIRED", "000")
+
+    :ok
+  end
+
   # Cancelled by the customer while queued (S-2.15, D8): never sent, not billed, no receipt; one EDR row (attempt 0,
   # DELETED).
   defp cancelled(msg) do
@@ -147,78 +181,159 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   # ---------------------------------------------------------------- one vendor
 
-  # `held`: the message comes from this vendor's overflow buffer (`resume/1`), with when it was buffered.
+  # `held`: the message comes from this vendor's queue (`resume/1`): when it was queued, whether it holds a place of the
+  # overflow buffer, and the parts still to send when it was part-way through (`job`).
   defp attempt(msg, route, no, tried, rows, held \\ nil) do
     vt = route.vendor_trunk_id
     tried = MapSet.put(tried, vt)
 
-    case submits(msg, route) do
+    if expired?(msg, held) do
+      left_buffer(held, vt)
+      expired(msg, rows)
+    else
+      try_vendor(msg, route, no, tried, rows, held)
+    end
+  end
+
+  # S-2.13: checked before each vendor is tried (a re-route, a resend, the message leaving a vendor's queue); a message
+  # part-way through on a vendor finishes there.
+  defp expired?(_msg, %{job: %{done: [_ | _]}}), do: false
+
+  defp expired?(msg, _held) do
+    expires = Map.get(msg, :expires_at)
+    is_integer(expires) and System.os_time(:millisecond) >= expires
+  end
+
+  defp try_vendor(msg, route, no, tried, rows, held) do
+    vt = route.vendor_trunk_id
+
+    case job(msg, route, held) do
       {:skip, reason} ->
         Logger.info("message #{msg.id}: vendor trunk #{vt} skipped (#{reason})")
         left_buffer(held, vt)
         next(msg, no, tried, rows, nil)
 
-      {:ok, submits, coding} ->
-        started = System.os_time(:millisecond)
-        outcome = send_parts(vt, submits, msg.id, first_part_deadline(held))
-        finished = System.os_time(:millisecond)
+      {:ok, job} ->
+        outcome = send_parts(vt, job, msg.id, held)
         left_buffer(held, vt)
-        vendor = Map.merge(route, %{data_coding: coding})
-
-        attempt = %{
-          edr_id: Edr.new_id(),
-          no: no,
-          vendor: vendor,
-          submit_time: started,
-          resp_time: finished,
-          msg_count: length(submits)
-        }
-
-        case outcome do
-          {:sent, results} ->
-            sent(msg, route, Map.put(attempt, :tried, tried), results, rows)
-
-          {:busy, reason} ->
-            busy(msg, route, no, tried, rows, held, reason)
-
-          {:unavailable, reason} ->
-            Logger.info("message #{msg.id}: vendor trunk #{vt} unavailable (#{inspect(reason)})")
-            next(msg, no, tried, rows, nil)
-
-          {:rejected, status} ->
-            row =
-              %{attempt | vendor: vendor} |> Map.merge(%{success: false, command_status: status})
-
-            next(
-              msg,
-              no + 1,
-              tried,
-              rows,
-              {row, %{status: "REJECTD", error: err(status), command_status: status}}
-            )
-
-          {:possibly_sent, reason} ->
-            Logger.warning(
-              "message #{msg.id}: no answer from vendor trunk #{vt} (#{reason}); re-routing (D4)"
-            )
-
-            row = Map.merge(attempt, %{success: false, command_status: -1})
-            _ = possibly_sent(msg, attempt, length(submits))
-
-            next(
-              msg,
-              no + 1,
-              tried,
-              rows,
-              {row, %{status: "UNKNOWN", error: "000", command_status: -1}}
-            )
-        end
+        outcome(outcome, {msg, route, no, tried, rows, held})
     end
   end
 
+  # A message part-way through goes on with the parts it has (the same reference, D2); otherwise they are built now.
+  defp job(_msg, _route, %{job: %{} = job}), do: {:ok, job}
+  defp job(msg, route, _held), do: new_job(msg, route)
+
+  defp new_job(msg, route) do
+    with {:ok, submits, coding, parts} <- submits(msg, route) do
+      {:ok,
+       %{
+         submits: submits,
+         coding: coding,
+         parts: parts,
+         done: [],
+         temporary: 0,
+         not_before: 0,
+         # The vendor's address as connected, from its last answer (EDR v_ip / v_port).
+         peer: nil,
+         started: System.os_time(:millisecond)
+       }}
+    end
+  end
+
+  # What happened on the vendor; `job` as it ended (the parts the vendor accepted, the parts left).
+  defp outcome({:sent, job}, {msg, route, no, tried, rows, _held}) do
+    attempt = no |> attempt_of(route, job) |> Map.put(:tried, tried)
+    sent(msg, route, attempt, Enum.reverse(job.done), rows)
+  end
+
+  defp outcome({:busy, reason}, {msg, route, no, tried, rows, held}),
+    do: busy(msg, route, no, tried, rows, held, reason)
+
+  defp outcome({:later, job}, {msg, route, no, tried, rows, _held}),
+    do: park(msg, route, no, tried, rows, job)
+
+  # S-4.7: a message whose PDU cannot be built (an address unfit to send) fails 0x0A unless another vendor takes it.
+  defp outcome({:invalid, reason}, {msg, route, no, tried, rows, _held}) do
+    Logger.error(
+      "message #{msg.id}: its PDU for vendor trunk #{route.vendor_trunk_id} cannot be encoded (#{inspect(reason)})"
+    )
+
+    code = Status.code(:esme_rinvsrcadr)
+
+    next(
+      msg,
+      no,
+      tried,
+      rows,
+      {nil, %{status: "REJECTD", error: err(code), command_status: code}}
+    )
+  end
+
+  defp outcome({:unavailable, reason}, {msg, route, no, tried, rows, _held}) do
+    Logger.info(
+      "message #{msg.id}: vendor trunk #{route.vendor_trunk_id} unavailable (#{inspect(reason)})"
+    )
+
+    next(msg, no, tried, rows, nil)
+  end
+
+  defp outcome({:rejected, status, job}, {msg, route, no, tried, rows, _held}) do
+    row = no |> attempt_of(route, job) |> refused(job.done, status)
+
+    next(
+      msg,
+      no + 1,
+      tried,
+      rows,
+      {row, %{status: "REJECTD", error: err(status), command_status: status}}
+    )
+  end
+
+  defp outcome({:possibly_sent, reason, job}, {msg, route, no, tried, rows, _held}) do
+    Logger.warning(
+      "message #{msg.id}: no answer from vendor trunk #{route.vendor_trunk_id} (#{reason}); re-routing (D4)"
+    )
+
+    attempt = attempt_of(no, route, job)
+    # The parts not answered: from the first one not accepted to the last.
+    _ = possibly_sent(msg, attempt, length(job.done) + 1, length(job.done) + length(job.submits))
+    row = refused(attempt, job.done, -1)
+    next(msg, no + 1, tried, rows, {row, %{status: "UNKNOWN", error: "000", command_status: -1}})
+  end
+
+  defp attempt_of(no, route, job) do
+    %{
+      edr_id: Edr.new_id(),
+      no: no,
+      vendor: Map.merge(route, %{data_coding: job.coding, peer: job[:peer]}),
+      submit_time: job.started,
+      resp_time: System.os_time(:millisecond),
+      # The parts the message counts as, not the PDUs (one message_payload is billed per part, S-3.1).
+      msg_count: job.parts
+    }
+  end
+
+  # D2: a part refused after others went; the parts the vendor accepted stay as that attempt's, with their ids and cost.
+  defp refused(attempt, [], status),
+    do: Map.merge(attempt, %{success: false, command_status: status})
+
+  defp refused(attempt, done, status) do
+    ids = done |> Enum.reverse() |> Enum.map(& &1.message_id)
+
+    Map.merge(attempt, %{
+      success: false,
+      command_status: status,
+      accepted: length(done),
+      msg_count: length(done),
+      vendor_message_id: done |> Enum.reverse() |> Enum.map_join(",", & &1.raw_message_id),
+      vendor_message_keys: Enum.reject(ids, &(&1 in [nil, ""]))
+    })
+  end
+
   # A message from a vendor's buffer gives its place back once tried there, whatever happened.
-  defp left_buffer(nil, _vt), do: :ok
-  defp left_buffer(_held, vt), do: Throttle.buffer_release(vendor_buffer_key(vt))
+  defp left_buffer(%{place: true}, vt), do: Throttle.buffer_release(vendor_buffer_key(vt))
+  defp left_buffer(_held, _vt), do: :ok
 
   # The vendor is at its TPS or its window is full: its overflow buffer, or the next vendor (S-5.1); a message that
   # waited its time in the buffer already goes to the next vendor.
@@ -241,13 +356,11 @@ defmodule Sms.Switch.Pipeline.Sender do
     size = (Config.vendor_trunk(vt) || %{})[:overflow_buffer] || 0
 
     if size > 0 and Throttle.buffer_take(vendor_buffer_key(vt), size) do
-      queue = Buffers.vendor_queue(vt)
-      held = {msg, route, no, MapSet.to_list(tried), rows, System.os_time(:millisecond)}
-      data = %{"id" => msg.id, "m" => Base.encode64(:erlang.term_to_binary(held, compressed: 1))}
+      held = %{queued_at: System.os_time(:millisecond), place: true, job: nil}
 
-      case Bus.put(queue, "msg.vendor_buffered", data, id: "vbuf:#{msg.id}:#{no}:#{vt}") do
-        {:ok, _} ->
-          Buffers.kick(queue)
+      case queue(msg, route, no, tried, rows, held, "vbuf:#{msg.id}:#{no}:#{vt}") do
+        :ok ->
+          :ok
 
         {:error, error} ->
           Logger.warning(
@@ -266,50 +379,93 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
+  # A message that must wait on its vendor (a part refused for now and tried again after a pause, or a later part
+  # waiting for room) goes on in the vendor's own queue, so no sender worker sleeps (S-5.1, D2). It takes no place of
+  # the overflow buffer: it is that vendor's already. If the queue cannot take it, it waits here.
+  defp park(msg, route, no, tried, rows, job) do
+    vt = route.vendor_trunk_id
+    held = %{queued_at: System.os_time(:millisecond), place: false, job: job}
+    id = "vbuf:#{msg.id}:#{no}:#{vt}:#{length(job.done)}:#{job.temporary}"
+
+    case queue(msg, route, no, tried, rows, held, id) do
+      :ok ->
+        :ok
+
+      {:error, error} ->
+        Logger.warning("message #{msg.id} not queued for vendor trunk #{vt}: #{inspect(error)}")
+        wait_until(job.not_before)
+        outcome(send_parts(vt, job, msg.id, held), {msg, route, no, tried, rows, held})
+    end
+  end
+
+  defp queue(msg, route, no, tried, rows, held, id) do
+    queue = Buffers.vendor_queue(route.vendor_trunk_id)
+
+    blob =
+      :erlang.term_to_binary({msg, route, no, MapSet.to_list(tried), rows, held}, compressed: 1)
+
+    case Bus.put(queue, "msg.vendor_buffered", %{"id" => msg.id, "m" => Base.encode64(blob)},
+           id: id
+         ) do
+      {:ok, _} -> Buffers.kick(queue)
+      {:error, _} = error -> error
+    end
+  end
+
   @doc """
-  Runs a message taken from a vendor's overflow buffer (`Sms.Switch.Pipeline.Buffers`) on that vendor, waiting for
-  room up to 30 s from when it was buffered, then the next vendor (S-5.1). A message already sent (a redelivery after a
-  crash) is not sent again.
+  Runs a message taken from a vendor's queue (`Sms.Switch.Pipeline.Buffers`) on that vendor: one from its overflow
+  buffer waits for room up to 30 s from when it was buffered, then goes to the next vendor (S-5.1); one part-way
+  through goes on with its remaining parts after its pause (D2). A message already sent (a redelivery after a crash)
+  is not sent again.
   """
   @spec resume(map()) :: :ok | {:error, :config_not_loaded}
   def resume(%{"m" => blob}) do
-    {msg, route, no, tried, rows, queued_at} =
+    {msg, route, no, tried, rows, held} =
       blob |> Base.decode64!() |> :erlang.binary_to_term([:safe])
+
+    # Queued before the vendor queue held parts in progress: a buffered message with its place.
+    held = if is_integer(held), do: %{queued_at: held, place: true, job: nil}, else: held
 
     cond do
       not Config.ready?() ->
         {:error, :config_not_loaded}
 
-      Store.sent?(msg.id) == true ->
-        Throttle.buffer_release(vendor_buffer_key(route.vendor_trunk_id))
+      held.job == nil and Store.sent?(msg.id) == true ->
+        left_buffer(held, route.vendor_trunk_id)
         :ok
 
       true ->
-        _ = attempt(msg, route, no, MapSet.new(tried), rows, %{queued_at: queued_at})
+        wait_until((held.job || %{})[:not_before] || 0)
+        _ = attempt(msg, route, no, MapSet.new(tried), rows, held)
         :ok
     end
   end
 
+  # In the vendor's own queue only (`resume/1`): its pause before a part refused for now is tried again.
+  defp wait_until(at_ms) do
+    left = at_ms - System.os_time(:millisecond)
+    if left > 0, do: Process.sleep(left), else: :ok
+  end
+
   defp vendor_buffer_key(vendor_trunk_id), do: "vt:#{vendor_trunk_id}"
 
-  # The first part waits for room on the vendor only when it comes from the vendor's buffer (until 30 s after it was
-  # buffered); otherwise a busy vendor answers at once, for the buffer to decide.
-  defp first_part_deadline(nil), do: System.monotonic_time(:millisecond)
-
+  # The first part waits for room on the vendor only when it comes from the vendor's queue, until 30 s after it was
+  # queued (in a sender worker a busy vendor answers at once, for the buffer to decide).
   defp first_part_deadline(%{queued_at: queued_at}) do
     left = queued_at + vendor_buffer_wait_ms() - System.os_time(:millisecond)
     System.monotonic_time(:millisecond) + max(left, 0)
   end
 
-  # D4: a late OK from this vendor flags the attempt as a possible duplicate (`Sms.Switch.Pipeline.LateResponses`).
-  defp possibly_sent(msg, attempt, parts) do
+  # D4: a late OK from this vendor for a part not answered (`from`..`to`) flags the attempt as a possible duplicate
+  # (`Sms.Switch.Pipeline.LateResponses`).
+  defp possibly_sent(msg, attempt, from, to) do
     remembered = %{
       edr_id: attempt.edr_id,
       data: Forwarder.core(msg),
       vendor_trunk_id: attempt.vendor.vendor_trunk_id
     }
 
-    for n <- 1..parts,
+    for n <- from..to//1,
         do: Store.put_possibly_sent("#{msg.id}:#{n}", Map.put(remembered, :part, n), @late_keep_s)
   end
 
@@ -322,7 +478,9 @@ defmodule Sms.Switch.Pipeline.Sender do
     _ =
       case reroute(msg, tried) do
         {:ok, routed} ->
-          attempt(msg, Intake.route_of(routed), resend.no + 1, tried, [])
+          # The EDR marks this attempt as a DLR re-route.
+          route = routed |> Intake.route_of() |> Map.put(:dlr_reroute, true)
+          attempt(msg, route, resend.no + 1, tried, [])
 
         {:error, reason, _} ->
           Logger.info(
@@ -366,8 +524,13 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp reroute(msg, tried), do: Router.route(Intake.router_input(msg), tried)
 
   # The next vendor in the rules' order; none left → the message has failed.
+  # `failed`: the attempt's row (nil when no vendor was reached) and how the message fails if no vendor is left.
   defp next(msg, no, tried, rows, failed) do
-    rows = if failed, do: [elem(failed, 0) | rows], else: rows
+    rows =
+      case failed do
+        {%{} = row, _failure} -> [row | rows]
+        _none -> rows
+      end
 
     case reroute(msg, tried) do
       {:ok, routed} ->
@@ -395,96 +558,137 @@ defmodule Sms.Switch.Pipeline.Sender do
   # take it (no multipart, a maximum length) is skipped for the next one (S-3.9).
   defp submits(msg, route) do
     text = route.egress[:text]
-    {bytes, alphabet, coding} = encoding(msg, text)
     vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
 
-    case skip_reason(msg, text, bytes, alphabet, vt) do
-      nil ->
-        base = fields(msg, route, coding)
-        tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
-        pieces = pieces(bytes, alphabet, vt[:multipart_format] || :udh8)
-        {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding}
+    # A coding the vendor does not allow is converted when the text fits another it allows (S-2.11, S-4.4).
+    with {:ok, bytes, alphabet, coding} <- Coding.for_vendor(msg, text, vt[:allowed_data_codings]),
+         ies = elements(msg, alphabet),
+         nil <- skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
+      base = fields(msg, route, coding)
+      tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
+      format = vt[:multipart_format] || :udh8
+      reference = fn -> reference(format, base.destination_addr) end
+      pieces = pieces(bytes, alphabet, format, ies, reference)
 
-      reason ->
-        {:skip, reason}
+      # Billed per part as counted (153 / 67 / 134), also when one message_payload carries them all (S-3.1).
+      parts = max(length(pieces), Text.part_count(bytes, alphabet, byte_size(ies)))
+      {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding, parts}
+    else
+      {:error, reason} -> {:skip, reason}
+      reason -> {:skip, reason}
     end
   end
 
-  defp skip_reason(_msg, _text, :error, _alphabet, _vt), do: :unencodable
-
-  defp skip_reason(msg, text, bytes, alphabet, vt) do
+  defp skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
     cond do
       # Egress growing the part count: this vendor cannot take it unchanged (S-4.1, S-4.9).
-      grows_parts?(msg, text) -> :translation_grows
-      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] -> :too_long
-      vt[:support_multipart] == false and length(Text.split(bytes, alphabet)) > 1 -> :no_multipart
-      true -> nil
+      grows_parts?(msg, text) ->
+        :translation_grows
+
+      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] ->
+        :too_long
+
+      vt[:support_multipart] == false and Text.part_count(bytes, alphabet, byte_size(ies)) > 1 ->
+        :no_multipart
+
+      true ->
+        nil
     end
   end
+
+  # A client's UDH elements other than concatenation (ports, a language shift table) go with the message (D9,
+  # S-3.12); a shift table only means something in GSM 7-bit, so a text a translation moved to another alphabet goes
+  # without it.
+  defp elements(msg, :gsm), do: Concat.other_elements(msg.udh)
+  defp elements(msg, _alphabet), do: Concat.other_elements(msg.udh, [0x00, 0x08, 0x24, 0x25])
 
   defp submit_pdu(base, tlvs, {esm, short_message, extra}),
     do: {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs ++ extra}
 
-  @doc false
   # The parts as {esm_class, short_message, extra TLVs}: one when the message fits in one SMS, else per the format
-  # (UDH with an 8- or 16-bit reference, SAR TLVs, or the whole message in message_payload).
-  @spec pieces(binary(), Text.alphabet(), :udh8 | :udh16 | :sar | :payload) :: [
-          {byte(), binary(), list()}
-        ]
-  def pieces(bytes, alphabet, :payload) do
-    case Text.split(bytes, alphabet) do
-      [single] -> [{0, single, []}]
-      _parts -> [{0, "", [message_payload: bytes]}]
+  # (UDH with an 8- or 16-bit reference, SAR TLVs, or the whole message in message_payload). `ies`: the message's
+  # other UDH elements, in a UDH of their own on a single message, after the concatenation element in each part (D9).
+  # `reference`: gives the message's concatenation reference when it is split.
+  @spec pieces(
+          binary(),
+          Text.alphabet(),
+          :udh8 | :udh16 | :sar | :payload,
+          binary(),
+          (-> non_neg_integer())
+        ) ::
+          [{byte(), binary(), list()}]
+  defp pieces(bytes, alphabet, :payload, ies, _reference) do
+    case Text.split(bytes, alphabet, 6, byte_size(ies)) do
+      [single] -> [single(single, ies, [])]
+      _parts -> [{esm(ies), "", [message_payload: Concat.udh(ies) <> bytes]}]
     end
   end
 
-  def pieces(bytes, alphabet, format) do
-    case Text.split(bytes, alphabet, header_octets(format)) do
+  defp pieces(bytes, alphabet, format, ies, reference) do
+    case Text.split(bytes, alphabet, header_octets(format), byte_size(ies)) do
       [single] ->
-        [{0, single, []}]
+        [single(single, ies, [])]
 
       parts ->
         total = length(parts)
-        ref = reference(format)
-        parts |> Enum.with_index(1) |> Enum.map(fn {p, n} -> piece(format, ref, total, n, p) end)
+        ref = reference.()
+
+        parts
+        |> Enum.with_index(1)
+        |> Enum.map(fn {p, n} -> piece(format, ref, total, n, p, ies) end)
     end
   end
+
+  # One PDU: the bytes after a UDH of the other elements, if any.
+  defp single(bytes, ies, tlvs), do: {esm(ies), Concat.udh(ies) <> bytes, tlvs}
+
+  defp esm(<<>>), do: 0
+  defp esm(_ies), do: @udhi
 
   defp header_octets(:udh8), do: 6
   defp header_octets(:udh16), do: 7
-  defp header_octets(:sar), do: 0
 
-  # A new reference for every message, so open messages on a connection do not share one (S-3.10).
-  defp reference(:udh8), do: :rand.uniform(256) - 1
-  defp reference(_format), do: :rand.uniform(65_536) - 1
+  # SAR parts carry their link in TLVs, but the vendor's SMSC puts a concatenation header on air: the same room is left.
+  defp header_octets(:sar), do: 6
 
-  defp piece(:udh8, ref, total, n, p), do: {@udhi, Concat.udh8(ref, total, n) <> p, []}
-  defp piece(:udh16, ref, total, n, p), do: {@udhi, Concat.udh16(ref, total, n) <> p, []}
+  # S-3.10: references count up per handset, so messages open together never share one on any session, nor does a
+  # message sent again via the next vendor with its first try (D2); an 8-bit one comes round after 256 messages to the
+  # same handset. Without Redis, this server's own count, still never the same for two messages in a row.
+  defp reference(format, destination) do
+    modulo = if format == :udh8, do: 256, else: 65_536
 
-  defp piece(:sar, ref, total, n, p),
-    do: {0, p, [sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n]}
-
-  defp encoding(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
-
-  defp encoding(msg, text) when text == msg.text or is_nil(text),
-    do: {msg.body, msg.alphabet, msg.data_coding}
-
-  defp encoding(msg, text) do
-    alphabet = Text.fit(text, msg.alphabet)
-
-    case Text.encode(text, alphabet) do
-      {:ok, bytes} -> {bytes, alphabet, Text.data_coding(alphabet, msg.data_coding)}
-      :error -> {:error, alphabet, msg.data_coding}
+    case Store.next_reference(destination || "") do
+      {:ok, n} -> rem(n, modulo)
+      {:error, _} -> rem(System.unique_integer([:positive, :monotonic]), modulo)
     end
   end
 
-  # Whether a changed text needs more parts than the customer sent (D3).
+  defp piece(:udh8, ref, total, n, p, ies), do: {@udhi, Concat.udh8(ref, total, n, ies) <> p, []}
+
+  defp piece(:udh16, ref, total, n, p, ies),
+    do: {@udhi, Concat.udh16(ref, total, n, ies) <> p, []}
+
+  defp piece(:sar, ref, total, n, p, ies),
+    do: single(p, ies, sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n)
+
+  # Whether a changed text needs more parts than the customer sent (D3), counted like with like: the text as it goes
+  # and as it came, both at 153 / 67 / 134 a part, or the parts the customer sent when it used more (a client's SAR
+  # parts of 160 characters are counted again, never compared with the 153 we split at).
   defp grows_parts?(%{text: nil}, _text), do: false
+  # No translation changed the text: it goes as the customer sent it.
+  defp grows_parts?(msg, text) when text == msg.text or is_nil(text), do: false
 
   defp grows_parts?(msg, text) do
-    case encoding(msg, text) do
-      {:error, _, _} -> false
-      {bytes, alphabet, _} -> Text.part_count(bytes, alphabet) > msg.parts
+    case Coding.natural(msg, text) do
+      {:error, _, _} ->
+        false
+
+      {bytes, alphabet, _} ->
+        Text.part_count(bytes, alphabet, byte_size(elements(msg, alphabet))) >
+          max(
+            Text.part_count(msg.body, msg.alphabet, byte_size(elements(msg, msg.alphabet))),
+            msg.parts
+          )
     end
   end
 
@@ -503,8 +707,8 @@ defmodule Sms.Switch.Pipeline.Sender do
       destination_addr: e[:receiver] || i[:receiver],
       protocol_id: f[:protocol_id] || 0,
       priority_flag: f[:priority_flag] || 0,
-      schedule_delivery_time: f[:schedule_delivery_time] || "",
-      validity_period: f[:validity_period] || "",
+      schedule_delivery_time: vendor_time(msg, :scheduled_at, f[:schedule_delivery_time]),
+      validity_period: vendor_time(msg, :expires_at, f[:validity_period]),
       # Receipts are always asked of the vendor; the customer gets what it asked for (S-2.14).
       registered_delivery: 1,
       replace_if_present_flag: 0,
@@ -515,15 +719,25 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   defp first(values), do: Enum.find(values, 0, &(&1 != nil))
 
+  # S-2.12, S-2.13: as an absolute time in UTC, so a relative one never starts again at the vendor.
+  defp vendor_time(msg, key, raw) do
+    case Map.fetch(msg, key) do
+      {:ok, ms} -> SmppTime.absolute(ms)
+      :error -> raw || ""
+    end
+  end
+
   # ---------------------------------------------------------------- sending
 
   # Every part to the same vendor, the same connection where possible; stops at the first part that does not go. A
   # service trunk (team trial round 12) sends nothing: each part gets an id of the switch's, and the trunk's receipt
-  # comes from the timeout sweep after its delay (`receipt_timeout/2`).
-  defp send_parts(vt, submits, message_id, first_deadline) do
+  # comes from the timeout sweep after its delay (`receipt_timeout/2`). `held`: nil in a sender worker, which never
+  # waits (what must wait goes on in the vendor's queue, `{:later, job}`); the vendor's queue entry otherwise.
+  defp send_parts(vt, job, message_id, held) do
     if (Config.vendor_trunk(vt) || %{})[:service] == true,
-      do: {:sent, Enum.map(submits, fn _ -> service_result() end)},
-      else: send_to_vendor(vt, submits, message_id, first_deadline)
+      do:
+        {:sent, %{job | submits: [], done: Enum.map(job.submits, fn _ -> service_result() end)}},
+      else: send_all(vt, job, message_id, held)
   end
 
   defp service_result do
@@ -531,59 +745,103 @@ defmodule Sms.Switch.Pipeline.Sender do
     %{message_id: id, raw_message_id: id}
   end
 
-  defp send_to_vendor(vt, submits, message_id, first_deadline) do
-    submits
-    |> Enum.with_index(1)
-    |> Enum.reduce_while({:sent, [], nil}, fn {{fields, tlvs}, n}, {:sent, done, prefer} ->
-      case submit(
-             vt,
-             fields,
-             tlvs,
-             "#{message_id}:#{n}",
-             prefer,
-             part_deadline(done, first_deadline)
-           ) do
-        {:ok, result} -> {:cont, {:sent, [result | done], result[:pid]}}
-        failure when done == [] -> {:halt, failure}
-        # A part refused after others went: the whole message moves on (D2), the earlier parts stay that attempt's.
-        {reason, detail} when reason in [:unavailable, :busy] -> {:halt, {:possibly_sent, detail}}
-        failure -> {:halt, failure}
-      end
-    end)
-    |> case do
-      {:sent, results, _} -> {:sent, Enum.reverse(results)}
-      other -> other
+  defp send_all(_vt, %{submits: []} = job, _message_id, _held), do: {:sent, job}
+
+  defp send_all(vt, %{submits: [{fields, tlvs} | rest]} = job, message_id, held) do
+    ref = "#{message_id}:#{length(job.done) + 1}"
+
+    case submit(vt, fields, tlvs, ref, prefer(job.done), part_deadline(job.done, held)) do
+      {:ok, result} ->
+        job = Map.merge(job, %{submits: rest, done: [result | job.done], temporary: 0})
+        send_all(vt, Map.put(job, :peer, result[:peer]), message_id, held)
+
+      {refusal, status, peer} ->
+        part_failed({refusal, status}, vt, Map.put(job, :peer, peer), message_id, held)
+
+      failure ->
+        part_failed(failure, vt, job, message_id, held)
     end
   end
 
-  # Later parts wait for room as long as `:vendor_wait_ms`: the earlier parts are with the vendor already.
-  defp part_deadline([], first_deadline), do: first_deadline
-  defp part_deadline(_done, _first), do: System.monotonic_time(:millisecond) + vendor_wait_ms()
+  defp prefer([last | _]), do: last[:pid]
+  defp prefer([]), do: nil
+
+  # D2: a part refused for now (0x58, 0x14, 0x08) is tried again on the same vendor, with the same reference, after a
+  # pause (0.5 s, then 1 s): in the vendor's queue, never in a sender worker. Past the tries it is refused.
+  defp part_failed({:temporary, status}, vt, job, message_id, held) do
+    if job.temporary + 1 < @temporary_tries do
+      pause = 500 * (job.temporary + 1)
+
+      job = %{
+        job
+        | temporary: job.temporary + 1,
+          not_before: System.os_time(:millisecond) + pause
+      }
+
+      if held == nil do
+        {:later, job}
+      else
+        wait_until(job.not_before)
+        send_all(vt, job, message_id, held)
+      end
+    else
+      {:rejected, status, job}
+    end
+  end
+
+  # The first part finding no room: the vendor is busy (its buffer decides) or unavailable (the next vendor); or it
+  # could not be encoded.
+  defp part_failed({reason, detail}, _vt, %{done: []}, _message_id, _held)
+       when reason in [:busy, :unavailable, :invalid],
+       do: {reason, detail}
+
+  defp part_failed({:invalid, _reason}, _vt, job, _message_id, _held),
+    do: {:rejected, Status.code(:esme_rinvsrcadr), job}
+
+  # A later part finding no room waits for it in the vendor's queue (`:vendor_wait_ms`): the earlier parts are with the
+  # vendor already. Still none there, or no connection: the whole message moves on (D2).
+  defp part_failed({:busy, _reason}, _vt, job, _message_id, nil), do: {:later, job}
+
+  defp part_failed({reason, detail}, _vt, job, _message_id, _held)
+       when reason in [:busy, :unavailable, :possibly_sent],
+       do: {:possibly_sent, detail, job}
+
+  defp part_failed({:rejected, status}, _vt, job, _message_id, _held),
+    do: {:rejected, status, job}
+
+  # How long a part waits for room when the vendor is at its TPS or its window is full: never in a sender worker; in the
+  # vendor's queue the first part until 30 s after it was queued, a later part `:vendor_wait_ms`.
+  defp part_deadline(_done, nil), do: System.monotonic_time(:millisecond)
+  defp part_deadline([], held), do: first_part_deadline(held)
+  defp part_deadline(_done, _held), do: System.monotonic_time(:millisecond) + vendor_wait_ms()
 
   # `deadline` (monotonic ms): how long to wait for room when the vendor is at its TPS or its window is full; past it
   # the vendor is busy.
-  defp submit(vt, fields, tlvs, ref, prefer, deadline, temporary \\ 0) do
+  defp submit(vt, fields, tlvs, ref, prefer, deadline) do
     case Vendor.submit(vt, :submit_sm, fields, tlvs, submit_opts(ref, prefer)) do
       {:ok, %{status: 0} = result} ->
         {:ok, result}
 
-      {:ok, %{status: status}} when status in @temporary and temporary + 1 < @temporary_tries ->
-        Process.sleep(500 * (temporary + 1))
-        submit(vt, fields, tlvs, ref, prefer, deadline, temporary + 1)
+      {:ok, %{status: status} = result} when status in @temporary ->
+        {:temporary, status, result[:peer]}
 
-      {:ok, %{status: status}} ->
-        {:rejected, status}
+      {:ok, %{status: status} = result} ->
+        {:rejected, status, result[:peer]}
 
       {:error, reason} when reason in [:throttled, :window_full] ->
         if System.monotonic_time(:millisecond) < deadline do
           Process.sleep(20)
-          submit(vt, fields, tlvs, ref, prefer, deadline, temporary)
+          submit(vt, fields, tlvs, ref, prefer, deadline)
         else
           {:busy, reason}
         end
 
       {:error, reason} when reason in [:timeout, :connection_lost] ->
         {:possibly_sent, reason}
+
+      # A PDU that cannot be encoded never left: no vendor problem, but nothing the next vendor would take either.
+      {:error, {:invalid_pdu, reason}} ->
+        {:invalid, reason}
 
       {:error, reason} ->
         {:unavailable, reason}
@@ -687,10 +945,11 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
+  # `parts`: the PDUs sent, each with its receipt; the vendor is billed per part as counted (`msg_count`, S-3.1).
   defp record_of(msg, route, trunk, attempt, parts, dims) do
     bill =
       msg
-      |> Billing.of_attempt(route, parts)
+      |> Billing.of_attempt(route, attempt[:msg_count] || parts)
       |> Map.put(:attempt_no, attempt.no)
       |> Map.update!(:dims, &Map.merge(&1, dims))
 

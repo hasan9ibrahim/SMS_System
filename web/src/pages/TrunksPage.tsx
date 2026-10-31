@@ -12,6 +12,7 @@ import { useRestore } from "../api/records";
 import { useNotifySaved } from "../history/undo";
 import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { newTabOf, type OpenEvent } from "../shell/useOpener";
 import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 
@@ -20,9 +21,9 @@ const LABEL = { customer: "Customer trunk", vendor: "Vendor trunk" } as const;
 export function TrunksPage({ kind }: { kind: TrunkKind }) {
   const navigate = useTabNavigate();
   const page = pageForPath(`/enterprises/${kind}-trunks`)!;
-  const open = (id: number, name: string, forceNew = false) =>
-    // In this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
-    navigate(`/enterprises/${kind}-trunks/${id}`, { forceNew, title: `${LABEL[kind]} · ${name}` });
+  const open = (id: number, name: string, e?: OpenEvent) =>
+    // In this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click or the middle button: a new tab.
+    navigate(`/enterprises/${kind}-trunks/${id}`, { ...newTabOf(e), title: `${LABEL[kind]} · ${name}` });
   const clone = (id: number, name: string) =>
     navigate(`/enterprises/${kind}-trunks/new?clone=${id}`, {
       newTab: true,
@@ -109,7 +110,7 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
             ),
         },
       }}
-      onOpen={(row, e) => open(row.id, row.name, e.ctrlKey || e.metaKey)}
+      onOpen={(row, e) => open(row.id, row.name, e)}
       detail={(r) => ({
         title: (
           <>

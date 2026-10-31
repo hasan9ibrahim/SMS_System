@@ -12,6 +12,13 @@
   --color-good: #16a34a;
   --color-warning: #b45309;
   --color-error: #dc2626;
+  /* Text in those colours, and fills under white text, at WCAG AA (4.5:1; design QA round 13): the brighter green
+     stays for dots, bars and icons, green figures use the text shade; selected items use the accent text shade on
+     their soft accent fill. */
+  --color-good-text: #157a3b;
+  --color-accent-text: #1d4ed8;
+  --color-accent-fill: var(--color-accent);
+  --color-error-fill: var(--color-error);
   /* Dark surfaces on a light page: toasts, the bulk bar, terminals. */
   --color-menu-bar: #1f2937;
   /* The two-row header (logo, search and status; the main menu). */
@@ -28,6 +35,10 @@
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 16px;
+  /* Names some styles use (phone drawer, portal, incident facts) for the tokens above (design QA round 13). */
+  --radius: var(--radius-md);
+  --color-bg: var(--color-page-bg);
+  --color-text-muted: var(--color-text-secondary);
   --border-width: 1px;
   --card-shadow: 0 1px 2px color-mix(in srgb, #101828 5%, transparent);
 
@@ -60,6 +71,11 @@
   --color-good: #4cc38a;
   --color-warning: #e9b25f;
   --color-error: #f07178;
+  --color-good-text: #4cc38a;
+  --color-accent-text: #7aa5f5;
+  /* White text on the bright dark-theme accent and red was 3.2:1 and 2.9:1. */
+  --color-accent-fill: #3b6fd8;
+  --color-error-fill: #c9454d;
   --color-menu-bar: #0b0f14;
   --color-header: #141921;
   --color-strong: #e6e9ef;
@@ -91,6 +107,10 @@
   --color-good: #16a34a;
   --color-warning: #b45309;
   --color-error: #dc2626;
+  --color-good-text: #157a3b;
+  --color-accent-text: #2b63c6;
+  --color-accent-fill: #2b63c6;
+  --color-error-fill: #dc2626;
   --color-menu-bar: #1f3350;
   --color-header: #1f3350;
   --color-strong: #1f3350;

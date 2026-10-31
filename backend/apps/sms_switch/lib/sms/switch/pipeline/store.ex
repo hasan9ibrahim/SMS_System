@@ -16,8 +16,11 @@ defmodule Sms.Switch.Pipeline.Store do
     * `dup:<customer trunk>:<fingerprint>`: the message id of a message, for the duplicate filter's window (D6);
       `lp:<fingerprint>`: the customer trunk of a message in flight to a vendor, for Loop Detection (S-5.16);
     * `pd:<message id>:<part>`: the attempt of a part whose submit timed out, for a late answer (D4);
+    * `ur:<destination>`: the count the concatenation references of messages split for that handset come from
+      (S-3.10);
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
-      by arrival; `hs` the trunks that have any, `hl:<customer trunk>` the lock of the node sending them.
+      of their keys (message id and status) by arrival, `hd:<customer trunk>` each one's entry; `hs` the trunks that
+      have any, `hl:<customer trunk>` the lock of the node sending them.
 
   A finished message (every part's final receipt in, the customer's receipt queued) is forgotten at once; one still
   waiting expires after its vendor trunk's DLR timeout plus an hour, so Redis holds only messages waiting for a
@@ -296,18 +299,34 @@ defmodule Sms.Switch.Pipeline.Store do
   def claim_group_timeout(key), do: match?({:ok, 1}, run(["ZREM", "rgt", key]))
 
   @doc """
-  The duplicate filter (D6): records `id` under the message's fingerprint for `ttl_s`, or returns the id of the same
-  message seen within the window.
+  The duplicate filter (D6): claims the message's fingerprint for message `id` while it is decided (for at most
+  `ttl_s`, a minute at most), or returns the message that has it: `{:duplicate, id}` once that one was taken
+  (`confirm_fingerprint/4`), `{:pending, id}` while it is still being decided.
   """
   @spec claim_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
-          :new | {:duplicate, String.t()} | {:error, term()}
+          :new | {:duplicate, String.t()} | {:pending, String.t()} | {:error, term()}
   def claim_fingerprint(trunk_id, fingerprint, id, ttl_s) do
-    case run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "NX", "GET", "EX", ttl_s]) do
+    case run([
+           "SET",
+           "dup:#{trunk_id}:#{fingerprint}",
+           "p:" <> id,
+           "NX",
+           "GET",
+           "EX",
+           min(ttl_s, 60)
+         ]) do
       {:ok, nil} -> :new
+      {:ok, "p:" <> first} -> {:pending, first}
       {:ok, first} -> {:duplicate, first}
       error -> error
     end
   end
+
+  @doc "The message that claimed the fingerprint was taken: its copies get its id for the window, `ttl_s` (D6)."
+  @spec confirm_fingerprint(integer(), String.t(), String.t(), pos_integer()) ::
+          :ok | {:error, term()}
+  def confirm_fingerprint(trunk_id, fingerprint, id, ttl_s),
+    do: ok(run(["SET", "dup:#{trunk_id}:#{fingerprint}", id, "XX", "GET", "EX", ttl_s]))
 
   @doc "Forgets a fingerprint (its message was refused, so a resend is a new message)."
   @spec release_fingerprint(integer(), String.t()) :: :ok | {:error, term()}
@@ -326,6 +345,21 @@ defmodule Sms.Switch.Pipeline.Store do
       {:ok, nil} -> {:ok, nil}
       {:ok, trunk} -> {:ok, String.to_integer(trunk)}
       error -> error
+    end
+  end
+
+  @doc """
+  The next concatenation reference count for a message the switch splits for `destination` (S-3.10, D2): one count per
+  handset, whatever the vendor, kept an hour after its last use, far longer than a message stays open.
+  """
+  @spec next_reference(String.t()) :: {:ok, pos_integer()} | {:error, term()}
+  def next_reference(destination) do
+    key = "ur:#{destination}"
+
+    case transaction([["INCRBY", key, 1], ["EXPIRE", key, 3_600]]) do
+      {:ok, [n, _]} when is_integer(n) -> {:ok, n}
+      {:ok, other} -> {:error, {:unexpected_reply, other}}
+      {:error, _} = error -> error
     end
   end
 
@@ -407,11 +441,18 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
-  @doc "Holds a customer receipt until a session of the trunk can take it (§13.1)."
-  @spec hold(integer(), term(), pos_integer()) :: :ok | {:error, term()}
-  def hold(trunk_id, entry, at_ms) do
+  @doc """
+  Holds a customer receipt until a session of the trunk can take it (§13.1). `key` names the receipt (its message id
+  and status): one already held under it stays as it is, so a copy delivered again by the bus is never held twice
+  (S-5.14). Without a key the entry itself is its key.
+  """
+  @spec hold(integer(), term(), pos_integer(), String.t() | nil) :: :ok | {:error, term()}
+  def hold(trunk_id, entry, at_ms, key \\ nil) do
+    member = key || entry |> :erlang.term_to_binary([:deterministic]) |> held_key()
+
     commands = [
-      ["ZADD", "h:#{trunk_id}", at_ms, :erlang.term_to_binary(entry)],
+      ["HSETNX", "hd:#{trunk_id}", member, :erlang.term_to_binary(entry)],
+      ["ZADD", "h:#{trunk_id}", "NX", at_ms, member],
       ["SADD", "hs", "#{trunk_id}"]
     ]
 
@@ -420,6 +461,14 @@ defmodule Sms.Switch.Pipeline.Store do
       :local -> ok(local(commands))
     end
   end
+
+  defp held_key(bytes),
+    do: :crypto.hash(:sha256, bytes) |> binary_part(0, 16) |> Base.url_encode64(padding: false)
+
+  @doc "Replaces a held receipt's entry (tried again later, S-5.14); it keeps its place."
+  @spec update_held(integer(), binary(), term()) :: :ok | {:error, term()}
+  def update_held(trunk_id, member, entry),
+    do: ok(run(["HSET", "hd:#{trunk_id}", member, :erlang.term_to_binary(entry)]))
 
   @doc "The trunks with held receipts."
   @spec held_trunks() :: {:ok, [integer()]} | {:error, term()}
@@ -430,13 +479,31 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
-  @doc "Up to `limit` held receipts of a trunk, oldest first, each with the stored member to release it by."
-  @spec held(integer(), pos_integer()) :: {:ok, [{binary(), term()}]} | {:error, term()}
-  def held(trunk_id, limit) do
-    case run(["ZRANGE", "h:#{trunk_id}", 0, limit - 1]) do
-      {:ok, members} -> {:ok, Enum.map(members, &{&1, :erlang.binary_to_term(&1, [:safe])})}
-      error -> error
+  @doc """
+  Up to `limit` held receipts of a trunk from the `offset`-th, oldest first, each with the stored member to release it
+  by (nil for an entry that can no longer be read).
+  """
+  @spec held(integer(), pos_integer(), non_neg_integer()) ::
+          {:ok, [{binary(), term() | nil}]} | {:error, term()}
+  def held(trunk_id, limit, offset \\ 0) do
+    with {:ok, members} <- run(["ZRANGE", "h:#{trunk_id}", offset, offset + limit - 1]),
+         {:ok, blobs} <- held_entries(trunk_id, members) do
+      {:ok, Enum.zip_with(members, blobs, &{&1, held_entry(&1, &2)})}
     end
+  end
+
+  defp held_entries(_trunk_id, []), do: {:ok, []}
+
+  defp held_entries(trunk_id, members),
+    do: transaction(for m <- members, do: ["HGET", "hd:#{trunk_id}", m])
+
+  defp held_entry(_member, blob) when is_binary(blob), do: :erlang.binary_to_term(blob, [:safe])
+
+  # A receipt held before entries had their own hash was its own member.
+  defp held_entry(member, nil) do
+    :erlang.binary_to_term(member, [:safe])
+  rescue
+    ArgumentError -> nil
   end
 
   @doc "Removes a held receipt (sent or given up); a trunk left with none leaves `hs`."
@@ -446,6 +513,7 @@ defmodule Sms.Switch.Pipeline.Store do
 
     # A receipt held between the count and the SREM is seen by the second count, and the trunk goes back in `hs`.
     with {:ok, _} <- run(["ZREM", key, member]),
+         {:ok, _} <- run(["HDEL", "hd:#{trunk_id}", member]),
          {:ok, 0} <- run(["ZCARD", key]),
          {:ok, _} <- run(["SREM", "hs", "#{trunk_id}"]),
          {:ok, n} when n > 0 <- run(["ZCARD", key]) do

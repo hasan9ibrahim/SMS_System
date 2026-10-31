@@ -31,6 +31,7 @@ function DepartmentDialog({ row, done }: { row: DepartmentRow | null; done: () =
   const [error, setError] = useState<string | null>(null);
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add department"}
       saveLabel={row ? "Save" : "Add department"}
       saving={save.isPending}

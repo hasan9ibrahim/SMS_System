@@ -245,7 +245,8 @@ export function CaptureFiles({
       ]}
       trailing={{
         header: "Action",
-        width: 110,
+        // Fits the small Download button with its icon (design QA round 13).
+        width: 128,
         render: (r) =>
           r.status === "running" ? (
             <Button

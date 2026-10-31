@@ -61,16 +61,38 @@ defmodule Sms.Api.Lists.EngineTest do
       })
 
     assert q.sql =~ " OR ("
-    assert q.sql =~ "ORDER BY u.username DESC NULLS LAST, a.id DESC LIMIT $4 OFFSET $5"
+    # Text sorts case-insensitively (QA 2026-10-31).
+    assert q.sql =~
+             "ORDER BY lower((u.username)::text) DESC NULLS LAST, a.id DESC LIMIT $4 OFFSET $5"
+
     assert Enum.take(q.values, -3) == ["%Rule%", 11, 30]
     assert q.count_values == Enum.drop(q.values, -2)
 
     assert Engine.pattern("Colo", true) == "Colo%"
     assert Engine.pattern("#12", true) == "%#12%"
-    assert Engine.pattern("a_b", false) == "a_b"
+    # Wildcard text is the start of a value unless it ends in % (QA 2026-10-31).
+    assert Engine.pattern("a_b", false) == "a_b%"
+    assert Engine.pattern("ALDEX_C", true) == "ALDEX_C%"
+    assert Engine.pattern("%x", false) == "%x%"
+    assert Engine.pattern("50\\%", false) == "50\\%%"
+    assert Engine.pattern("ab\\", false) == "%ab\\\\%"
     assert Engine.decode_cursor("not-base64!") == 0
     assert Engine.decode_cursor(Base.url_encode64(~s({"o":-1}), padding: false)) == 0
     assert Engine.decode_cursor(nil) == 0
+  end
+
+  test "a time in a filter is its whole millisecond (QA 2026-10-31)" do
+    t = "2026-10-31T10:00:00.123Z"
+    q = where([%{"field" => "at", "op" => "between", "values" => [t, t]}])
+
+    assert q.sql =~
+             "(a.at >= $1::text::timestamptz AND a.at < ($2::text::timestamptz + interval '1 millisecond'))"
+
+    assert where([%{"field" => "at", "op" => "lte", "value" => t}]).sql =~ "a.at < ($1"
+    assert where([%{"field" => "at", "op" => "gt", "value" => t}]).sql =~ "a.at >= ($1"
+
+    assert where([%{"field" => "at", "op" => "gte", "value" => t}]).sql =~
+             "a.at >= $1::text::timestamptz"
   end
 
   test "a list's base condition is lifted when its archived field is filtered" do

@@ -205,6 +205,32 @@ defmodule Sms.Switch.Vendor.SessionTest do
       assert_receive {:smsc, ^conn, %Pdu{command: :enquire_link_resp, sequence: 77}}
     end
 
+    test "while receipts in hand fill the inbound window, unread answers never time the vendor out (S-1.18)",
+         %{port: port} do
+      start_vendor([trunk(port, enquire_link_interval_s: 1, enquire_link_timeout_s: 1)],
+        session: [inbound_window: 1]
+      )
+
+      {conn, _} = assert_bind()
+      await_bound(1, 1)
+
+      Receipts.own(fn _, _ ->
+        Process.sleep(3_000)
+        :ok
+      end)
+
+      FakeSmsc.send_pdu(
+        conn,
+        Pdu.new(:deliver_sm, %{esm_class: 4, short_message: "id:1 stat:DELIVRD"}, sequence: 5)
+      )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, sequence: 5, status: 0}},
+                     4_000
+
+      refute Enum.any?(events("closed"))
+      refute_receive {:smsc, _, %Pdu{command: :bind_transceiver}}, 100
+    end
+
     test "the vendor's unbind is answered after the receipts in hand, then the connection opens again",
          %{port: port} do
       start_vendor([trunk(port)])
@@ -331,6 +357,23 @@ defmodule Sms.Switch.Vendor.SessionTest do
       results = for _ <- 1..3, do: submit()
       assert Enum.count(results, &match?({:ok, _}, &1)) == 2
       assert {:error, :throttled} in results
+    end
+
+    test "a submit no connection takes (window full) gives its TPS place back (S-5.1)", %{
+      smsc: smsc,
+      port: port
+    } do
+      FakeSmsc.set(smsc, :submit, :silent)
+      start_vendor([trunk(port, window_size: 1, tps: 3, submit_timeout_s: 5)])
+      await_bound(1, 1)
+      Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+      task = Task.async(fn -> submit() end)
+      assert_receive {:smsc, _, %Pdu{command: :submit_sm}}, 1_000
+
+      # The window is full: polled as the sender would, never answered :throttled for places it did not use.
+      results = for _ <- 1..6, do: submit()
+      assert Enum.all?(results, &(&1 == {:error, :window_full}))
+      Task.shutdown(task, :brutal_kill)
     end
 
     test "unknown, inactive and unbound trunks", %{smsc: smsc, port: port} do

@@ -173,9 +173,13 @@ export async function generateRates(world: World, rng: Rng, sink: TableSink, pro
       owner?.deletedAt ?? null,
       false,
     );
-    const list = tablesByCategory.get(categoryId) ?? [];
-    list.push(table);
-    tablesByCategory.set(categoryId, list);
+    // Shared with other trunks only while live: a table made for an archived trunk is archived with it, and a live
+    // trunk priced only by it had no live rates (QA 2026-10-31, §5.4, §13.29).
+    if (!owner?.deletedAt) {
+      const list = tablesByCategory.get(categoryId) ?? [];
+      list.push(table);
+      tablesByCategory.set(categoryId, list);
+    }
     return table;
   };
 

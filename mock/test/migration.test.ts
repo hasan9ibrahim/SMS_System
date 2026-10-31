@@ -450,6 +450,12 @@ describe("migration center", { skip }, () => {
     assert.equal(applied.status, "applied", applied.applyError);
     assert.equal(applied.applyError, null);
     assert.ok(applied.changeId);
+    // Rolled back below; if an assertion stops the test first, the import is undone when the tests end, so its live
+    // partner, trunks, rule and user do not stay in the shared database (QA 2026-10-31).
+    cleanup.push(async () => {
+      const { rows: undone } = await db().query("SELECT 1 FROM changes WHERE undo_of_id = $1", [applied.changeId]);
+      if (!undone.length) await call("POST", `/changes/${applied.changeId}/undo`, {});
+    });
     assert.equal(applied.inactiveTrunks, 2);
     await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
     const { rows: e } = await db().query(
@@ -459,6 +465,19 @@ describe("migration center", { skip }, () => {
     );
     assert.equal(e[0].username, `legacy.am.${run}`);
     assert.equal(Number(e[0].sides), 2);
+    // The AM history holds the imported AM (QA 2026-10-31, §13.30): reports attribute by it, and the record keeps it.
+    const { rows: hist } = await db().query(
+      `SELECT u.username, h.ends_at FROM enterprise_am_history h JOIN users u ON u.id = h.user_id
+        WHERE h.enterprise_id = $1`,
+      [e[0].id],
+    );
+    assert.deepEqual(
+      hist.map((h) => [h.username, h.ends_at]),
+      [[`legacy.am.${run}`, null]],
+    );
+    // Checked against the contract: an import row now holds what Add enterprise needs (§13.22).
+    const record = await ok("getEnterprise", call("GET", `/enterprises/${e[0].id}`));
+    assert.equal(record.accountManagerName, "Legacy Manager", "a load keeps the imported AM");
     const { rows: lines } = await db().query(
       `SELECT l.mccmnc, l.rate, l.valid_to FROM rate_lines l JOIN rate_tables t ON t.id = l.rate_table_id
         WHERE t.name = $1 ORDER BY l.mccmnc, l.valid_from`,
@@ -1113,6 +1132,7 @@ describe("rows lacking what the app needs to add a record are refused (§13.22)"
         for (const sql of [
           "DELETE FROM enterprise_contacts WHERE enterprise_id = $1",
           "DELETE FROM enterprise_billing WHERE enterprise_id = $1",
+          "DELETE FROM enterprise_am_history WHERE enterprise_id = $1",
           "DELETE FROM migration_refs WHERE entity = 'enterprises' AND record_id = $1",
           "DELETE FROM enterprises WHERE id = $1",
         ])
@@ -1121,6 +1141,12 @@ describe("rows lacking what the app needs to add a record are refused (§13.22)"
       const record = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
       assert.equal(record.address.line1, "3 Example Avenue");
       assert.deepEqual(record.contacts.technical.emails, [`noc.ce.${run}@example.com`]);
+      // The account manager the row named, with its history row (§13.30).
+      const { rows: history } = await db().query(
+        "SELECT count(*)::int AS n FROM enterprise_am_history WHERE enterprise_id = $1 AND ends_at IS NULL",
+        [id],
+      );
+      assert.equal(history[0].n, 1);
       assert.equal(await named(badName), undefined);
       await ok("undoChange", call("POST", `/changes/${applied.changeId}/undo`, {}));
     },

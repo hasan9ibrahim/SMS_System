@@ -35,6 +35,14 @@ export async function contactsHidden(enterpriseId: number): Promise<boolean> {
   return (v.own.includes(enterpriseId) ? s.own : s.others) === "hide";
 }
 
+/** True when the viewer's policy withholds this client's sell rates (§13.17): no rate sheet goes out through them. */
+export async function sellRatesHidden(enterpriseId: number): Promise<boolean> {
+  const v = await restrictingViewer();
+  if (!v) return false;
+  const s = v.policy.items.sellRates;
+  return (v.own.includes(enterpriseId) ? s.own : s.others) !== "show";
+}
+
 export async function maskEnterpriseDetail<T extends Record<string, unknown>>(e: T): Promise<T> {
   const id = Number(e.id);
   const out: Record<string, unknown> = { ...e };

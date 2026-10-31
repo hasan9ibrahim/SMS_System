@@ -10,6 +10,7 @@ import { Fragment } from "react";
 import { useNotifySaved } from "../history/undo";
 import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { newTabOf } from "../shell/useOpener";
 import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 import { Avatar } from "../page/PageHeader";
@@ -162,10 +163,7 @@ export function EnterprisesPage() {
       }}
       // The record opens in this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
       onOpen={(row, e) =>
-        navigate(`/enterprises/${row.id}`, {
-          forceNew: e.ctrlKey || e.metaKey,
-          title: `Enterprise · ${row.name}`,
-        })
+        navigate(`/enterprises/${row.id}`, { ...newTabOf(e), title: `Enterprise · ${row.name}` })
       }
       // The detail panel as a card (team trial round 4): tile, name and chips; the key facts; then the
       // contacts' emails under the ID, without names or phones.

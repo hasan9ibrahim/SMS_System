@@ -52,6 +52,8 @@ import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { csvText } from "../csvSafe.js";
 import { runTrunkRules } from "./translationRules.js";
+import { compilePattern } from "../routing/pattern.js";
+import { natural, textCoding, type MessageForm } from "../routing/coding.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Route rule ${id} not found`);
@@ -384,15 +386,8 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
   return out as RuleCore;
 }
 
-const regexOk = (p: string | null) => {
-  if (!p) return true;
-  try {
-    new RegExp(p);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** Valid for the switch too (PCRE; routing/pattern.ts). */
+const regexOk = (p: string | null) => !p || compilePattern(p) !== null;
 
 async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
   const errors: FieldError[] = [];
@@ -1205,13 +1200,17 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const profiles = rule.lcrProfileId ? await loadLcrProfiles(pool) : null;
     const options = await vendorOptions(pool, m.mccmnc, ids);
     const withProfile = { ...rule, lcrProfile: profiles?.get(rule.lcrProfileId!) ?? null };
-    // A vendor whose own egress rules block the message is skipped for the next one (decided 2026-10-18).
+    const form = testForm(raw);
+    m.parts = natural(form)?.parts || 1;
+    // A vendor whose own egress rules block the message, or that cannot take it, is skipped for the next one (decided
+    // 2026-10-18; §5.5).
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
       testMessage(input),
       (mm) => decide(withProfile, mm, options),
       (d) => d.vendor,
+      { form },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
@@ -1302,16 +1301,29 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(pool, input, listIdsOf(rules));
     const options = await vendorOptions(pool, m.mccmnc, null);
+    const form = testForm(raw);
+    m.parts = natural(form)?.parts || 1;
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
       testMessage(input),
       (mm) => routeThrough(rules, mm, options),
       (r) => r.decision?.vendor,
+      { form },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
 }
+
+/**
+ * The message as the customer sent it, for Deny Multipart and the vendors' capability filter (§6.3, §5.5): the Test
+ * form has no coding or TON / NPI, so the text goes in the coding it needs (GSM, else UCS-2) and TON / NPI are not
+ * checked.
+ */
+const testForm = (raw: RouteTestRequest): MessageForm => ({
+  text: raw.content ?? "",
+  dataCoding: textCoding(raw.content ?? ""),
+});
 
 /** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form). */
 const testMessage = (input: RouteTestRequest) => ({

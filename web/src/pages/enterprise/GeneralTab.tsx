@@ -17,6 +17,7 @@ import {
   ToggleCard,
   useForm,
 } from "../../form/form";
+import { MSG, normalizeWebsite } from "../../form/checks";
 import { useNotifySaved } from "../../history/undo";
 import { useTabNavigate } from "../../shell/tabContext";
 import { Button } from "../../ui/primitives";
@@ -222,16 +223,19 @@ function NoticeTile({
 /** Required fields checked before the round trip, with plain messages. */
 function check(v: Form, isNew: boolean): Record<string, string> {
   const errors: Record<string, string> = {};
-  if (!v.name.trim()) errors.name = "Required";
-  if (!v.alias.trim()) errors.alias = "Required";
-  if (!v.businessCompanyId) errors.businessCompanyId = "Required";
-  if (!v.address.line1.trim()) errors["address.line1"] = "Required";
-  if (v.address.countryId == null) errors["address.countryId"] = "Required";
-  if (isNew && v.accountManagerId == null) errors.accountManagerId = "Required";
-  for (const [k] of CONTACTS) if (!v.contacts[k].emails.length) errors[`contacts.${k}.emails`] = "At least one email";
+  if (!v.name.trim()) errors.name = MSG.required;
+  if (!v.alias.trim()) errors.alias = MSG.required;
+  if (!v.businessCompanyId) errors.businessCompanyId = MSG.required;
+  if (!v.address.line1.trim()) errors["address.line1"] = MSG.required;
+  if (v.address.countryId == null) errors["address.countryId"] = MSG.required;
+  if (isNew && v.accountManagerId == null) errors.accountManagerId = MSG.required;
+  for (const [k] of CONTACTS)
+    if (!v.contacts[k].emails.length) errors[`contacts.${k}.emails`] = "Add at least one email.";
+  // A web address, or a bare domain that is saved with https:// in front (functional QA round 13).
+  if (v.website && normalizeWebsite(v.website) === null) errors.website = MSG.website;
   const p = v.creditAlertPercent;
   if (!(p.notice < p.warning && p.warning < p.critical))
-    errors.creditAlertPercent = "Levels must rise: notice < warning < critical";
+    errors.creditAlertPercent = "Levels must rise: notice < warning < critical.";
   return errors;
 }
 
@@ -265,14 +269,15 @@ export function GeneralTab({
   }, [isNew, ref.data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = () => {
-    const errors = check(form.values, isNew);
+    // The page's rules, plus every field's limits and each contact e-mail, all at once (functional QA round 13).
+    const errors = form.check(check(form.values, isNew));
     if (Object.keys(errors).length) {
-      form.setErrors(errors);
       setBanner(`Check the highlighted fields (${Object.keys(errors).length})`);
       return;
     }
     setBanner(null);
-    const input = { ...form.values };
+    const website = form.values.website ? normalizeWebsite(form.values.website) || null : null;
+    const input = { ...form.values, website };
     if (!isNew) delete (input as Partial<Form>).accountManagerId;
     save.mutate(
       { id: record?.id ?? null, input },
@@ -412,7 +417,14 @@ export function GeneralTab({
         </Section>
 
         <Section id="ent-company" title="Company details" columns={4}>
-          <TextField form={form} path="website" label="Website" maxLength={300} placeholder="https://" />
+          <TextField
+            form={form}
+            path="website"
+            label="Website"
+            maxLength={300}
+            placeholder="example.com"
+            hint="A bare domain is saved with https:// in front"
+          />
           <TextField form={form} path="registrationNumber" label="Registration number" maxLength={100} />
           <TextField form={form} path="vatNumber" label="VAT number" maxLength={100} />
           <TextField form={form} path="fax" label="Fax" maxLength={50} placeholder="Optional" />
@@ -508,6 +520,7 @@ export function GeneralTab({
                   path={`contacts.${k}.emails`}
                   label="Emails"
                   required
+                  item="email"
                   placeholder="+ Add email"
                   keepPlaceholder
                 />

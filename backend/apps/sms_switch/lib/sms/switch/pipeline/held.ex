@@ -6,6 +6,15 @@ defmodule Sms.Switch.Pipeline.Held do
 
   One node at a time sends a trunk's held receipts (a Redis lock), so a receipt is not sent twice by two servers;
   the sessions are found cluster-wide, so either server can send them.
+
+  Each trunk's receipts are sent by a process of their own, one at a time per trunk, so a slow customer never holds
+  another trunk's receipts back (S-1.18). In a run:
+
+    * a receipt no session can take now (none bound for its IP, S-5.13, or windows full) is passed over, never
+      blocking the ones after it;
+    * a receipt the customer refused for now, or one its session did not answer, is tried again later, each time
+      later (S-5.14; the session takes no more receipts meanwhile, `Sms.Switch.Customer.Session`);
+    * the run stops well before its lock runs out, so another server never sends the same receipts meanwhile.
   """
   use GenServer
   require Logger
@@ -14,6 +23,8 @@ defmodule Sms.Switch.Pipeline.Held do
   @sweep_ms 15_000
   @batch 200
   @lock_s 60
+  # A run stops after half its lock time; what is left goes on the next sweep.
+  @run_ms div(@lock_s * 1_000, 2)
 
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -25,23 +36,49 @@ defmodule Sms.Switch.Pipeline.Held do
   def init(opts) do
     every = Keyword.get(opts, :sweep_ms, @sweep_ms)
     {:ok, _} = :timer.send_interval(every, :sweep)
-    {:ok, nil}
+    # The trunks being sent (monitor → trunk) and those asked for again meanwhile.
+    {:ok, %{runs: %{}, again: MapSet.new()}}
   end
 
   @impl true
-  def handle_cast({:drain, trunk_id}, state) do
-    run(trunk_id)
-    {:noreply, state}
-  end
+  def handle_cast({:drain, trunk_id}, state), do: {:noreply, start_run(state, trunk_id)}
 
   @impl true
   def handle_info(:sweep, state) do
     case Store.held_trunks() do
-      {:ok, ids} -> Enum.each(ids, &run/1)
-      {:error, reason} -> Logger.warning("held receipts not swept: #{inspect(reason)}")
-    end
+      {:ok, ids} ->
+        {:noreply, Enum.reduce(ids, state, &start_run(&2, &1))}
 
-    {:noreply, state}
+      {:error, reason} ->
+        Logger.warning("held receipts not swept: #{inspect(reason)}")
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{runs: runs} = state)
+      when is_map_key(runs, ref) do
+    {trunk_id, runs} = Map.pop(runs, ref)
+
+    if reason != :normal,
+      do: Logger.error("held receipts of trunk #{trunk_id}: #{inspect(reason)}")
+
+    state = %{state | runs: runs}
+
+    if MapSet.member?(state.again, trunk_id),
+      do: {:noreply, start_run(%{state | again: MapSet.delete(state.again, trunk_id)}, trunk_id)},
+      else: {:noreply, state}
+  end
+
+  def handle_info(_msg, state), do: {:noreply, state}
+
+  # A trunk already being sent is sent again once that run ends (a session that bound meanwhile).
+  defp start_run(state, trunk_id) do
+    if trunk_id in Map.values(state.runs) do
+      %{state | again: MapSet.put(state.again, trunk_id)}
+    else
+      {_pid, ref} = spawn_monitor(fn -> run(trunk_id) end)
+      %{state | runs: Map.put(state.runs, ref, trunk_id)}
+    end
   end
 
   @doc false
@@ -50,7 +87,7 @@ defmodule Sms.Switch.Pipeline.Held do
   def run(trunk_id) do
     if Store.lock_held(trunk_id, @lock_s) do
       try do
-        send_held(trunk_id)
+        send_held(trunk_id, 0, System.monotonic_time(:millisecond) + @run_ms)
       after
         Store.unlock_held(trunk_id)
       end
@@ -59,37 +96,72 @@ defmodule Sms.Switch.Pipeline.Held do
     :ok
   end
 
-  defp send_held(trunk_id) do
-    case Store.held(trunk_id, @batch) do
+  # `offset`: the receipts passed over so far, still held before the next batch.
+  defp send_held(trunk_id, offset, deadline) do
+    case Store.held(trunk_id, @batch, offset) do
       {:ok, []} ->
         :ok
 
       {:ok, entries} ->
-        # Stops at the first receipt no session can take; a full batch sent goes on with the next one.
-        if Enum.all?(entries, &send_one(trunk_id, &1)) and length(entries) == @batch,
-          do: send_held(trunk_id)
+        case send_batch(trunk_id, entries, deadline) do
+          {:cont, kept} when length(entries) == @batch ->
+            send_held(trunk_id, offset + kept, deadline)
+
+          _done_or_stopped ->
+            :ok
+        end
 
       {:error, reason} ->
         Logger.warning("held receipts of trunk #{trunk_id} not read: #{inspect(reason)}")
     end
   end
 
+  # Past the run's deadline, the rest wait for the next sweep.
+  defp send_batch(trunk_id, entries, deadline) do
+    Enum.reduce_while(entries, {:cont, 0}, fn entry, {:cont, kept} ->
+      cond do
+        System.monotonic_time(:millisecond) > deadline -> {:halt, :stop}
+        send_one(trunk_id, entry) == :sent -> {:cont, {:cont, kept}}
+        true -> {:cont, {:cont, kept + 1}}
+      end
+    end)
+  end
+
+  # An entry that can no longer be read is dropped.
+  defp send_one(trunk_id, {member, nil}) do
+    _ = Store.release(trunk_id, member)
+    :sent
+  end
+
   defp send_one(trunk_id, {member, entry}) do
     now = System.os_time(:millisecond)
 
-    if now > entry.until do
-      Forwarder.give_up(entry)
-      _ = Store.release(trunk_id, member)
-      true
-    else
-      case Forwarder.deliver(entry.data, entry.receipt, max(1, now - entry.held_at)) do
-        :ok ->
-          _ = Store.release(trunk_id, member)
-          true
+    cond do
+      now > entry.until ->
+        Forwarder.give_up(entry)
+        _ = Store.release(trunk_id, member)
+        :sent
 
-        _hold_or_error ->
-          false
-      end
+      Map.get(entry, :retry_at, 0) > now ->
+        :kept
+
+      true ->
+        deliver(trunk_id, member, entry, now)
+    end
+  end
+
+  defp deliver(trunk_id, member, entry, now) do
+    case Forwarder.deliver(entry.data, entry.receipt, max(1, now - entry.held_at)) do
+      :ok ->
+        _ = Store.release(trunk_id, member)
+        :sent
+
+      why when why in [:retry, :slow] ->
+        _ = Store.update_held(trunk_id, member, Forwarder.retry_later(entry, now))
+        :kept
+
+      _hold_or_error ->
+        :kept
     end
   end
 

@@ -1,5 +1,5 @@
 // Never-saved New rule drafts (§6.3, §13.10, contract v0.129.0). The New rule window adds its rule at once as a draft
-// (route_rules.draft, migration 103) and discards it on ×, tab close, reload or window close; only its Save keeps it.
+// (route_rules.draft, migration 104) and discards it on ×, tab close, reload or window close; only its Save keeps it.
 // A draft is still left behind when the page reloads while the window is adding it (the id never reached the page),
 // so once an hour the server that runs the jobs (leader.ts) removes the drafts older than 24 hours, by the definition
 // discard uses: never turned on, not on now, no traffic ever. They go as discard removes them, with their vendors,

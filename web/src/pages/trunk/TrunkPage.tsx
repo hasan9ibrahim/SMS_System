@@ -97,9 +97,9 @@ function GeneralSection({
 
   const submit = () => {
     const values = fillService(kind, form.values, isNew);
-    const errors = checkTrunk(kind, values, isNew);
+    // The trunk's own rules, plus every field's limits and each host IP, all at once (functional QA round 13).
+    const errors = form.check(checkTrunk(kind, values, isNew));
     if (Object.keys(errors).length) {
-      form.setErrors(errors);
       setBanner(`Check the highlighted fields (${Object.keys(errors).length})`);
       return;
     }

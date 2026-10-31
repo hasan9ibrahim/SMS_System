@@ -9,6 +9,7 @@ import {
   parseIdList,
   parseMixedList,
   parseReceivers,
+  receiverProblem,
   timeBounds,
   timeCondition,
   toGridRow,
@@ -70,4 +71,15 @@ test("route simulator: receivers list, coding and TON/NPI picked from the messag
   assert.deepEqual(autoTonNpi("INFO"), { ton: 5, npi: 0 });
   assert.deepEqual(autoTonNpi("12345"), { ton: 3, npi: 0 });
   assert.deepEqual(autoTonNpi("+447700900123"), { ton: 1, npi: 1 });
+});
+
+test("route simulator numbers: digits with the usual punctuation, 5 to 15 of them (functional QA round 13)", () => {
+  assert.equal(receiverProblem("447700900123, +33 612345678; (0044) 7700-900.124"), null);
+  assert.equal(receiverProblem(""), null);
+  assert.equal(
+    receiverProblem("40721000111, 447700900123, 12x"),
+    "Not a phone number: 12x. Use 5 to 15 digits, e.g. 447700900123.",
+  );
+  assert.match(receiverProblem("1234")!, /^Not a phone number: 1234\./);
+  assert.match(receiverProblem("1234567890123456")!, /^Not a phone number: 1234567890123456\./);
 });

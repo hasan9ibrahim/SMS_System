@@ -53,6 +53,7 @@ function AlertDialog({ row, done }: { row: DailyTrafficAlertRow | null; done: ()
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add daily traffic alert"}
       saveLabel={row ? "Save" : "Add alert"}
       saving={save.isPending}

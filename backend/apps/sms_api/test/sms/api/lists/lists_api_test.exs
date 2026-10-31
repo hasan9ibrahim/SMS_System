@@ -117,6 +117,62 @@ defmodule Sms.Api.ListsApiTest do
     assert Enum.count(page["rows"], & &1["current"]) == 1
   end
 
+  test "values PostgreSQL refuses are 400 field errors, not 500 (QA 2026-10-31)", %{token: t} do
+    cond = fn c -> %{filter: %{logic: "and", conditions: [c]}} end
+
+    for {c, message} <- [
+          {%{field: "action", op: "regex", value: "(?<y>sign)"}, "invalid regular expression"},
+          {%{field: "action", op: "eq", value: "a\u0000b"}, "NUL"},
+          {%{field: "id", op: "eq", value: 99_999_999_999_999_999_999}, "out of range"}
+        ] do
+      body = query(t, "/api/v1/audit-log/query", cond.(c)) |> json_response(400)
+      assert [%{"path" => "/filter", "message" => m}] = body["errors"]
+      assert m =~ message
+    end
+
+    # A LIKE pattern ending in a lone backslash is refused before the database sees it; a quick search ending in one
+    # is that character.
+    assert %{
+             "errors" => [
+               %{"path" => "/filter/conditions/0/value", "message" => "a pattern cannot" <> _}
+             ]
+           } =
+             query(
+               t,
+               "/api/v1/audit-log/query",
+               cond.(%{field: "action", op: "like", value: "ab\\"})
+             )
+             |> json_response(400)
+
+    assert query(t, "/api/v1/audit-log/query", %{search: "ab\\"}) |> json_response(200)
+  end
+
+  test "a time as shown finds its row; part of a name with _ finds it; text sorts in any case", %{
+    token: t,
+    action: action
+  } do
+    mine = %{field: "action", op: "eq", value: action}
+
+    [row | _] =
+      query(t, "/api/v1/audit-log/query", %{filter: %{logic: "and", conditions: [mine]}})
+      |> json_response(200)
+      |> Map.fetch!("rows")
+
+    at = %{field: "at", op: "between", values: [row["at"], row["at"]]}
+
+    assert query(t, "/api/v1/audit-log/query", %{filter: %{logic: "and", conditions: [mine, at]}})
+           |> json_response(200)
+           |> Map.fetch!("total") >= 1
+
+    # "testListAction<n>": "testList_ction" is its start.
+    part = "testList_ction"
+
+    assert query(t, "/api/v1/audit-log/query", %{search: part, limit: 4000})
+           |> json_response(200)
+           |> Map.fetch!("rows")
+           |> Enum.any?(&(&1["action"] == action))
+  end
+
   test "a query that does not fit is refused with field errors", %{token: t} do
     bad = %{filter: %{logic: "and", conditions: [%{field: "nope", op: "eq", value: 1}]}}
 

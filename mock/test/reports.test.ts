@@ -153,7 +153,16 @@ describe("§13.15 Master Report", { skip }, () => {
     assert.ok(groups.rows.every((r) => !/^[+]?[0-9]+$/.test(String(r.dims.vendorSenderGroup!.label))));
     const edrs = await ok<{ rows: { senderId: string; vendorSenderId: string }[] }>(
       "queryEdrs",
-      call("POST", "/edrs/query", { limit: 5, filter: { logic: "and", conditions: [] } }),
+      call("POST", "/edrs/query", {
+        limit: 5,
+        // EDR lists need a period (§9.1).
+        filter: {
+          logic: "and",
+          conditions: [
+            { field: "startTime", op: "between", values: [new Date(Date.now() - 7 * 86_400_000).toISOString(), new Date().toISOString()] },
+          ],
+        },
+      }),
     );
     assert.ok(edrs.rows.every((r) => typeof r.vendorSenderId === "string"));
   });
