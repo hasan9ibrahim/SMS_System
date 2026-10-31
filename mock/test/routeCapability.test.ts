@@ -67,16 +67,25 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
       const short = await simulate(p.trunk, p.mccmnc, "Your code is 1234");
       const v = short.route.decision?.outcome === "route" ? short.route.decision.vendor!.vendorTrunkId : null;
       if (v === null) continue;
-      const { rows } = await db().query("SELECT max_msg_len FROM vendor_trunks WHERE id = $1", [v]);
-      if (rows[0]?.max_msg_len === null || Number(rows[0].max_msg_len) >= LONG.length) continue;
-      const long = await simulate(p.trunk, p.mccmnc, LONG);
-      const d = long.route.decision;
-      if (d?.ruleId !== short.route.decision!.ruleId) continue; // another rule (e.g. Deny Multipart) took over
-      assert.notEqual(d.vendor?.vendorTrunkId, v, "the vendor is passed over");
-      const note = d.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "";
-      assert.match(note, /^cannot take the message: 400 characters, longer than its Max Msg Len \d+/);
-      if (d.outcome === "no_vendor") assert.match(long.blocked ?? "", /0x45/);
-      return;
+      const { rows } = await db().query("SELECT max_msg_len, support_multipart FROM vendor_trunks WHERE id = $1", [v]);
+      if (rows[0]?.support_multipart === false) continue; // passed over for multipart before its length counts
+      // The generator sets no Max Msg Len (CI's fresh seed has none): the vendor gets one just under the long message
+      // for this check, and its own value back after.
+      const before: number | null = rows[0]?.max_msg_len ?? null;
+      if (before === null || Number(before) >= LONG.length)
+        await db().query("UPDATE vendor_trunks SET max_msg_len = $2 WHERE id = $1", [v, LONG.length - 1]);
+      try {
+        const long = await simulate(p.trunk, p.mccmnc, LONG);
+        const d = long.route.decision;
+        if (d?.ruleId !== short.route.decision!.ruleId) continue; // another rule (e.g. Deny Multipart) took over
+        assert.notEqual(d.vendor?.vendorTrunkId, v, "the vendor is passed over");
+        const note = d.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "";
+        assert.match(note, /^cannot take the message: 400 characters, longer than its Max Msg Len \d+/);
+        if (d.outcome === "no_vendor") assert.match(long.blocked ?? "", /0x45/);
+        return;
+      } finally {
+        await db().query("UPDATE vendor_trunks SET max_msg_len = $2 WHERE id = $1", [v, before]);
+      }
     }
     assert.fail("no routed vendor with a Max Msg Len found in the seeded data");
   });

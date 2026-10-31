@@ -123,7 +123,13 @@ describe("equality filters find the value the row shows (§13.25)", { skip }, ()
   });
 
   test("a time as shown, alone or as both ends of a period", async () => {
-    const r = await post("/enterprises/query", { sort: [{ field: "updatedAt", dir: "desc" }], limit: 1 });
+    // An enterprise no other test is changing while this one runs (tests run side by side): one last saved over an hour
+    // ago, preferably with digits below the millisecond.
+    const { rows: pick } = await db().query(
+      `SELECT id FROM enterprises WHERE deleted_at IS NULL AND updated_at < now() - interval '1 hour'
+        ORDER BY (extract(microseconds FROM updated_at)::bigint % 1000) DESC, id LIMIT 1`,
+    );
+    const r = await post("/enterprises/query", where({ field: "id", op: "eq", value: Number(pick[0].id) }));
     const row = r.json().rows[0] as { id: number; updatedAt: string };
     // Stored to the microsecond, shown to the millisecond.
     assert.match(row.updatedAt, /\.\d{3}Z$/);
