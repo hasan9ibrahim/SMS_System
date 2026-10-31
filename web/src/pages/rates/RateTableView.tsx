@@ -777,7 +777,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
           </div>
         </div>
         <div className="page-actions">
-          <Button icon="upload" disabled title="Rate import arrives with the import wizard (§12.1, §13.22)">
+          <Button icon="upload" disabled title="Rate import is not available yet">
             Import
           </Button>
           {/* Exports the rows the filters show (team trial round 2). */}
@@ -793,7 +793,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
             Export
           </Button>
           {t.kind === "customer" && (
-            <Button icon="send" disabled title="Rate notifications go out on save with Send RN (team trial round 1)">
+            <Button icon="send" disabled title="Rate notifications go out when you save with Send RN">
               Send to client
             </Button>
           )}
@@ -1017,7 +1017,7 @@ export function RateTableView({ id, embedded = false }: { id: number; embedded?:
               type="button"
               className="btn btn-sm bar-btn"
               disabled={!selected.size || t.kind !== "customer"}
-              title="Re-price these destinations for this and other clients' tables at once (§13.11)"
+              title="Re-price these destinations for this and other clients' tables at once"
               onClick={() =>
                 navigate(
                   scopeUrl({

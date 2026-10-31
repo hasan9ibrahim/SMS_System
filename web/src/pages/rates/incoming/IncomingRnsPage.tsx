@@ -354,7 +354,7 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
     >
       {s && (
         <>
-          <h3 className="part-title">Defaults (§13.32)</h3>
+          <h3 className="part-title">Defaults</h3>
           <div className="rn-form-grid">
             <label className="field">
               <span>Live traffic window</span>
@@ -1169,7 +1169,7 @@ function RnReview({ id }: { id: number }) {
             </Button>
             <Button
               disabled={decide.isPending || !rn.affectedRateTableIds.length}
-              title="Accept, then re-price the affected customers in Bulk rating (§13.14)"
+              title="Accept, then re-price the affected customers in Bulk rating"
               onClick={() => void run("accept", [], updateCustomersUrl(rn))}
             >
               Accept + update customers

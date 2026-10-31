@@ -361,7 +361,7 @@ function BulkDeleteDialog({
       }
     >
       <p>
-        Delete archives each record (§13.29): it leaves lists, pickers and routing, and stays in reports, invoices and
+        Delete archives each record: it leaves lists, pickers and routing, and stays in reports, invoices and
         history. Each one is a change you can undo from History.
       </p>
       <ul className="dep-list bulk-del">

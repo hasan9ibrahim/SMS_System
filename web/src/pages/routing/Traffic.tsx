@@ -240,7 +240,7 @@ function FiguresTable({
 
 function Unavailable({ data }: { data: RouteTraffic | undefined }) {
   return data && !data.available ? (
-    <p className="muted small">Traffic figures need the EDR store (ClickHouse), which is not answering.</p>
+    <p className="muted small">Traffic figures are not available: the EDR store is not answering.</p>
   ) : null;
 }
 

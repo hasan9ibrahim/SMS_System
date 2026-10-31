@@ -384,7 +384,7 @@ const MobileCard = memo(MobileCardInner) as typeof MobileCardInner;
 /** A value the visibility policy withholds (§13.17): Hidden, a band (Low / Normal / High) or Above limit. */
 export function Withheld({ text }: { text: string }) {
   return (
-    <span className="withheld" title="Withheld by your visibility policy (§13.17)">
+    <span className="withheld" title="Hidden by your visibility policy">
       {text}
     </span>
   );

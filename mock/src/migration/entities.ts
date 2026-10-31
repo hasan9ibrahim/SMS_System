@@ -310,7 +310,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     fields: [
       f("enterprise", "Enterprise", "Name or external ID.", { required: true }),
       f("side", "Side", "", { required: true, allowed: ["customer", "vendor"] }),
-      f("amount", "Amount", "Positive = the partner's credit, negative = owed (§7).", { required: true }),
+      f("amount", "Amount", "Positive = the partner's credit, negative = owed.", { required: true }),
       f("currency", "Currency", "", { required: true }),
       f("date", "Date", "YYYY-MM-DD", { required: true }),
     ],

@@ -26,7 +26,7 @@ export function AuditTrailPage() {
           icon: "history",
           main: true,
           disabled: !r.userId,
-          hint: r.userId ? "Field-level before / after values (§13.10)" : "System entry: no user change",
+          hint: r.userId ? "Field-level before / after values" : "System entry: no user change",
           onSelect: () => navigate("/admin/changes"),
         },
       ]}

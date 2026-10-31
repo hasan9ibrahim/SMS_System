@@ -209,7 +209,7 @@ export function ViewsMenu({
       </button>
       <Popover anchor={ref} open={open} onClose={() => setOpen(false)} className="views-pop">
         <div className="menu">
-          {views.isError && <p className="muted small pad">Views need the mock server and database.</p>}
+          {views.isError && <p className="muted small pad">Saved views could not be loaded.</p>}
           {own.length > 0 && <div className="menu-label">My views</div>}
           {own.map((v) => (
             <div key={v.id} className="menu-item-row">

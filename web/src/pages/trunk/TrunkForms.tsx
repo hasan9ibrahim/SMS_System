@@ -376,7 +376,7 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         label="Billing time zone"
         placeholder="The enterprise's"
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
-        hint="Day and month totals are cut at midnight here (§13.31)"
+        hint="Day and month totals are cut at midnight here"
       />
       <ChoiceField
         form={form}

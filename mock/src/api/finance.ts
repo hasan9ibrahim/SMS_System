@@ -132,9 +132,9 @@ async function checkTransaction(
   const { rows: c } = await db.query("SELECT 1 FROM currencies WHERE iso = $1 AND deleted_at IS NULL", [t.currency]);
   if (!c[0]) err("/currency", "unknown currency");
   if (t.transactionType === "reprocess" && existing?.transactionType !== "reprocess")
-    err("/transactionType", "reprocess notes are posted by approved re-rating requests (§12.2)");
+    err("/transactionType", "reprocess notes are posted by approved re-rating requests");
   if (t.transactionType !== "reprocess" && t.paymentMode === null) err("/paymentMode", "required");
-  if (!t.includeInSoa && !t.excludeReason?.trim()) err("/excludeReason", "say why it stays off the SOA (§13.33)");
+  if (!t.includeInSoa && !t.excludeReason?.trim()) err("/excludeReason", "say why it stays off the SOA");
   if (t.invoiceId !== null) {
     const { rows } = await db.query("SELECT enterprise_id FROM invoices WHERE id = $1 AND deleted_at IS NULL", [
       t.invoiceId,
@@ -451,7 +451,7 @@ export function sendTransactionConfirmation(request: FastifyRequest, reply: Fast
 export function bulkUpdateTransactions(request: FastifyRequest, reply: FastifyReply) {
   const body = request.body as TransactionBulkInput;
   if (body.action === "exclude_from_soa" && !body.reason?.trim())
-    return badInput(reply, [{ path: "/reason", message: "say why they stay off the SOA (§13.33)" }]);
+    return badInput(reply, [{ path: "/reason", message: "say why they stay off the SOA" }]);
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {

@@ -125,7 +125,7 @@ function MoveCard({ r }: { r: MarketMoveRow }) {
         <span className="fb-spacer" />
         <Button
           small
-          title="Pick the vendor trunks that count for this destination (team trial round 5)"
+          title="Pick the vendor trunks that count for this destination"
           onClick={() => void editTopVendorsFor(r.mccmnc)}
         >
           Top vendors…
@@ -246,7 +246,7 @@ function Clients({ r }: { r: MarketMoveRow }) {
           small
           variant="primary"
           disabled={!chosen.size}
-          title="Opens Bulk rating with the suggested rates and dates (§13.11)"
+          title="Opens Bulk rating with the suggested rates and dates"
           onClick={() => navigate(updateRatesUrl(d, [...chosen]), { newTab: true, title: "Bulk rating" })}
         >
           Update rates ({chosen.size})
@@ -516,7 +516,7 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
     >
       {s && (
         <>
-          <h3 className="part-title">Detection (§13.14)</h3>
+          <h3 className="part-title">Detection</h3>
           <div className="rn-form-grid">
             <label className="field">
               <span>Destinations without a top vendor list</span>

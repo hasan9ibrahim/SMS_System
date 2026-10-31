@@ -733,7 +733,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 title={
                   onExport
                     ? "Export the rows matching the current filters (CSV)"
-                    : "Export follows the current filters; it arrives with import/export (§13.22)"
+                    : "Export is not available on this page yet"
                 }
               >
                 Export

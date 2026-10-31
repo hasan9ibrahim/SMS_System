@@ -820,7 +820,7 @@ export function AdvancedLookup({
           <Button
             small
             disabled={!rows.length}
-            title="Re-price the destinations shown (up to 500) in the bulk rating workspace (§13.11)"
+            title="Re-price the destinations shown (up to 500) in Bulk rating"
             onClick={() =>
               navigate(
                 scopeUrl({
@@ -833,7 +833,7 @@ export function AdvancedLookup({
           >
             Update rates
           </Button>
-          <Button small disabled title="Bulk routing: use Route Rules' Bulk edit (§13.11)">
+          <Button small disabled title="Use Bulk edit on Route rules">
             Change route
           </Button>
           <Button small icon="copy" onClick={copyTable} disabled={!rows.length}>

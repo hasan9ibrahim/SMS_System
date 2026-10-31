@@ -597,7 +597,7 @@ export function getTeamMember(request: FastifyRequest, reply: FastifyReply) {
       const { rows } = await pool.query("SELECT 1 FROM users WHERE id = $1", [id]);
       return rows[0]
         ? sendProblem(reply, 403, "This user is outside your team", {
-            detail: "The Team report shows your scope only (§13.18).",
+            detail: "The Team report shows your scope only.",
           })
         : sendProblem(reply, 404, `User ${id} not found`);
     }

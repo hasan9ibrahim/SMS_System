@@ -22,7 +22,7 @@ export async function isMasked(enterpriseId: number): Promise<boolean> {
 export async function refuseMasked(reply: FastifyReply, enterpriseId: number): Promise<boolean> {
   if (!(await isMasked(enterpriseId))) return false;
   sendProblem(reply, 403, "This record belongs to another account manager", {
-    detail: "Your visibility policy masks it (§13.17), so it cannot be changed here.",
+    detail: "Your visibility policy masks it, so it cannot be changed here.",
   });
   return true;
 }

@@ -147,7 +147,7 @@ function Settings({
         <RangeChip withTime from={draft.from} to={draft.to} onChange={(from, to) => from && to && set({ from, to })} />
       </div>
       <div className="rp-row">
-        <label className="toggle-inline" title="Day and month totals are cut at midnight in this zone (§13.31)">
+        <label className="toggle-inline" title="Day and month totals are cut at midnight in this zone">
           Time zone
           <select
             value={draft.timezone ?? "partner"}

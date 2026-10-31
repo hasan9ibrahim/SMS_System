@@ -54,7 +54,7 @@ const fieldError = (reply: FastifyReply, path: string, message: string) =>
  */
 async function totpRefusal(c: Db, reply: FastifyReply, me: CurrentUser, code: string | null | undefined) {
   if (!isAdmin(me))
-    return () => sendProblem(reply, 403, "Credentials can be exported and imported by admins only (§13.22)");
+    return () => sendProblem(reply, 403, "Credentials can be exported and imported by admins only");
   const { rows } = await c.query("SELECT totp_enabled, totp_secret FROM users WHERE id = $1", [me.id]);
   const u = rows[0];
   // Without the authenticator app, the code e-mailed by sendMyCredentialCode is the second factor, as at sign-in (R9).
@@ -322,7 +322,7 @@ export function createMigrationExport(request: FastifyRequest, reply: FastifyRep
   const b = request.body as MigrationExportInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
-    if (!isAdmin(me)) return sendProblem(reply, 403, "Full export packages are made by admins only (§13.22)");
+    if (!isAdmin(me)) return sendProblem(reply, 403, "Full export packages are made by admins only");
     if (b.password.length < 12) return fieldError(reply, "/password", "use at least 12 characters");
     if (b.withPasswords && !b.includeCredentials)
       return fieldError(reply, "/withPasswords", "passwords go only with credentials included");
@@ -373,7 +373,7 @@ export function createMigrationLink(request: FastifyRequest, reply: FastifyReply
   const b = (request.body ?? {}) as MigrationLinkInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
-    if (!isAdmin(me)) return sendProblem(reply, 403, "Export packages are downloaded by admins only (§13.22)");
+    if (!isAdmin(me)) return sendProblem(reply, 403, "Export packages are downloaded by admins only");
     const x = await loadExport(pool, id);
     if (!x) return sendProblem(reply, 404, `Export ${id} not found`);
     if (x.status !== "done")

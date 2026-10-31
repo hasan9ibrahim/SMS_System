@@ -381,7 +381,7 @@ export function VendorsSection({
                 </th>
                 {d.huntPolicy === "percentage" && <th className="num">Share %</th>}
                 <th>Backup</th>
-                <th title="Send the first N messages to this vendor before the normal split (§13.27)">Warm-up first</th>
+                <th title="Send the first N messages to this vendor before the normal split">Warm-up first</th>
                 <th>Counted per</th>
                 <th>Resets</th>
                 <th />
@@ -729,7 +729,7 @@ export function VendorsSection({
               </div>
               {d.routeType === "dynamic" && (
                 <div className="field">
-                  <span>LCR profile (§13.23)</span>
+                  <span>LCR profile</span>
                   <ListLookup<{ id: number; name: string; vendorCount: number; split: string }>
                     list="lcr_profiles"
                     value={d.lcrProfileId ?? null}

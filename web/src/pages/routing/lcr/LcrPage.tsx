@@ -301,7 +301,7 @@ function TableView() {
               variant="primary"
               icon="tag"
               disabled={!mccmnc}
-              title="Bulk rating for this destination: set client rates from cost + margin (§13.11)"
+              title="Bulk rating for this destination: set client rates from cost + margin"
               onClick={() => navigate(scopeUrl({ mccmncs: [mccmnc] }), { newTab: true, title: "Bulk rating" })}
             >
               Price clients from LCR

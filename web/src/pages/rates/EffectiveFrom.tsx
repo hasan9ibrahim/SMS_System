@@ -33,7 +33,7 @@ export function EffectiveFromField({
   const tz = usePlatformTz();
   return (
     <div className="field">
-      <span title="A past date is fine: the change applies from the moment you save and traffic already sent keeps its rate (§13.32).">
+      <span title="A past date is fine: the change applies from the moment you save and traffic already sent keeps its rate.">
         {label} <span className="muted">({tz}, 24-hour)</span>
       </span>
       <DateTimeInput autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} />
