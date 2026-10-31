@@ -18,7 +18,7 @@ import { clearRouteMaps } from "./api/routeMap.js";
 import { invalidateLiveRoutes } from "./live/routing.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
-const PUBLIC_OPS = new Set([
+export const PUBLIC_OPS = new Set([
   "getHealth",
   "signIn",
   "signInCode",

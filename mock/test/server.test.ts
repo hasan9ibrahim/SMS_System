@@ -3,7 +3,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import type { LightMyRequestResponse } from "fastify";
-import { buildServer, API_PREFIX, ROUTING_WRITES } from "../src/server.js";
+import { buildServer, API_PREFIX, PUBLIC_OPS, ROUTING_WRITES } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, dbReady } from "../src/db.js";
 
@@ -55,6 +55,25 @@ test("writes that move routing displays clear the route caches (QA 2026-10-31, �
     assert.match(op, ROUTING_WRITES, op);
   for (const op of ["queryQbrStats", "queryDestinations", "exportDialCodes", "getDestination", "simulateRoute"])
     assert.doesNotMatch(op, ROUTING_WRITES, op);
+});
+
+test("every operation a signed-in user calls lists 403 (QA 2026-10-31, §13.28, §1)", () => {
+  // The password gate, the access group and a call checked for another operation answer 403 on any of them; the
+  // portal answers it while the portal user's password must be changed.
+  const portal403 = new Set([
+    "portalOverview",
+    "portalTraffic",
+    "portalQueryRates",
+    "portalExportRates",
+    "portalQueryMessages",
+    "portalListFields",
+  ]);
+  const missing = operations
+    .filter((o) => !PUBLIC_OPS.has(o.operationId))
+    .filter((o) => !o.operationId.startsWith("portal") || portal403.has(o.operationId))
+    .filter((o) => !("403" in o.responses))
+    .map((o) => o.operationId);
+  assert.deepEqual(missing, []);
 });
 
 test("GET /health", async () => {
