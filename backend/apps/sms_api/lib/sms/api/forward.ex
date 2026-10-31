@@ -3,8 +3,9 @@ defmodule Sms.Api.Forward do
   Forwards every contract call the Elixir API has not ported yet to the mock server (product owner 2026-10-25: the
   API in front, the screens keep one address). The signed-in user goes along as `X-Sms-User` / `X-Sms-Session` with
   the shared secret `X-Sms-Proxy-Secret` (MOCK_PROXY_SECRET), which the mock checks (mock/src/auth/user.ts); such
-  headers from the browser are dropped. Without a session only the health check and the set-password link's calls
-  are forwarded; anything else is answered 401 `sign_in_required`. The customer portal (/portal) has its own sign-in: its calls go through with the
+  headers from the browser are dropped. Without a session only the health check, the set-password link's calls and
+  Content-Security-Policy reports (at most 64 KB, 60 a minute per client address) are forwarded; anything else is
+  answered 401 `sign_in_required`. The customer portal (/portal) has its own sign-in: its calls go through with the
   portal's cookie.
 
   Before a call goes on, the password gate (`Sms.Api.PasswordGate`) and the user's access group
@@ -16,7 +17,7 @@ defmodule Sms.Api.Forward do
   @behaviour Plug
   import Plug.Conn
   require Logger
-  alias Sms.Api.{Access, Auth, ConfigPush, Operations, PasswordGate, Problem}
+  alias Sms.Api.{Access, Auth, ConfigPush, Operations, PasswordGate, Problem, RateLimit}
 
   # Hop-by-hop headers and the ones this API sets itself.
   @dropped ~w(connection keep-alive proxy-connection transfer-encoding te trailer upgrade host content-length cookie)
@@ -29,6 +30,12 @@ defmodule Sms.Api.Forward do
 
   @impl true
   def init(opts), do: opts
+
+  # Content-Security-Policy reports (§14): browsers post them on their own, so no session; nginx and the service
+  # limit them too.
+  @csp_reports "/api/v1/csp-reports"
+  @csp_max_bytes 65_536
+  @csp_per_minute 60
 
   # Only the methods the contract uses go on (HEAD and the rest matched no operation and were forwarded unchecked).
   @methods ~w(GET POST PUT PATCH DELETE)
@@ -44,6 +51,7 @@ defmodule Sms.Api.Forward do
       unsafe_path?(conn.request_path) -> Problem.send(conn, not_found(conn))
       conn.method not in @methods -> Problem.send(conn, Problem.new(405, "Method not allowed"))
       portal?(conn) -> forward(conn, nil)
+      conn.method == "POST" and conn.request_path == @csp_reports -> csp_report(conn)
       {conn.method, conn.request_path} in @public -> forward(conn, session)
       session == nil -> Problem.send(conn, Problem.sign_in_required())
       true -> checked(conn, session)
@@ -51,6 +59,22 @@ defmodule Sms.Api.Forward do
   end
 
   defp portal?(conn), do: String.starts_with?(conn.request_path, "/api/v1/portal/")
+
+  # A report goes on as nobody when it says how long it is (at most 64 KB) and its address is under the limit.
+  defp csp_report(conn) do
+    length = conn |> get_req_header("content-length") |> List.first("") |> Integer.parse()
+
+    cond do
+      not match?({n, ""} when n <= @csp_max_bytes, length) ->
+        Problem.send(conn, Problem.new(413, "The report is over 64 KB"))
+
+      RateLimit.hit({:csp, Auth.client_ip(conn)}, @csp_per_minute, 60) != :ok ->
+        Problem.send(conn, Problem.new(429, "Too many reports", detail: "Try again in a minute."))
+
+      true ->
+        forward(conn, nil)
+    end
+  end
 
   defp checked(conn, session) do
     op = Operations.find(conn.method, String.replace_prefix(conn.request_path, "/api/v1", ""))
