@@ -133,56 +133,87 @@ describe("Route Simulator routes as the switch (§6.3, §5.5)", { skip }, () => 
     assert.fail("no simulated message reached a rule with Deny Multipart in the seeded data");
   });
 
-  test("a vendor on auto TON / NPI takes an international number sent with TON 0; a long sender still not (S-4.7)", async () => {
+  test("TON / NPI as the vendor takes them: the one equivalent, auto, Refuse invalid senders (S-4.7)", async () => {
     const CODE = "Your code is 1234";
+    const LONG_SENDER = "ABCDEFGHIJKLMN";
+    const setVendor = (id: number, sql: string, params: unknown[] = []) =>
+      db().query(`UPDATE vendor_trunks SET ${sql} WHERE id = $1`, [id, ...params]);
+    let equivalents = false;
+    let senders = false;
     for (const p of await pairs(60)) {
+      if (equivalents && senders) return;
       const first = await simulate(p.trunk, p.mccmnc, CODE);
       const v = first.route.decision?.outcome === "route" ? first.route.decision.vendor!.vendorTrunkId : null;
       if (v === null) continue;
-      // The vendor takes international destinations only, as sent; its own values come back after.
-      const { rows } = await db().query("SELECT allowed_dst_ton, ton_npi_mode FROM vendor_trunks WHERE id = $1", [v]);
+      const ruleId = first.route.decision!.ruleId;
+      // The vendor's notes (it can be listed more than once, e.g. also as a backup).
+      const notes = (sim: Sim) =>
+        (sim.route.decision?.candidates ?? []).filter((c) => c.vendorTrunkId === v).map((c) => c.note ?? "");
+      // A backup vendor's skip has no note of its own; take a vendor routed in its own right.
+      if (notes(first).includes("backup route")) continue;
+      // The vendor's own values come back after.
+      const { rows } = await db().query(
+        `SELECT allowed_dst_ton, allowed_dst_npi, ton_npi_mode, refuse_invalid_senders FROM vendor_trunks WHERE id = $1`,
+        [v],
+      );
       const before = rows[0];
-      await db().query("UPDATE vendor_trunks SET allowed_dst_ton = '{1}', ton_npi_mode = 'as_sent' WHERE id = $1", [v]);
       try {
-        const asSent = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0 });
-        const d = asSent.route.decision;
-        if (d?.ruleId !== first.route.decision!.ruleId) continue; // another rule took over
-        assert.notEqual(d.vendor?.vendorTrunkId, v, "as sent, destination TON 0 passes the vendor over");
-        assert.match(
-          d.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "",
-          /^cannot take the message: destination TON 0 is not allowed \(it takes 1\)/,
+        // National destinations only: an international number has no equivalent it takes.
+        await setVendor(v, "allowed_dst_ton = '{2}', allowed_dst_npi = NULL, ton_npi_mode = 'as_sent'");
+        const national = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, destNpi: 0 });
+        const d = national.route.decision;
+        if (d?.ruleId !== ruleId) continue; // another rule took over
+        equivalents = true;
+        assert.notEqual(d.vendor?.vendorTrunkId, v, "no equivalent: passed over");
+        assert.ok(
+          notes(national).some((n) =>
+            /^cannot take the message: destination TON 0 is not allowed \(it takes 2\)/.test(n),
+          ),
+          JSON.stringify(notes(national)),
         );
 
-        await db().query("UPDATE vendor_trunks SET ton_npi_mode = 'auto' WHERE id = $1", [v]);
-        const auto = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0 });
-        assert.equal(auto.route.decision?.vendor?.vendorTrunkId, v, "auto sends the international number with TON 1");
+        // International numbers only: 0 / 0 goes as the equivalent 1 / 1, auto or not.
+        await setVendor(v, "allowed_dst_ton = '{1}', allowed_dst_npi = '{1}'");
+        const equivalent = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, destNpi: 0 });
+        assert.equal(equivalent.route.decision?.vendor?.vendorTrunkId, v, "the equivalent 1 / 1 is taken");
+        await setVendor(v, "ton_npi_mode = 'auto'");
+        const auto = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, destNpi: 0 });
+        assert.equal(auto.route.decision?.vendor?.vendorTrunkId, v, "auto sends the international number as 1 / 1");
 
-        // Auto cannot fix the length of an alphanumeric sender: the vendor is still passed over (unless its own egress
-        // rules give it another sender).
-        const LONG_SENDER = "ABCDEFGHIJKLMN";
-        const long = await simulate(p.trunk, p.mccmnc, CODE, { destTon: 0, senderId: LONG_SENDER, sourceTon: 1 });
+        // A sender a handset cannot show: passed over while the vendor refuses invalid senders (the default), taken
+        // with that off; auto cannot fix a length. Only when the vendor's own egress rules leave the sender as it is.
         const egress = await app.inject({
           method: "POST",
           url: `${API_PREFIX}/vendor-trunks/${v}/rules/test`,
           payload: { message: { sender: LONG_SENDER, receiver: "447700900123", text: CODE } },
         });
-        const keepsSender = (egress.json() as { after: { sender: string } }).after.sender === LONG_SENDER;
-        if (keepsSender && long.route.decision?.ruleId === first.route.decision!.ruleId) {
-          assert.notEqual(long.route.decision?.vendor?.vendorTrunkId, v);
-          assert.match(
-            long.route.decision!.candidates.find((c) => c.vendorTrunkId === v)?.note ?? "",
-            /^cannot take the message: the sender "ABCDEFGHIJKLMN" is longer than 11 characters/,
-          );
+        if ((egress.json() as { after: { sender: string } }).after.sender === LONG_SENDER) {
+          const extra = { senderId: LONG_SENDER, sourceTon: 1 };
+          await setVendor(v, "refuse_invalid_senders = true");
+          const refused = await simulate(p.trunk, p.mccmnc, CODE, extra);
+          await setVendor(v, "refuse_invalid_senders = false");
+          const taken = await simulate(p.trunk, p.mccmnc, CODE, extra);
+          if (refused.route.decision?.ruleId === ruleId && taken.route.decision?.ruleId === ruleId) {
+            assert.notEqual(refused.route.decision?.vendor?.vendorTrunkId, v);
+            assert.ok(
+              notes(refused).some((n) =>
+                /^cannot take the message: the sender "ABCDEFGHIJKLMN" is longer than 11 characters/.test(n),
+              ),
+              JSON.stringify(notes(refused)),
+            );
+            assert.equal(taken.route.decision?.vendor?.vendorTrunkId, v, "Refuse invalid senders off: taken");
+            senders = true;
+          }
         }
-        return;
       } finally {
-        await db().query("UPDATE vendor_trunks SET allowed_dst_ton = $2, ton_npi_mode = $3 WHERE id = $1", [
+        await setVendor(
           v,
-          before.allowed_dst_ton,
-          before.ton_npi_mode,
-        ]);
+          "allowed_dst_ton = $2, allowed_dst_npi = $3, ton_npi_mode = $4, refuse_invalid_senders = $5",
+          [before.allowed_dst_ton, before.allowed_dst_npi, before.ton_npi_mode, before.refuse_invalid_senders],
+        );
       }
     }
-    assert.fail("no routed vendor found in the seeded data");
+    assert.ok(equivalents, "no routed vendor found in the seeded data");
+    assert.ok(senders, "no routed vendor that keeps the sender found in the seeded data");
   });
 });

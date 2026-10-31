@@ -3,7 +3,15 @@
 // to auto. Pure, no database.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { autoTonNpi, pinnedBy, senderProblem, withTonNpiMode, type Addresses } from "../src/routing/tonNpi.js";
+import {
+  autoTonNpi,
+  fitTonNpi,
+  pinnedBy,
+  senderProblem,
+  senderRefusal,
+  withTonNpiMode,
+  type Addresses,
+} from "../src/routing/tonNpi.js";
 import { incapable, type VendorCapabilities } from "../src/routing/coding.js";
 
 const msg = (over: Partial<Addresses> = {}): Addresses => ({
@@ -93,4 +101,35 @@ test("the capability filter checks the sender when it is given (S-4.7)", () => {
   assert.equal(incapable(ANY, { form, text: "hello", ...autoTonNpi(sent) }), null, "auto: destination TON 1");
   const long = autoTonNpi(msg({ sender: "ABCDEFGHIJKLMN" }));
   assert.match(incapable(ANY, { form, text: "hello", ...long })!, /longer than 11 characters/);
+  // Refuse invalid senders off: the vendor takes it as it is (its destination TON still counts).
+  const takesAny = { ...ANY, allowedDstTon: null, refuseInvalidSenders: false };
+  assert.equal(incapable(takesAny, { form, text: "hello", ...long }), null);
+});
+
+test("the one equivalent a vendor's lists take, only where they do not take what it has (S-4.7)", () => {
+  const lists = { allowedSrcTon: [5], allowedSrcNpi: [0], allowedDstTon: [1], allowedDstNpi: [1] };
+  const any = { allowedSrcTon: null, allowedSrcNpi: null, allowedDstTon: null, allowedDstNpi: null };
+  const fit = fitTonNpi(msg(), lists);
+  assert.deepEqual([fit.sender, fit.senderTon, fit.senderNpi], ["FakeBank", 5, 0]);
+  assert.deepEqual([fit.receiver, fit.destTon, fit.destNpi], ["4915112345678", 1, 1]);
+  assert.deepEqual(fitTonNpi(msg(), any), msg(), "null lists take anything");
+  const plus = fitTonNpi(msg({ sender: "+447700900123", senderTon: 5, senderNpi: 0 }), { ...any, allowedSrcTon: [1] });
+  assert.deepEqual([plus.sender, plus.senderTon, plus.senderNpi], ["447700900123", 1, 1]);
+  // No single equivalent (a short code, a national number) or one the lists do not take either: as it is.
+  const short = fitTonNpi(msg({ sender: "12345", senderTon: 0 }), { ...any, allowedSrcTon: [3] });
+  assert.deepEqual([short.senderTon, short.senderNpi], [0, 1]);
+  assert.equal(fitTonNpi(msg({ receiver: "1234567" }), { ...any, allowedDstTon: [1] }).destTon, 0);
+  assert.equal(fitTonNpi(msg(), { ...any, allowedSrcTon: [2] }).senderTon, 1);
+  // Not given: not checked.
+  assert.equal(fitTonNpi(msg({ destTon: null, destNpi: null }), lists).destTon, null);
+});
+
+test("which senders a vendor refuses: SMPP's limits always, what a handset shows unless switched off", () => {
+  assert.match(senderRefusal("Fake", 7, 0, false)!, /^source TON 7/);
+  assert.match(senderRefusal("", 5, 0, false)!, /no sender/);
+  assert.match(senderRefusal("A".repeat(21), 5, 0, false)!, /longer than 20 characters/);
+  assert.match(senderRefusal("ABCDEFGHIJKLMN", 5, 0)!, /longer than 11 characters/);
+  assert.equal(senderRefusal("ABCDEFGHIJKLMN", 5, 0, false), null);
+  assert.match(senderRefusal("Fakë", 5, 0)!, /not printable ASCII/);
+  assert.equal(senderRefusal("447700900123", 1, 1), null);
 });

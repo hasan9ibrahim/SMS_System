@@ -99,7 +99,11 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     m.parts = natural(form)?.parts || 1;
     // A vendor whose own egress rules block the message is skipped and the next vendor tried
     // (decided 2026-10-18); a block on the customer trunk rejects the message before routing.
-    const { result: route, skipped: egressSkipped } =
+    const {
+      result: route,
+      skipped: egressSkipped,
+      senderOnly,
+    } =
       !translation.blocked && !b.vendorTrunkId
         ? await skipEgressBlocked(
             pool,
@@ -116,7 +120,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
               pinned: ingress.pinned,
             },
           )
-        : { result: routeThrough(rules, m, options), skipped: [] };
+        : { result: routeThrough(rules, m, options), skipped: [], senderOnly: false };
 
     // The customer's rate as the switch prices it (linePrice.ts): the sender's own line first; a blocked line that
     // applies refuses the message (blocked means blocked, decided 2026-10-30).
@@ -201,7 +205,9 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                 : forcedVendor.rate === null
                   ? `${forcedVendor.name} has no rate for the destination`
                   : null
-              : !d
+              : senderOnly && (!d || d.outcome === "no_vendor")
+                ? "Every vendor that could take the message refuses its sender (Refuse invalid senders); the switch refuses it at once (0x0A)"
+                : !d
                 ? "No route rule matches"
                 : d.outcome === "block"
                   ? `Blocked by route rule ${d.ruleId}`

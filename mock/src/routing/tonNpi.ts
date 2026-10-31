@@ -9,6 +9,8 @@
 //     anything else as it is.
 //   * a translation rule that sets Sender or Destination TON / NPI wins over auto for that field; the + stays on an
 //     address whose TON a rule set.
+// Whatever the mode, a TON / NPI a vendor's allowed lists do not take is replaced by the single equivalent they take
+// (fitTonNpi, address.ex fit/2) before the vendor is passed over. Which senders a vendor refuses: senderRefusal.
 
 export type TonNpiMode = "as_sent" | "auto";
 export type TonNpiField = "senderTon" | "senderNpi" | "destTon" | "destNpi";
@@ -50,6 +52,44 @@ export function autoTonNpi<T extends Addresses>(a: T, pinned: ReadonlySet<TonNpi
   return out;
 }
 
+/** A vendor trunk's allowed TON / NPI lists; null = any. */
+export interface TonNpiLists {
+  allowedSrcTon: number[] | null;
+  allowedSrcNpi: number[] | null;
+  allowedDstTon: number[] | null;
+  allowedDstNpi: number[] | null;
+}
+
+const takes = (list: number[] | null, value: number | null) => list === null || value === null || list.includes(value);
+
+/**
+ * The addresses with the single unambiguous equivalent TON / NPI a vendor's allowed lists take, where they do not take
+ * the values it has (S-4.7, whatever the TON / NPI mode; switch address.ex fit/2): an alphanumeric sender 5 / 0, an
+ * international one (9 or more digits, or + then digits, the + taken off) 1 / 1, a full international destination
+ * 1 / 1. A short code has no single equivalent. A value not given (null) is not checked.
+ */
+export function fitTonNpi<T extends Addresses>(a: T, lists: TonNpiLists): T {
+  const out = { ...a };
+  const src = fixSource(a.sender);
+  if (
+    src &&
+    src[1] !== 3 &&
+    !(takes(lists.allowedSrcTon, a.senderTon) && takes(lists.allowedSrcNpi, a.senderNpi)) &&
+    takes(lists.allowedSrcTon, src[1]) &&
+    takes(lists.allowedSrcNpi, src[2])
+  )
+    [out.sender, out.senderTon, out.senderNpi] = src;
+  const dst = fixDestination(a.receiver);
+  if (
+    dst &&
+    !(takes(lists.allowedDstTon, a.destTon) && takes(lists.allowedDstNpi, a.destNpi)) &&
+    takes(lists.allowedDstTon, dst[1]) &&
+    takes(lists.allowedDstNpi, dst[2])
+  )
+    [out.receiver, out.destTon, out.destNpi] = dst;
+  return out;
+}
+
 /** `a` as a trunk in `mode` sends it. */
 export const withTonNpiMode = <T extends Addresses>(
   mode: TonNpiMode | null | undefined,
@@ -77,12 +117,10 @@ export function pinnedBy(
 }
 
 /**
- * Why a sender cannot go to a vendor with its TON / NPI (null or left out: 0), or null when it can (switch
- * address.ex source_problem/3, SMPP 3.4 §5.2.5-§5.2.6, S-2.10, S-4.7): a TON or NPI SMPP does not define, no
- * sender, a numeric one over 20 digits, an alphanumeric one (or any with TON 5) over 11 characters or not printable
- * ASCII.
+ * A sender SMPP cannot carry, whatever the vendor (switch address.ex protocol_problem/3, refused at intake): a TON or
+ * NPI SMPP does not define (null or left out: 0), or no sender.
  */
-export function senderProblem(
+export function senderProtocolProblem(
   sender: string,
   ton: number | null | undefined,
   npi: number | null | undefined,
@@ -92,9 +130,45 @@ export function senderProblem(
   if (!Number.isInteger(t) || t < 0 || t > 6) return `source TON ${t} is not an SMPP type of number`;
   if (![0, 1, 3, 4, 6, 8, 9, 10, 14, 18].includes(n)) return `source NPI ${n} is not an SMPP numbering plan`;
   if (sender === "") return "there is no sender";
-  if (t !== 5 && /^\+?[0-9]+$/.test(sender))
+  return null;
+}
+
+/**
+ * A sender a handset cannot show (a vendor trunk's Refuse invalid senders; address.ex handset_problem/2): a numeric
+ * one over 20 digits, an alphanumeric one (or any with TON 5) over 11 characters or not printable ASCII.
+ */
+export function senderHandsetProblem(sender: string, ton: number | null | undefined): string | null {
+  if (sender === "") return null;
+  if (ton !== 5 && /^\+?[0-9]+$/.test(sender))
     return sender.replace(/^\+/, "").length > 20 ? `the sender ${sender} is longer than 20 digits` : null;
   if ([...sender].length > 11) return `the sender ${JSON.stringify(sender)} is longer than 11 characters`;
   if (!/^[\x20-\x7E]+$/.test(sender)) return `the sender ${JSON.stringify(sender)} is not printable ASCII`;
   return null;
+}
+
+/** Both checks: why a sender cannot go to a vendor that refuses invalid senders, or null (address.ex source_problem/3). */
+export const senderProblem = (
+  sender: string,
+  ton: number | null | undefined,
+  npi: number | null | undefined,
+): string | null => senderProtocolProblem(sender, ton, npi) ?? senderHandsetProblem(sender, ton);
+
+/**
+ * Why a vendor refuses a sender, or null (switch router.ex refuses_sender?/4, S-2.10, S-4.7): one SMPP cannot carry
+ * or longer than the 20 characters a source_addr holds, always; one a handset cannot show, unless the vendor trunk's
+ * Refuse invalid senders is off.
+ */
+export function senderRefusal(
+  sender: string,
+  ton: number | null | undefined,
+  npi: number | null | undefined,
+  refuseInvalidSenders = true,
+): string | null {
+  return (
+    senderProtocolProblem(sender, ton, npi) ??
+    (Buffer.byteLength(sender, "utf8") > 20
+      ? `the sender ${JSON.stringify(sender)} is longer than 20 characters`
+      : null) ??
+    (refuseInvalidSenders ? senderHandsetProblem(sender, ton) : null)
+  );
 }
