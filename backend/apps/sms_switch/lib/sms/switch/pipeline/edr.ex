@@ -324,11 +324,16 @@ defmodule Sms.Switch.Pipeline.Edr do
     bill = data.bill
     base = bill.base_currency
 
+    # In the base currency at the exchange rates of the send, not of the receipt (S-6.7).
     {revenue, revenue_sys} =
-      if o.customer_billable, do: Billing.amount(bill.sell, bill.c_parts, base), else: {"0", "0"}
+      if o.customer_billable,
+        do: Billing.amount(bill.sell, bill.c_parts, base, bill[:c_sys_rate]),
+        else: {"0", "0"}
 
     {cost, cost_sys} =
-      if o.vendor_billable, do: Billing.amount(bill.cost, bill.v_parts, base), else: {"0", "0"}
+      if o.vendor_billable,
+        do: Billing.amount(bill.cost, bill.v_parts, base, bill[:v_sys_rate]),
+        else: {"0", "0"}
 
     %{
       edr_id: data.edr_id,

@@ -92,6 +92,10 @@ defmodule Sms.Switch.Pipeline.Billing do
       v_parts: submits,
       cost: route[:cost],
       base_currency: trunk[:base_currency],
+      # S-6.7: both rates in the base currency at the exchange rates in force now, at send time; the outcome row,
+      # written when the receipt comes, converts with them.
+      c_sys_rate: msg[:sell] && sys_rate(msg.sell, trunk[:base_currency]),
+      v_sys_rate: route[:cost] && sys_rate(route.cost, trunk[:base_currency]),
       attempt_no: 0,
       # §13.9: where its revenue counts once billed.
       rev_keys: Revenue.keys(msg, route[:rule_id]),
@@ -113,12 +117,19 @@ defmodule Sms.Switch.Pipeline.Billing do
     }
   end
 
-  @doc "A rate × parts, and the same in the business company's base currency: `{amount, amount_sys}` (strings)."
-  @spec amount(map() | nil, non_neg_integer(), String.t() | nil) :: {String.t(), String.t()}
-  def amount(nil, _parts, _base), do: {"0", "0"}
+  @doc """
+  A rate × parts, and the same in the business company's base currency: `{amount, amount_sys}` (strings). `sys`: the
+  rate in the base currency as taken at send time (S-6.7); without it, at today's exchange rate.
+  """
+  @spec amount(map() | nil, non_neg_integer(), String.t() | nil, Decimal.t() | nil) ::
+          {String.t(), String.t()}
+  def amount(rate, parts, base, sys \\ nil)
+  def amount(nil, _parts, _base, _sys), do: {"0", "0"}
 
-  def amount(rate, parts, base),
-    do: {money(Decimal.mult(rate.rate, parts)), money(Decimal.mult(sys_rate(rate, base), parts))}
+  def amount(rate, parts, base, sys),
+    do:
+      {money(Decimal.mult(rate.rate, parts)),
+       money(Decimal.mult(sys || sys_rate(rate, base), parts))}
 
   # 6 decimals (Q20), written without trailing zeros.
   defp money(d), do: d |> Decimal.round(6) |> Decimal.normalize() |> Decimal.to_string(:normal)

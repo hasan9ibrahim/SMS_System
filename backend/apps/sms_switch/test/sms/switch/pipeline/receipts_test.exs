@@ -26,6 +26,50 @@ defmodule Sms.Switch.Pipeline.ReceiptsTest do
     end
   end
 
+  describe "outcome rows (§7, S-6.7)" do
+    alias Sms.Switch.Pipeline.Edr
+
+    test "money in the base currency at the exchange rates taken at send time, not at the receipt's" do
+      now = System.os_time(:millisecond)
+
+      data = %{
+        id: "m1",
+        edr_id: "e1",
+        received_at: now - 60_000,
+        trunk: %{id: 1, enterprise_id: 11},
+        vendor_trunk_id: 1,
+        bill: %{
+          sell: %{rate: Decimal.new("0.05"), currency: "USD"},
+          cost: %{rate: Decimal.new("0.02"), currency: "USD"},
+          c_parts: 2,
+          v_parts: 2,
+          base_currency: "EUR",
+          # 1 EUR = 1.25 USD when the message was sent.
+          c_sys_rate: Decimal.new("0.04"),
+          v_sys_rate: Decimal.new("0.016"),
+          attempt_no: 1,
+          dims: %{}
+        }
+      }
+
+      row =
+        Edr.outcome_row(data, %{
+          at: now,
+          status: "DELIVRD",
+          customer_billable: true,
+          vendor_billable: true
+        })
+
+      assert %{
+               "revenue" => "0.1",
+               "revenue_sys" => "0.08",
+               "cost" => "0.04",
+               "cost_sys" => "0.032"
+             } =
+               row
+    end
+  end
+
   describe "aggregate/1 (S-5.9)" do
     test "DELIVRD only when every part was delivered" do
       assert %{status: "DELIVRD"} =
