@@ -228,6 +228,7 @@ backend team knows exactly what to build. Newest first.
 
 ## Decisions
 
+- 2026-10-31, SMS to voice (§8, product owner): calls go over **SIP to the operator's own voice switch** (through a local Asterisk); the call says **"Your verification code is" and the code digit by digit, in English**, the code being the first standalone run of 4–8 digits (a longer number is not a code; no code: the message goes as an SMS); a rule may have **its own recording** instead of the default phrase; **answered: DELIVRD and charged** at the customer's SMS rate, **not answered: one retry, then UNDELIV, not charged**; a matching message is **always a call**. Built in the screens, the switch and the deployment (docs/SMS_TO_VOICE.md, S-6.9). Settled between them: a rule whose gateway is inactive calls through the active gateway with the lowest priority, none active: SMS; the switch's config fingerprint hashes the voice rows whole (with `deleted_at`), so archives, restores and undos reach it whatever `updated_at` does; the voice columns are on `edr` only and the switch writes the attempt row with the outcome.
 - 2026-10-31, round 14 follow-up (product owner): a multipart message that was only partly delivered is **billed per part on both sides** (customer and vendor, S-6.4; it was all or nothing before), and the customer portal's **available credit subtracts the credit held** for messages still in flight (balance + limit − reserved). Confirmed as built. The open items are taken on: scheduled messages are released at the customer trunk's TPS (S-2.12), the Content-Security-Policy allows the Google Fonts hosts for e-mail template previews, the Help center describes the platform as it is now, and the sign-in screens say so when the username looks like a saved sign-in code (§13.28).
 - 2026-10-31, round 14 decisions (product owner): credit is **reserved when a message is accepted** (option A; S-6.3); **scheduled messages are held in the switch** until their time and priced, credit-checked and routed when they go (S-2.12); **Part Wise Routing removed** (S-3.8); a multipart message is translated whole and goes when it keeps its part count or fewer (S-4.1, S-4.3, D3); **TON/NPI**: avoid needless failures (equivalent TON/NPI before a vendor is skipped) and an Auto mode per trunk (S-4.7); **Refuse invalid senders** is a vendor trunk option, on by default; Migration Center imports refuse rows lacking what the app requires or with values in the wrong format; one shared CSV export on the list pages where it is useful and bulk delete everywhere single delete exists, with two confirmations; authenticator codes work once; a Content-Security-Policy header, report-only first; colour only for state except the Live analytics bands, Inter bundled with one type scale, and spec §15 rewritten to the current design; build-step labels and spec numbers removed from the interface. Decided by: Hasan Ibrahim.
 - 2026-10-30, Vendor Sender ID rates (§5.4, §6.2, round 12 audit, option B): a vendor rate line with a Sender ID matches the sender **the vendor receives**, after that vendor trunk's egress translation rules (EDR `v_src_addr`). A customer rate line with a Sender ID matches the sender as the customer sent it (EDR `src_addr`). Re-rating matches the same field on each side. Decided by: Hasan Ibrahim.
@@ -752,23 +753,6 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
-- **SMS to voice in the switch (§8, asked 2026-10-31; the product owner asked for it to be built).** The spec lists the rule
-  fields (Sender ID / ANI, Receiver ID / DNID, Prefix, a .wav recording, Repeat 1–5, Destination) but not how a call is
-  made. Asked: (1) how calls are placed: a voice provider's HTTP API set up like the HLR providers (proposed) or SIP to
-  a voice switch with a media server for text-to-speech; (2) what the call says: the recording, then the text or only the
-  code read out, repeated Repeat times, and in which language; (3) receipt and billing: DELIVRD when answered, UNDELIV
-  after one retry, the customer charged the SMS rate and the provider's charge recorded as cost (proposed); (4) always a
-  call instead of the SMS for a matching message, as the spec reads, or only when the SMS fails.
-- **SMS to voice: open points from the screens (2026-10-31, contract v0.133.0).** (1) A rule whose gateway is inactive
-  (or was deleted through an undo) calls through the active gateway with the lowest priority in the mock and the test
-  box; with no active gateway at all the message goes as an SMS (`smsReason` no_gateway). Confirm the switch does the
-  same. (2) The code is the first *maximal* run of 4–8 digits: a 10-digit phone number in the text is skipped, "PIN 12"
-  has none. Confirm for the switch. (3) Migration 099's `archive_touches_updated_at` trigger lists its tables and does
-  not cover `voice_gateways` or `sms_voice_rules`, so an archive, restore or undo there leaves `updated_at` as it was;
-  the TS service moves it on a gateway's archive and restore, but undo and bulk delete do not. The switch's
-  configuration fingerprint for these tables should also count `deleted_at`, or a migration add the trigger. (4) The
-  voice columns exist on `edr` only (ClickHouse 011), so the switch writes a call's attempt row once its outcome is
-  known; the mock leaves `route_decided_by` empty and puts the caller ID in `v_src_addr` for a call.
 - **EDR de-duplication on redelivery (QA round 13, proposal).** A bus batch redelivered after a slow insert writes its
   EDRs twice. Proposal: keep the bus `row_key` (edr_id + attempt, or edr_id + receipt kind + sequence) as a column in
   `edr` and `edr_receipt` with a bloom-filter index; the writer drops keys already stored for the same days and sends
