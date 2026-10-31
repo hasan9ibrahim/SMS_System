@@ -52,9 +52,12 @@ A message that matches an active SMS-to-voice rule is **always** a phone call in
   installed by the Ansible role `asterisk`. AMI listens on 127.0.0.1:5038 only; user `sms_switch`, secret from the vault
   (`vault_asterisk_ami_secret`). Switch config: `SMS_ASTERISK_AMI_HOST`, `SMS_ASTERISK_AMI_PORT`,
   `SMS_ASTERISK_AMI_USER`, `SMS_ASTERISK_AMI_SECRET`; voice is off when the host is unset.
-- Gateways: the switch writes `/etc/asterisk/pjsip_sms_voice.conf` (included from `pjsip.conf`; owned by the switch user,
-  group `asterisk`, mode 0640) with one endpoint/aor/auth per active gateway, named `smsvoice-gw<id>`, whenever the
-  gateway config changes, then sends AMI `Action: Command` / `Command: module reload res_pjsip.so`.
+- Gateways: the switch rewrites `/etc/asterisk/pjsip_sms_voice.conf` **in place** (included from `pjsip.conf`; created
+  once by Ansible, owned by the switch user, group `asterisk`, mode 0640; the switch user cannot create files in
+  `/etc/asterisk`, and a replaced file would lose its group) with one endpoint/aor/auth per active gateway, named
+  `smsvoice-gw<id>`, using the transports Ansible defines (`transport-udp`, `transport-tcp`, `transport-tls`) and no
+  `context` (calls coming in are refused), whenever the gateway config changes, then sends AMI `Action: Command` /
+  `Command: module reload res_pjsip.so`.
 - Dialplan (Ansible, `extensions_sms_voice.conf`, context `sms-voice`): on answer, `Wait(1)`, then `REPEAT` times:
   `Playback(${PROMPT})`, `SayDigits(${CODE})`, `Wait(1)`; then `Hangup()`. `PROMPT` defaults to `custom/sms-voice-code`
   (the flite phrase "Your verification code is", 8 kHz WAV) when the variable is empty.
