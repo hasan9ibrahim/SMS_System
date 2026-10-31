@@ -5,8 +5,9 @@ defmodule Sms.Switch.Pipeline.Buffers do
   pace by a `Drain` process, so a buffer of any size never takes the sender's workers or holds other trunks back.
 
     * **Customer trunk:** a message accepted over the trunk's TPS (while its buffer has room, else 0x58 at the
-      session) waits in `ct.<id>`; the drain takes it once the trunk's TPS has room, gives its buffer place back and
-      hands it to the sender (`sms.msg.accepted`), oldest first.
+      session) waits in `ct.<id>`, as does a scheduled message released over it (while there is room, else it stays
+      held, `Sms.Switch.Pipeline.Scheduled`, S-2.12); the drain takes it once the trunk's TPS has room, gives its
+      buffer place back and hands it to the sender (`sms.msg.accepted`), oldest first.
     * **Vendor trunk:** a message whose vendor is at its TPS or has its window full waits in `vt.<id>` (while that
       trunk's buffer has room, else it goes to the next vendor; a buffer of 0 skips the vendor at once). The drain
       runs it on that vendor (`Sms.Switch.Pipeline.Sender.resume/1`), several at a time, waiting for room up to 30 s

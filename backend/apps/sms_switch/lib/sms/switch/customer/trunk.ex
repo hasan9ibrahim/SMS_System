@@ -7,6 +7,7 @@ defmodule Sms.Switch.Customer.Trunk do
   (migration 034, decision Q13). `company_tps_limit` is the business company's limit on top (S-2.4), `nil` for none.
   """
   alias Sms.Switch.Customer.IpRange
+  alias Sms.Switch.Throttle
 
   @enforce_keys [:id, :username, :password]
   defstruct [
@@ -78,6 +79,28 @@ defmodule Sms.Switch.Customer.Trunk do
   @spec buffer_key(t() | pos_integer()) :: String.t()
   def buffer_key(%__MODULE__{id: id}), do: buffer_key(id)
   def buffer_key(id) when is_integer(id), do: "ct:#{id}"
+
+  @doc """
+  Whether one more message fits on the trunk in `second` (S-2.4): within its TPS and its company's (`:ok`, counted), over
+  it with a place taken in its overflow buffer (`:buffered`), or neither (`:full`). Asked by the session for each submit,
+  and again for a scheduled message when its time comes (`Sms.Switch.Pipeline.Scheduled`, S-2.12).
+  """
+  @spec admit(t(), integer()) :: :ok | :buffered | :full
+  def admit(%__MODULE__{} = trunk, second \\ System.os_time(:second)) do
+    cond do
+      Throttle.acquire(tps_counters(trunk), second) == :ok -> :ok
+      Throttle.buffer_take(buffer_key(trunk), trunk.overflow_buffer) -> :buffered
+      true -> :full
+    end
+  end
+
+  @doc "Gives back what `admit/2` took in `second` for a message that did not go after all."
+  @spec unadmit(t(), :ok | :buffered, integer()) :: :ok
+  def unadmit(%__MODULE__{} = trunk, :ok, second),
+    do: Throttle.release(tps_counters(trunk), second)
+
+  def unadmit(%__MODULE__{} = trunk, :buffered, _second),
+    do: Throttle.buffer_release(buffer_key(trunk))
 
   @doc "Whether a client at `ip` may bind (spec §5.4 Host Name)."
   @spec ip_allowed?(t(), :inet.ip_address()) :: boolean()

@@ -5,7 +5,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   @moduletag capture_log: true
 
   alias Sms.Core.Bus.{Event, Local}
-  alias Sms.Switch.Pipeline
+  alias Sms.Switch.{Customer, Pipeline}
   alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Pipeline.Ledger.Sync
   alias Sms.Switch.Test.{Client, CustomerCase, FakeHlr, LedgerSource, PipelineConfig}
@@ -2955,6 +2955,132 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
         submit(client, %{short_message: "too far", schedule_delivery_time: far}, 3)
 
       assert resp.status == 0x61
+    end
+
+    # Just after a second starts, so a sweep counts in one TPS second.
+    defp second_start, do: Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+
+    # The customer trunk's TPS lowered after the messages were accepted (one connection).
+    defp customer_tps(fields) do
+      CustomerCase.put_trunks([CustomerCase.trunk([max_connections: 1] ++ fields)])
+      {:ok, _} = Customer.reload_trunks()
+    end
+
+    # A sweep at the start of each second until `n` messages reached the vendor: their texts and arrival times (ms).
+    defp sweep_until_sent(conn, due_at, n, sent \\ [], seconds \\ 8)
+
+    defp sweep_until_sent(_conn, _due_at, n, sent, _seconds) when length(sent) >= n,
+      do: Enum.reverse(sent)
+
+    defp sweep_until_sent(_conn, _due_at, _n, sent, 0), do: Enum.reverse(sent)
+
+    defp sweep_until_sent(conn, due_at, n, sent, seconds) do
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      sweep_until_sent(conn, due_at, n, receive_sent(conn, sent, 900), seconds - 1)
+    end
+
+    defp receive_sent(conn, sent, wait_ms) do
+      receive do
+        {:smsc, ^conn, %Pdu{command: :submit_sm} = pdu} ->
+          at = System.monotonic_time(:millisecond)
+          receive_sent(conn, [{pdu.fields.short_message, at} | sent], wait_ms)
+      after
+        wait_ms -> sent
+      end
+    end
+
+    test "a burst over the customer trunk's TPS reaches the vendor at that TPS, through its buffer and later sweeps, each once (S-2.4)" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      Enum.reduce(1..4, client, fn i, client ->
+        {client, %{status: 0}} =
+          submit(
+            client,
+            %{short_message: "campaign #{i}", schedule_delivery_time: five_minutes()},
+            i + 1
+          )
+
+        client
+      end)
+
+      customer_tps(tps: 1, overflow_buffer: 1)
+      due_at = before + 5 * 60_000 + 1_000
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = first}, 2_000
+      first_at = System.monotonic_time(:millisecond)
+      # One a second: the next waits in the trunk's buffer, the other two are still held.
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 600
+
+      rest = sweep_until_sent(conn, due_at, 3)
+      texts = [first.fields.short_message | Enum.map(rest, &elem(&1, 0))]
+      assert Enum.sort(texts) == Enum.map(1..4, &"campaign #{&1}")
+      # Four at one a second take three more TPS seconds.
+      {_, last_at} = List.last(rest)
+      assert last_at - first_at >= 2_500
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 4 end)
+      rows = edr("edr.attempt")
+      assert rows |> Enum.map(& &1["c_message_id"]) |> Enum.uniq() |> length() == 4
+      assert Enum.all?(rows, &(&1["is_submit_success"] == 1 and &1["c_rate"] == "0.05"))
+      # At least the one that waited in the buffer says so.
+      assert Enum.any?(rows, &(&1["is_buffered"] == 1))
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "held for the customer trunk's TPS: query_sm answers ENROUTE and cancel_sm takes it out, never sent" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, %{status: 0}} =
+        submit(client, %{short_message: "goes first", schedule_delivery_time: five_minutes()})
+
+      {client, resp} =
+        submit(
+          client,
+          %{
+            short_message: "cancelled while held",
+            registered_delivery: 1,
+            schedule_delivery_time: five_minutes()
+          },
+          3
+        )
+
+      id = resp.fields.message_id
+      customer_tps(tps: 1)
+      due_at = before + 5 * 60_000 + 1_000
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "goes first"
+
+      {client, q} = query(client, id, 4)
+      assert {q.status, q.fields.message_state} == {0, 1}
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:cancel_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: 5)
+      )
+
+      {_client, c, dlr} = answer_and_receipt(client, :cancel_sm_resp)
+      assert c.status == 0
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:DELETED"
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 500
+
+      assert_eventually(fn ->
+        Enum.any?(edr("edr.attempt"), &(&1["c_message_id"] == id))
+      end)
+
+      assert [%{"c_msg_status" => "DELETED", "revenue" => "0"}] =
+               Enum.filter(edr("edr.attempt"), &(&1["c_message_id"] == id))
     end
   end
 
