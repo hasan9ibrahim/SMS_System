@@ -338,6 +338,13 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
 
   defp sar(ref, n), do: [sar_msg_ref_num: ref, sar_total_segments: 2, sar_segment_seqnum: n]
 
+  # One ingress translation rule on the customer trunk.
+  defp translated(rule),
+    do: [
+      translation_rules: [Map.put(rule, :id, 9)],
+      translation_targets: [PipelineConfig.target(9, "customer", 1)]
+    ]
+
   describe "part counts (S-3.1, S-3.10, S-4.1, D3)" do
     test "a client's 160-character SAR parts with no translation go to the vendor, never 'translation grows'" do
       %{client: client, conn: conn} = start_all()
@@ -358,6 +365,72 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
              ) == a <> b
 
       refute Enum.any?(edr("edr.attempt"), &(&1["command_status"] == 0x45))
+    end
+
+    # A multipart message is translated whole (S-4.3) and may go out in as many parts as it came in, or fewer; a
+    # translation that needs more parts than that blocks it (S-4.1, D3), as for a single message (product owner
+    # 2026-10-31). 200 characters in two SAR parts need two parts.
+    test "a multipart message translated whole keeping its part count goes to the vendor" do
+      %{client: client, conn: conn} =
+        start_all(config: translated(%{msg_template: "{text} " <> String.duplicate("z", 49)}))
+
+      a = String.duplicate("a", 100)
+      b = String.duplicate("b", 100)
+      send_submit(client, %{short_message: a}, sar(31, 1), 2)
+      send_submit(client, %{short_message: b}, sar(31, 2), 3)
+      {[0, 0], _client} = resps(client, 2)
+
+      # 250 characters: still two parts.
+      parts = vendor_parts(conn)
+      assert length(parts) == 2
+
+      assert Enum.map_join(
+               parts,
+               &binary_part(&1.fields.short_message, 6, byte_size(&1.fields.short_message) - 6)
+             ) ==
+               a <> b <> " " <> String.duplicate("z", 49)
+    end
+
+    test "a multipart message a translation shortens goes in fewer parts" do
+      %{client: client, conn: conn} =
+        start_all(config: translated(%{content_regex: "b+", content_replacement: "B"}))
+
+      send_submit(client, %{short_message: String.duplicate("a", 100)}, sar(32, 1), 2)
+      send_submit(client, %{short_message: String.duplicate("b", 100)}, sar(32, 2), 3)
+      {[0, 0], _client} = resps(client, 2)
+
+      assert [single] = vendor_parts(conn)
+      assert single.fields.short_message == String.duplicate("a", 100) <> "B"
+    end
+
+    test "a multipart message a translation grows past its part count is not sent, a REJECTD outcome (D3)" do
+      %{client: client, conn: conn} =
+        start_all(config: translated(%{msg_template: "{text} " <> String.duplicate("z", 119)}))
+
+      send_submit(
+        client,
+        %{short_message: String.duplicate("a", 100), registered_delivery: 1},
+        sar(33, 1),
+        2
+      )
+
+      send_submit(
+        client,
+        %{short_message: String.duplicate("b", 100), registered_delivery: 1},
+        sar(33, 2),
+        3
+      )
+
+      {[0, 0], _client} = resps(client, 2)
+
+      # 320 characters would be three parts: nothing goes to the vendor, the outcome is REJECTD and not billed.
+      assert vendor_parts(conn) == []
+      CustomerCase.assert_eventually(fn -> edr("edr.attempt") != [] end)
+
+      assert Enum.all?(
+               edr("edr.attempt"),
+               &(&1["c_msg_status"] == "REJECTD" and &1["command_status"] == 0x45)
+             )
     end
 
     test "UCS-2 SAR parts of 70 characters go too, as parts of 67" do
