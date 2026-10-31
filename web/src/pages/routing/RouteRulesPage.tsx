@@ -609,7 +609,12 @@ export function RouteRulesPage() {
       // ID and priority in bold (team trial round 8).
       id: { width: 70, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.id}</strong> },
       name: { width: 200, render: (r: RouteRuleRow) => <span className="strong">{r.name}</span> },
-      priority: { width: 80, render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.priority}</strong> },
+      // Headed "Pri" as in §15.4.
+      priority: {
+        width: 80,
+        label: "Pri",
+        render: (r: RouteRuleRow) => <strong className="num rr-bold">{r.priority}</strong>,
+      },
       // Wide enough for "YYYY-MM-DD HH:MM" in tabular figures; On beside it keeps its filter inside (round 12).
       updatedAt: {
         width: 180,
