@@ -237,11 +237,13 @@ const mapMapping = (r: Record<string, unknown>): MigrationMapping => ({
   builtIn: !!r.built_in,
   updatedAt: iso(r.updated_at)!,
 });
+/** The ready mappings, kept as the code has them (they cannot be edited): new fields reach a kept database too. */
 async function seedMappings(c: Db) {
   for (const m of BUILT_IN_MAPPINGS)
     await c.query(
       `INSERT INTO migration_mappings (source_system, entity, name, columns, built_in) VALUES ($1, $2, $1, $3, true)
-       ON CONFLICT (source_system, entity, name) DO NOTHING`,
+       ON CONFLICT (source_system, entity, name) DO UPDATE SET columns = EXCLUDED.columns, updated_at = now()
+        WHERE migration_mappings.built_in AND migration_mappings.columns IS DISTINCT FROM EXCLUDED.columns`,
       [REFERENCE_PLATFORM, m.entity, JSON.stringify(m.columns)],
     );
 }

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { rm } from "node:fs/promises";
 import type { LightMyRequestResponse } from "fastify";
+import type { MigrationImportEntity } from "@sms/contract";
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
@@ -15,6 +16,7 @@ import { TOTP_USED } from "../src/admin/passwords.js";
 import { parseCsv, pgArray, toCsv } from "../src/migration/csv.js";
 import { PACKAGE_DIR, PackageError, readPackage, writePackage } from "../src/migration/package.js";
 import { runningApplies, runningExports } from "../src/api/migration.js";
+import { lacking } from "../src/migration/importer.js";
 import { withFreshTotp } from "./totp.js";
 
 const app = await buildServer({ socket: false });
@@ -64,6 +66,19 @@ async function fails(operationId: string, res: Promise<LightMyRequestResponse>, 
 /** The test admin's (user 1) authenticator code, fresh for each call: a code works once (§13.28). */
 const asAdmin = <T>(use: (code: string) => Promise<T>) => withFreshTotp(1, use);
 
+/** What a new user needs besides its name and e-mail (§13.22), as template fields, and seeded values for them. */
+const NEED_FIELDS = ["department", "accessGroup", "businessCompany", "address", "country"];
+let seededCompany = "";
+const userNeeds = () => ["Sales", "Account Manager", seededCompany, "1 Example Street", "AE"];
+/**
+ * Adds the last `headers.length` of those to a users file, as `[header, ...rows].map(addUserNeeds(headers))`: the
+ * header row gets the column names, every other row the values.
+ */
+const addUserNeeds = (headers: string[]) => (row: string[], i: number) => [
+  ...row,
+  ...(i === 0 ? headers : userNeeds().slice(-headers.length)),
+];
+
 describe("csv", () => {
   test("parses quotes, separators and line breaks; writes them back", () => {
     const rows = [
@@ -84,6 +99,7 @@ describe("migration center", { skip }, () => {
   before(async () => {
     const { rows } = await db().query("SELECT name FROM business_companies ORDER BY id LIMIT 1");
     company = rows[0].name;
+    seededCompany = company;
   });
 
   test("entities, templates and the reference platform's mappings", async () => {
@@ -273,12 +289,14 @@ describe("migration center", { skip }, () => {
           content: csv([
             ["User ID", "User Name", "First Name", "Last Name", "Email", "Department", "Account Manager", "Status"],
             ["900", `legacy.am.${run}`, "Legacy", "Manager", `legacy.${run}@example.com`, "Sales", "yes", "active"],
-          ]),
+            // Everything else Add user needs (§13.22), under the reference platform's names.
+          ].map(addUserNeeds(["GUI Access Group", "Business Company", "Address 1", "Country"]))),
         },
         {
           entity: "enterprises",
           fileName: "enterprises.csv",
           mappingId: ref("enterprises"),
+          // Everything Add enterprise needs (§13.22): an AM, the country, the address and the four contacts' e-mails.
           content: csv([
             [
               "Enterprise ID",
@@ -287,9 +305,25 @@ describe("migration center", { skip }, () => {
               "Business Company",
               "Account Manager",
               "Country",
+              "Address 1",
               "Commercial Email",
+              "Technical Email",
+              "Rates Email",
+              "Billing Email",
             ],
-            ["E1", ent, "reciprocal", company, "900", "AE", `rates.${run}@example.com`],
+            [
+              "E1",
+              ent,
+              "reciprocal",
+              company,
+              "900",
+              "AE",
+              "2 Example Road",
+              `sales.${run}@example.com`,
+              `noc.${run}@example.com`,
+              `rates.${run}@example.com`,
+              `billing.${run}@example.com`,
+            ],
           ]),
         },
         {
@@ -506,7 +540,7 @@ describe("migration center", { skip }, () => {
             content: toCsv([
               ["externalId", "username", "firstName", "lastName", "email"],
               ["G1", `gone.${run}`, "Gone", "User", `gone.${run}@example.com`],
-            ]),
+            ].map(addUserNeeds(NEED_FIELDS))),
           },
         ],
       }),
@@ -543,7 +577,8 @@ describe("migration center", { skip }, () => {
             content: toCsv([
               ["External ID", "Username", "First name", "Last_Name", "E-MAIL", "Account Manager", "Status"],
               ["L1", username, "Loosa", "Fakename", `${username}@example.com`, "Yes", "Active"],
-            ]),
+              // What a new user needs besides (§13.22), under names the fields are known by.
+            ].map(addUserNeeds(["Dept", "Role", "Company", "Street", "Country code"]))),
           },
         ],
       }),
@@ -758,7 +793,7 @@ describe("migration center", { skip }, () => {
           content: toCsv([
             ["externalId", "username", "firstName", "lastName", "email"],
             ["B1", username, first, "User", `${username}@example.com`],
-          ]),
+          ].map(addUserNeeds(NEED_FIELDS))),
         },
       ],
     });
@@ -849,4 +884,378 @@ describe("migration center", { skip }, () => {
     assert.equal(dry.report.canApply, false);
     assert.ok(dry.report.issues.some((i: { entity: string }) => i.entity === "package"));
   });
+});
+
+// §13.22 (approved 2026-10-31): a row that adds a record must hold everything the app's own create needs, or the
+// row is refused: the dry run names its row and what is missing, and Apply writes nothing until the file is fixed.
+describe("rows lacking what the app needs to add a record are refused (§13.22)", () => {
+  test("the contract's create schemas decide: complete records lack nothing, a missing value is named", () => {
+    const contacts = {
+      commercial: ["a@example.com"],
+      technical: ["n@example.com"],
+      rates: ["r@example.com"],
+      finance: ["f@example.com"],
+    };
+    const complete: [MigrationImportEntity, Record<string, unknown>, Record<string, unknown>?][] = [
+      ["departments", { name: "Fake dept", status: "active", description: null }],
+      ["product_categories", { name: "Fake category" }],
+      ["number_lists", { name: "Fake list", list_type: "tag" }],
+      [
+        "users",
+        {
+          username: "fake.user",
+          first_name: "Fake",
+          last_name: "User",
+          email: "fake.user@example.com",
+          department_id: 1,
+          access_group_id: 2,
+          business_company_id: 1,
+          address1: "1 Example Street",
+          country_iso: "AE",
+          is_account_manager: false,
+          status: "active",
+        },
+      ],
+      [
+        "enterprises",
+        {
+          name: "Fake Enterprise",
+          alias: "FAKE",
+          type: "customer",
+          tier: "tier3",
+          status: "active",
+          business_company_id: 1,
+          account_manager_id: 5,
+          address_line1: "2 Example Road",
+          country_id: 3,
+          vat_number: null,
+        },
+        { contacts },
+      ],
+      [
+        "customer_trunks",
+        {
+          enterprise_id: 1,
+          name: "FAKE_C",
+          protocol: "smpp",
+          product_category_id: null,
+          billing_type: "submit",
+          tps: 10,
+          bind_type: "TR",
+          max_connections: 2,
+          username: "fake_c",
+          password: "pw",
+          host_ips: ["192.0.2.1/32"],
+          ssl_type: "none",
+        },
+      ],
+      [
+        "vendor_trunks",
+        {
+          enterprise_id: 1,
+          name: "FAKE_V",
+          protocol: "smpp",
+          product_category_id: 2,
+          billing_type: "submit",
+          tps: 10,
+          bind_type: "TR",
+          max_connections: 2,
+          port: 2775,
+          host: "smsc.example.net",
+          username: "fake_v",
+          password: "pw",
+        },
+      ],
+      [
+        "rate_tables",
+        { name: "Fake table", kind: "vendor", product_category_id: 1, currency: "USD", vendor_trunk_id: 1 },
+      ],
+      [
+        "route_rules",
+        {
+          name: "Fake rule",
+          priority: 50,
+          status: "active",
+          customer_trunk_mode: "all",
+          customer_trunk_ids: [],
+          mccmnc_mode: "all",
+          mccmncs: [],
+        },
+        { vendors: [{ trunk: 1, share: null }], percentage: false },
+      ],
+      ["hlr_rules", { name: "Fake HLR rule", hlr_provider_id: 1, dnid_pattern: "^44", status: "active" }],
+      ["opening_balances", { enterprise_id: 1, side: "customer", amount: -10, currency: "USD", date: "2026-10-01" }],
+    ];
+    const byEntity = new Map(complete.map(([e, v, x]) => [e, { v, x }]));
+    for (const [e, v, x] of complete) assert.deepEqual(lacking(e, v, x), [], e);
+    const without = (e: MigrationImportEntity, change: Record<string, unknown>, extra?: Record<string, unknown>) =>
+      lacking(e, { ...byEntity.get(e)!.v, ...change }, extra ?? byEntity.get(e)!.x);
+    assert.deepEqual(without("departments", { name: "" }), ["name"]);
+    assert.deepEqual(without("product_categories", { name: "" }), ["name"]);
+    assert.deepEqual(without("number_lists", { name: "" }), ["name"]);
+    assert.deepEqual(without("users", { address1: "" }), ["address"]);
+    assert.deepEqual(without("users", { department_id: null }), ["department"]);
+    assert.deepEqual(without("users", { access_group_id: null, business_company_id: null }).sort(), [
+      "accessGroup",
+      "businessCompany",
+    ]);
+    assert.deepEqual(without("enterprises", { address_line1: "" }, { contacts: { ...contacts, technical: [] } }), [
+      "address",
+      "technicalEmails",
+    ]);
+    assert.deepEqual(without("enterprises", { country_id: null, account_manager_id: null }).sort(), [
+      "accountManager",
+      "country",
+    ]);
+    assert.deepEqual(without("customer_trunks", { host_ips: [] }), ["hostIps"]);
+    assert.deepEqual(without("vendor_trunks", { product_category_id: null }), ["category"]);
+    assert.deepEqual(without("rate_tables", { currency: "" }), ["currency"]);
+    assert.deepEqual(without("route_rules", { name: "" }), ["name"]);
+    assert.deepEqual(without("hlr_rules", { dnid_pattern: "" }), ["dnidPattern"]);
+    assert.deepEqual(without("opening_balances", { date: null }), ["date"]);
+  });
+
+  test(
+    "an enterprise without address or contacts is refused in the dry run and not created; a complete one imports",
+    { skip },
+    async () => {
+      const { rows: am } = await db().query(
+        "SELECT username FROM users WHERE is_account_manager AND status = 'active' AND deleted_at IS NULL ORDER BY id LIMIT 1",
+      );
+      const okName = `Complete Ent ${run}`;
+      const badName = `Lacking Ent ${run}`;
+      const header = [
+        "externalId",
+        "name",
+        "type",
+        "businessCompany",
+        "accountManager",
+        "country",
+        "address",
+        "emails",
+        "technicalEmails",
+        "ratesEmails",
+        "financeEmails",
+      ];
+      const complete = [
+        "CE1",
+        okName,
+        "customer",
+        seededCompany,
+        am[0].username,
+        "AE",
+        "3 Example Avenue",
+        `sales.ce.${run}@example.com`,
+        `noc.ce.${run}@example.com`,
+        `rates.ce.${run}@example.com`,
+        `billing.ce.${run}@example.com`,
+      ];
+      const lackingRow = [
+        "LE1",
+        badName,
+        "customer",
+        seededCompany,
+        am[0].username,
+        "AE",
+        "",
+        `sales.le.${run}@example.com`,
+        "",
+        "",
+        "",
+      ];
+      const body = (rows: string[][]) => ({
+        sourceSystem: `Needs ${run}`,
+        trunksInactive: true,
+        files: [{ entity: "enterprises", fileName: "enterprises.csv", content: toCsv([header, ...rows]) }],
+      });
+      const named = async (name: string) =>
+        (await db().query("SELECT id FROM enterprises WHERE name = $1", [name])).rows[0]?.id as number | undefined;
+
+      const dry = await ok(
+        "createMigrationImport",
+        call("POST", "/migration/imports", body([complete, lackingRow])),
+        201,
+      );
+      madeImports.push(dry.id);
+      const refused = dry.report.issues.filter((i: { severity: string }) => i.severity === "error");
+      assert.deepEqual(refused, [
+        {
+          entity: "enterprises",
+          row: 3,
+          field: null,
+          message:
+            "Not imported: a new enterprise needs Address, Technical / NOC e-mails, Rates e-mails and Finance / billing e-mails",
+          severity: "error",
+        },
+      ]);
+      const counts = dry.report.entities.find((e: { entity: string }) => e.entity === "enterprises");
+      assert.equal(counts.create, 1);
+      assert.equal(counts.errors, 1);
+      assert.equal(dry.report.canApply, false);
+      // Apply writes nothing while a row is refused (as for any other row with an error).
+      await fails("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 409);
+      assert.equal(await named(okName), undefined);
+      assert.equal(await named(badName), undefined);
+
+      // Fixed by leaving the row out: the complete enterprise imports and answers the contract's Enterprise.
+      const fixed = await ok(
+        "revalidateMigrationImport",
+        call("PUT", `/migration/imports/${dry.id}`, body([complete])),
+      );
+      assert.equal(fixed.report.canApply, true, JSON.stringify(fixed.report.issues));
+      await ok("applyMigrationImport", call("POST", `/migration/imports/${dry.id}/apply`), 202);
+      await runningApplies.get(dry.id);
+      const applied = await ok("getMigrationImport", call("GET", `/migration/imports/${dry.id}`));
+      assert.equal(applied.status, "applied", applied.applyError);
+      const id = await named(okName);
+      assert.ok(id);
+      cleanup.push(async () => {
+        for (const sql of [
+          "DELETE FROM enterprise_contacts WHERE enterprise_id = $1",
+          "DELETE FROM enterprise_billing WHERE enterprise_id = $1",
+          "DELETE FROM migration_refs WHERE entity = 'enterprises' AND record_id = $1",
+          "DELETE FROM enterprises WHERE id = $1",
+        ])
+          await db().query(sql, [id]);
+      });
+      const record = await ok("getEnterprise", call("GET", `/enterprises/${id}`));
+      assert.equal(record.address.line1, "3 Example Avenue");
+      assert.deepEqual(record.contacts.technical.emails, [`noc.ce.${run}@example.com`]);
+      assert.equal(await named(badName), undefined);
+      await ok("undoChange", call("POST", `/changes/${applied.changeId}/undo`, {}));
+    },
+  );
+
+  test(
+    "every other entity: a row without a value its create needs is refused with its row number",
+    { skip },
+    async () => {
+      const { rows: ents } = await db().query(
+        `SELECT (SELECT name FROM enterprises WHERE type IN ('customer', 'reciprocal') AND deleted_at IS NULL ORDER BY id LIMIT 1) AS customer,
+              (SELECT name FROM enterprises WHERE type IN ('vendor', 'reciprocal') AND deleted_at IS NULL ORDER BY id LIMIT 1) AS vendor,
+              (SELECT name FROM hlr_providers WHERE deleted_at IS NULL ORDER BY id LIMIT 1) AS provider`,
+      );
+      const { customer, vendor, provider } = ents[0];
+      const cases: [MigrationImportEntity, string[][], string][] = [
+        [
+          "departments",
+          [
+            ["name", "description"],
+            ["", "No name"],
+          ],
+          "Name is required",
+        ],
+        // A lone empty cell would be a blank line, which CSV skips: the rows carry their external ID.
+        [
+          "product_categories",
+          [
+            ["externalId", "name"],
+            ["PC9", ""],
+          ],
+          "Name is required",
+        ],
+        [
+          "number_lists",
+          [
+            ["name", "type", "value"],
+            [`Need list ${run}`, "tag", ""],
+          ],
+          "Value is required",
+        ],
+        [
+          "users",
+          [
+            ["externalId", "username", "firstName", "lastName", "email", ...NEED_FIELDS],
+            ["N1", `need.${run}`, "Need", "User", `need.${run}@example.com`, "Sales", "", "", "", ""],
+          ],
+          "Not imported: a new user needs GUI access group, Business company, Address and Country",
+        ],
+        [
+          "customer_trunks",
+          [
+            ["enterprise", "name", "tps"],
+            [customer, `NEED_C_${run}`, "10"],
+          ],
+          "Not imported: a new customer trunk needs Allowed IPs",
+        ],
+        [
+          "vendor_trunks",
+          [
+            ["enterprise", "name", "tps", "category"],
+            [vendor, `NEED_V_${run}`, "10", ""],
+          ],
+          "Product category is required",
+        ],
+        [
+          "rate_tables",
+          [
+            ["name", "kind", "currency", "category"],
+            [`Need table ${run}`, "customer", "", "OTP"],
+          ],
+          "Currency is required",
+        ],
+        [
+          "rate_lines",
+          [
+            ["rateTable", "mccmnc", "rate"],
+            [`Need table ${run}`, "424", ""],
+          ],
+          "Rate is required",
+        ],
+        [
+          "route_rules",
+          [
+            ["name", "priority", "vendors"],
+            [`Need rule ${run}`, "50", ""],
+          ],
+          "Vendors is required",
+        ],
+        [
+          "translation_rules",
+          [
+            ["externalId", "name"],
+            ["TR9", ""],
+          ],
+          "Name is required",
+        ],
+        [
+          "hlr_rules",
+          [
+            ["name", "provider", "dnidPattern"],
+            [`Need hlr ${run}`, provider, ""],
+          ],
+          "Receiver pattern is required",
+        ],
+        [
+          "opening_balances",
+          [
+            ["enterprise", "side", "amount", "currency", "date"],
+            [customer, "customer", "10", "USD", ""],
+          ],
+          "Date is required",
+        ],
+      ];
+      const dry = await ok(
+        "createMigrationImport",
+        call("POST", "/migration/imports", {
+          sourceSystem: `Needs each ${run}`,
+          trunksInactive: true,
+          files: cases.map(([entity, rows]) => ({ entity, fileName: `${entity}.csv`, content: toCsv(rows) })),
+        }),
+        201,
+      );
+      madeImports.push(dry.id);
+      assert.equal(dry.report.canApply, false);
+      for (const [entity, , message] of cases) {
+        const issue = dry.report.issues.find(
+          (i: { entity: string; row: number; severity: string; message: string }) =>
+            i.entity === entity && i.row === 2 && i.severity === "error" && i.message === message,
+        );
+        assert.ok(
+          issue,
+          `${entity}: ${JSON.stringify(dry.report.issues.filter((i: { entity: string }) => i.entity === entity))}`,
+        );
+      }
+    },
+  );
 });

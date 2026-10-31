@@ -21,6 +21,7 @@ import { csvTable } from "./csv.js";
 import { BUILT_IN_MAPPINGS, CHOICE_SYNONYMS, ENTITY, HEADER_ALIASES, IMPORT_ENTITIES } from "./entities.js";
 import { entryProblem } from "../api/numberLists.js";
 import { checkRule, insertRule, normalise } from "../api/translationRules.js";
+import { operations } from "../contract.js";
 
 type Db = pg.Pool | pg.PoolClient;
 type Ent = MigrationImportEntity;
@@ -89,6 +90,8 @@ interface Lookups {
   countries: Map<string, number>;
   mccmnc: Map<string, number>;
   users: Map<string, number>;
+  /** Active account managers: a new enterprise needs one (§13.22, as Add enterprise). */
+  accountManagers: Set<number>;
   /** Users that are deleted: a file row with one of their usernames brings the user back (team trial round 10). */
   deletedUsers: Set<number>;
   enterprises: Map<string, number>;
@@ -145,6 +148,11 @@ async function loadLookups(c: Db, source: string): Promise<Lookups> {
     mccmnc: await map("SELECT mccmnc AS k, id FROM mccmnc WHERE deleted_at IS NULL"),
     // Usernames are unique across archived users too.
     users: await map("SELECT lower(username) AS k, id FROM users"),
+    accountManagers: new Set(
+      (
+        await c.query("SELECT id FROM users WHERE is_account_manager AND status = 'active' AND deleted_at IS NULL")
+      ).rows.map((r) => Number(r.id)),
+    ),
     deletedUsers: new Set(
       (await c.query("SELECT id FROM users WHERE deleted_at IS NOT NULL")).rows.map((r) => Number(r.id)),
     ),
@@ -331,6 +339,13 @@ class Planner {
     return this.lk.refs.get(`${entity}:${k}`) ?? system.get(systemKey) ?? null;
   }
 
+  /** Whether a user (in the system, or a row of this import's users file) is an active account manager. */
+  isAccountManager(user: Ref | number): boolean {
+    if (!(user instanceof Ref)) return this.lk.accountManagers.has(user);
+    const v = this.rows.get("users")?.[user.row]?.values;
+    return !!v?.is_account_manager && v.status === "active";
+  }
+
   /** Matches a row to an existing record; decides create / update / skip by the conflict setting. */
   match(entity: Ent, line: number, ext: string | null, existing: number | null): { action: Action; id: number | null } {
     const id = (ext ? this.lk.refs.get(`${entity}:${ext}`) : undefined) ?? existing;
@@ -355,6 +370,9 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
       "email",
       "department_id",
       "access_group_id",
+      "business_company_id",
+      "address1",
+      "country_iso",
       "is_account_manager",
       "status",
       "deleted_at",
@@ -439,6 +457,333 @@ function required(p: Planner, entity: Ent, line: number, r: Raw): boolean {
   return ok;
 }
 
+// ---------------------------------------------------------------- what a new record needs (§13.22)
+
+/**
+ * A row that adds a record must hold everything the app's own create needs (§13.22, approved 2026-10-31): otherwise
+ * the row is refused, as a row with a wrong value is, and Apply writes nothing until the file is fixed. The rules are
+ * the contract's, not a copy: `body` is what the app's form would send for the row, checked by that create's request
+ * schema (the validator the API applies to the form), and `fields` names the import field of each body path. `server`
+ * adds what the create handler checks beyond the schema. A record of this import stands in as id 1 (its id is not
+ * known before Apply). Only lacking values count here; the planners check the values themselves.
+ */
+interface NewRecord {
+  operation: string;
+  body: (v: Record<string, Value>, x: Record<string, Value>) => Record<string, unknown>;
+  fields: Record<string, string>;
+  server?: (v: Record<string, Value>) => (string | false)[];
+}
+const idOf = (v: Value): number | null => (v instanceof Ref ? 1 : v == null ? null : Number(v));
+const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
+  departments: {
+    operation: "createDepartment",
+    body: (v) => ({ name: v.name, status: v.status, managerId: null, description: v.description ?? null }),
+    fields: { "/name": "name", "/status": "status", "/description": "description" },
+  },
+  product_categories: {
+    operation: "createProductCategory",
+    body: (v) => ({ name: v.name }),
+    fields: { "/name": "name" },
+  },
+  number_lists: {
+    operation: "createNumberList",
+    body: (v) => ({ name: v.name, listType: v.list_type }),
+    fields: { "/name": "name", "/listType": "type" },
+  },
+  users: {
+    operation: "createUser",
+    body: (v) => ({
+      username: v.username,
+      firstName: v.first_name,
+      lastName: v.last_name,
+      email: v.email,
+      phone: null,
+      departmentId: idOf(v.department_id),
+      accessGroupId: idOf(v.access_group_id),
+      businessCompanyId: idOf(v.business_company_id),
+      managerId: null,
+      userType: "wholesale",
+      isAccountManager: !!v.is_account_manager,
+      isTeamLead: false,
+      status: v.status,
+      allowMultipleLogin: false,
+      otpMethod: "email",
+      language: "en",
+      address1: v.address1,
+      address2: null,
+      countryIso: v.country_iso,
+      state: null,
+      city: null,
+      zip: null,
+    }),
+    fields: {
+      "/username": "username",
+      "/firstName": "firstName",
+      "/lastName": "lastName",
+      "/email": "email",
+      "/departmentId": "department",
+      "/accessGroupId": "accessGroup",
+      "/businessCompanyId": "businessCompany",
+      "/address1": "address",
+      "/countryIso": "country",
+      "/status": "status",
+    },
+    // createUser (api/admin.ts checkUser): the access group and the business company must exist. The temporary
+    // password the form asks for is not needed: imported users get a random one and set their own (password links).
+    server: (v) => [v.access_group_id == null && "accessGroup", v.business_company_id == null && "businessCompany"],
+  },
+  enterprises: {
+    operation: "createEnterprise",
+    body: (v, x) => {
+      const contacts = x.contacts as Record<string, string[]>;
+      return {
+        name: v.name,
+        alias: v.alias,
+        type: v.type,
+        tier: v.tier,
+        status: v.status,
+        businessCompanyId: idOf(v.business_company_id),
+        ...(v.account_manager_id != null ? { accountManagerId: idOf(v.account_manager_id) } : {}),
+        creditAlertPercent: { notice: 50, warning: 70, critical: 90 },
+        address: { line1: v.address_line1, countryId: idOf(v.country_id) },
+        vatNumber: v.vat_number ?? null,
+        contacts: Object.fromEntries(CONTACT_FIELDS.map(([, type]) => [type, { emails: contacts[type] ?? [] }])),
+      };
+    },
+    fields: {
+      "/name": "name",
+      "/alias": "alias",
+      "/type": "type",
+      "/tier": "tier",
+      "/status": "status",
+      "/businessCompanyId": "businessCompany",
+      "/accountManagerId": "accountManager",
+      "/address": "address",
+      "/address/countryId": "country",
+      "/vatNumber": "vatNumber",
+      ...Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [`/contacts/${type}`, field])),
+    },
+    // createEnterprise (api/enterprises.ts checkInput): the country and the account manager are required on create.
+    server: (v) => [v.country_id == null && "country", v.account_manager_id == null && "accountManager"],
+  },
+  customer_trunks: {
+    operation: "createCustomerTrunk",
+    body: (v) => ({
+      enterpriseId: idOf(v.enterprise_id),
+      name: v.name,
+      protocol: v.protocol,
+      categoryId: idOf(v.product_category_id),
+      billingType: v.billing_type,
+      status: "inactive",
+      bindType: v.bind_type,
+      hostIps: v.host_ips,
+      username: v.username,
+      password: v.password,
+      maxConnections: v.max_connections,
+      sslType: v.ssl_type,
+      tps: v.tps,
+    }),
+    fields: {
+      "/enterpriseId": "enterprise",
+      "/name": "name",
+      "/protocol": "protocol",
+      "/categoryId": "category",
+      "/billingType": "billingType",
+      "/hostIps": "hostIps",
+      "/username": "username",
+      "/password": "password",
+      "/sslType": "sslType",
+      "/tps": "tps",
+    },
+  },
+  vendor_trunks: {
+    operation: "createVendorTrunk",
+    body: (v) => ({
+      enterpriseId: idOf(v.enterprise_id),
+      name: v.name,
+      protocol: v.protocol,
+      categoryId: idOf(v.product_category_id),
+      billingType: v.billing_type,
+      status: "inactive",
+      bindType: v.bind_type,
+      host: v.host,
+      port: v.port,
+      username: v.username,
+      password: v.password,
+      maxConnections: v.max_connections,
+      tps: v.tps,
+    }),
+    fields: {
+      "/enterpriseId": "enterprise",
+      "/name": "name",
+      "/protocol": "protocol",
+      "/categoryId": "category",
+      "/billingType": "billingType",
+      "/host": "host",
+      "/port": "port",
+      "/username": "username",
+      "/password": "password",
+      "/tps": "tps",
+    },
+  },
+  rate_tables: {
+    operation: "createRateTable",
+    body: (v) => ({ name: v.name, categoryId: idOf(v.product_category_id), currency: v.currency }),
+    fields: { "/name": "name", "/categoryId": "category", "/currency": "currency" },
+  },
+  route_rules: {
+    operation: "createRouteRule",
+    body: (v, x) => ({
+      name: v.name,
+      priority: v.priority,
+      status: v.status,
+      routeType: (x.vendors as unknown[]).length ? "static" : "block",
+      customerTrunkMode: v.customer_trunk_mode,
+      customerTrunkIds: (v.customer_trunk_ids as Value[]).map(idOf),
+      mccmncMode: v.mccmnc_mode,
+      mccmncs: v.mccmncs,
+    }),
+    fields: {
+      "/name": "name",
+      "/priority": "priority",
+      "/status": "status",
+      "/customerTrunkIds": "customerTrunks",
+      "/mccmncs": "destinations",
+    },
+  },
+  hlr_rules: {
+    operation: "createHlrRule",
+    body: (v) => ({
+      name: v.name,
+      providerId: idOf(v.hlr_provider_id),
+      dnidPattern: v.dnid_pattern,
+      status: v.status,
+      insertAt: "bottom",
+      targets: [],
+    }),
+    fields: { "/name": "name", "/providerId": "provider", "/dnidPattern": "dnidPattern", "/status": "status" },
+  },
+  opening_balances: {
+    operation: "createTransaction",
+    body: (v) => ({
+      side: v.side,
+      enterpriseId: idOf(v.enterprise_id),
+      invoiceId: null,
+      paymentMode: "bank_transfer",
+      transactionType: "adjustment",
+      paymentType: Number(v.amount) >= 0 ? "credit" : "debit",
+      paymentDate: v.date,
+      amount: Math.abs(Number(v.amount)),
+      currency: v.currency,
+      description: "Opening balance",
+      sendConfirmation: false,
+      includeInSoa: true,
+      excludeReason: null,
+    }),
+    fields: {
+      "/side": "side",
+      "/enterpriseId": "enterprise",
+      "/paymentDate": "date",
+      "/amount": "amount",
+      "/currency": "currency",
+    },
+  },
+  // Translation rules: the rule form's own checks run on each new rule (checkTranslationRows). Rates: lines go through
+  // no create of their own; the template's required fields are the Rate Manager upload's (table, MCCMNC, rate).
+};
+const createOperations = new Map(operations.map((o) => [o.operationId, o]));
+
+/**
+ * The import fields a new record would lack (§13.22): a value its create needs that is absent, empty, an empty list or
+ * null. A body path no import field stands for is returned as the path, so a field the contract starts to require
+ * shows up instead of passing unnoticed.
+ */
+export function lacking(entity: Ent, values: Record<string, Value>, extra: Record<string, Value> = {}): string[] {
+  const spec = NEW_RECORD[entity];
+  if (!spec) return [];
+  const validate = createOperations.get(spec.operation)?.validateBody;
+  if (!validate) throw new Error(`the contract has no request body for ${spec.operation}`);
+  const body = spec.body(values, extra);
+  const out = new Set<string>();
+  // A copy: the validator fills in schema defaults.
+  if (!validate(structuredClone(body)))
+    for (const e of validate.errors ?? []) {
+      const path =
+        e.keyword === "required"
+          ? `${e.instancePath}/${(e.params as { missingProperty: string }).missingProperty}`
+          : e.instancePath;
+      const value = path
+        .split("/")
+        .slice(1)
+        .reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), body);
+      if (!(value == null || value === "" || (Array.isArray(value) && value.length === 0))) continue;
+      const key = Object.keys(spec.fields)
+        .filter((k) => path === k || path.startsWith(`${k}/`))
+        .sort((a, b) => b.length - a.length)[0];
+      out.add(key ? spec.fields[key]! : path.slice(1));
+    }
+  for (const f of spec.server?.(values) ?? []) if (f) out.add(f);
+  return [...out];
+}
+
+const NEW_NOUN: Record<Ent, string> = {
+  departments: "department",
+  product_categories: "product category",
+  number_lists: "number list",
+  translation_rules: "translation rule",
+  hlr_rules: "HLR rule",
+  users: "user",
+  enterprises: "enterprise",
+  customer_trunks: "customer trunk",
+  vendor_trunks: "vendor trunk",
+  rate_tables: "rate table",
+  rate_lines: "rate",
+  route_rules: "route rule",
+  opening_balances: "opening balance",
+};
+const andList = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+
+/**
+ * Refuses a row that would add a record lacking what the app needs: one error naming everything missing, in the
+ * template's words ("Not imported: a new enterprise needs Address, Country and Rates e-mails"). False when refused.
+ */
+function refuseIncomplete(p: Planner, entity: Ent, pr: PlanRow): boolean {
+  if (pr.action !== "create") return true;
+  const missing = lacking(entity, pr.values, pr.extra);
+  if (!missing.length) return true;
+  // In the template's order and words.
+  const fields = ENTITY.get(entity)!.fields;
+  const at = (f: string) => {
+    const i = fields.findIndex((x) => x.field === f);
+    return i < 0 ? fields.length : i;
+  };
+  const label = (f: string) => fields.find((x) => x.field === f)?.label ?? f;
+  missing.sort((a, b) => at(a) - at(b));
+  p.issue(entity, pr.line, null, `Not imported: a new ${NEW_NOUN[entity]} needs ${andList(missing.map(label))}`);
+  pr.action = "error";
+  return false;
+}
+
+/** refuseIncomplete for the planners that return their rows. */
+const checked = <T extends PlanRow>(p: Planner, entity: Ent, pr: T): T => (refuseIncomplete(p, entity, pr), pr);
+
+/** On an update, an empty cell keeps the record's value: a value the record needs is never blanked (§13.22). */
+function keepCurrent(pr: PlanRow, columns: string[]) {
+  if (pr.action !== "update") return;
+  for (const c of columns) if (pr.values[c] == null || pr.values[c] === "") delete pr.values[c];
+}
+
+/**
+ * A name in the file that matches nothing (a department, a country, ...): a new record would lack it, so its row is
+ * refused; an update or a skip keeps the record's value, with a warning.
+ */
+function unknownRef(p: Planner, entity: Ent, pr: PlanRow, field: string, what: string) {
+  if (pr.action === "create") {
+    p.issue(entity, pr.line, field, what);
+    pr.action = "error";
+  } else p.issue(entity, pr.line, field, `${what}; kept as it is`, "warning");
+}
+
 function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
   const out: PlanRow[] = [];
   const seen = new Set<string>();
@@ -476,10 +821,17 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
     }
     const dept = r.department?.trim() ? p.resolve("departments", r.department, p.lk.departments) : null;
     if (r.department?.trim() && dept == null)
-      p.issue("users", line, "department", `Department "${r.department}" does not exist; left empty`, "warning");
+      unknownRef(p, "users", pr, "department", `Department "${r.department}" does not exist`);
     const group = r.accessGroup?.trim() ? (p.lk.accessGroups.get(lower(r.accessGroup)) ?? null) : null;
     if (r.accessGroup?.trim() && group == null)
-      p.issue("users", line, "accessGroup", `Access group "${r.accessGroup}" does not exist; left empty`, "warning");
+      unknownRef(p, "users", pr, "accessGroup", `Access group "${r.accessGroup}" does not exist`);
+    const company = r.businessCompany?.trim() ? (p.lk.companies.get(lower(r.businessCompany))?.id ?? null) : null;
+    if (r.businessCompany?.trim() && company == null)
+      unknownRef(p, "users", pr, "businessCompany", `Business company "${r.businessCompany}" does not exist`);
+    const iso = r.country?.trim().toUpperCase() ?? "";
+    const country = iso && p.lk.countries.has(iso) ? iso : null;
+    if (iso && country == null) unknownRef(p, "users", pr, "country", `Country "${r.country}" not found`);
+    if (pr.action === "error") return;
     pr.values = {
       username: r.username!.trim(),
       first_name: r.firstName!.trim(),
@@ -487,10 +839,15 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
       email: r.email!.trim(),
       department_id: dept,
       access_group_id: group,
+      business_company_id: company,
+      address1: r.address?.trim() ?? "",
+      country_iso: country,
       is_account_manager: yes(r.isAccountManager),
       status: r.status?.trim().toLowerCase() || "active",
       ...(restore ? { deleted_at: null } : {}),
     };
+    keepCurrent(pr, ["department_id", "access_group_id", "business_company_id", "address1", "country_iso"]);
+    refuseIncomplete(p, "users", pr);
   });
   out.forEach((r, i) => r.action !== "error" && p.index("users", i, r.externalId, lower(String(r.values.username))));
   return out;
@@ -516,18 +873,19 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
       p.issue("enterprises", line, "businessCompany", `Business company "${r.businessCompany}" does not exist`);
       return void (pr.action = "error");
     }
-    let am: Ref | number | null = null;
-    if (r.accountManager?.trim()) {
-      am = p.resolve("users", r.accountManager, p.lk.users);
-      if (am == null)
-        p.issue("enterprises", line, "accountManager", `User "${r.accountManager}" not found; no AM set`, "warning");
-    }
-    const country = r.country?.trim() ? (p.lk.countries.get(r.country.trim().toUpperCase()) ?? null) : null;
-    if (r.country?.trim() && country == null)
-      p.issue("enterprises", line, "country", `Country "${r.country}" not found; left empty`, "warning");
     const m = p.match("enterprises", line, ext, p.lk.enterprises.get(lower(name)) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
+    const am = r.accountManager?.trim() ? p.resolve("users", r.accountManager, p.lk.users) : null;
+    if (r.accountManager?.trim() && am == null)
+      unknownRef(p, "enterprises", pr, "accountManager", `User "${r.accountManager}" not found`);
+    else if (am != null && m.action === "create" && !p.isAccountManager(am))
+      // As Add enterprise (api/enterprises.ts checkInput): the account manager must be an active one.
+      unknownRef(p, "enterprises", pr, "accountManager", `User "${r.accountManager}" is not an active account manager`);
+    const country = r.country?.trim() ? (p.lk.countries.get(r.country.trim().toUpperCase()) ?? null) : null;
+    if (r.country?.trim() && country == null)
+      unknownRef(p, "enterprises", pr, "country", `Country "${r.country}" not found`);
+    if (pr.action === "error") return;
     pr.values = {
       business_company_id: company.id,
       name,
@@ -550,6 +908,8 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
       currency: company.currency,
       contacts: Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [type, list(r[field])])),
     };
+    keepCurrent(pr, ["account_manager_id", "address_line1", "country_id"]);
+    refuseIncomplete(p, "enterprises", pr);
   });
   out.forEach((r, i) => r.action !== "error" && p.index("enterprises", i, r.externalId, lower(String(r.values.name))));
   return out;
@@ -566,6 +926,9 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
     const ext = r.externalId?.trim() || null;
     const pr = row(line, ext);
     out.push(pr);
+    // Connection details in the file, whether the row passes or not: the stored files hold them all the same, so the
+    // import needs an admin with 2FA (§13.22). Checked first: a refused row used to let them in without.
+    if (["username", "password", "hostIps", "host", "port"].some((f) => r[f]?.trim())) p.includesCredentials = true;
     if (!required(p, entity, line, r)) return void (pr.action = "error");
     const name = r.name!.trim();
     if (seen.has(lower(name)) && !ext) {
@@ -602,7 +965,6 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
     const m = p.match(entity, line, ext, system.get(lower(name)) ?? null);
     pr.action = m.action;
     pr.existingId = m.id;
-    if (["username", "password", "hostIps", "host", "port"].some((f) => r[f]?.trim())) p.includesCredentials = true;
     const v: Record<string, Value> = {
       enterprise_id: ent,
       name,
@@ -663,6 +1025,8 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       if (!r.category?.trim()) delete v.product_category_id;
     }
     pr.values = v;
+    // A new customer trunk needs its allowed IPs (Add trunk); System ID and password are made up when missing.
+    refuseIncomplete(p, entity, pr);
   });
   out.forEach((r, i) => r.action !== "error" && p.index(entity, i, r.externalId, lower(String(r.values.name))));
   return out;
@@ -734,6 +1098,7 @@ function planRateTables(p: Planner, raws: Raw[]): PlanRow[] {
       vendor_trunk_id: vendor,
     };
     pr.extra = { customerTrunks: trunks };
+    refuseIncomplete(p, "rate_tables", pr);
   });
   out.forEach((r, i) => {
     const raw = raws[i]!;
@@ -898,6 +1263,7 @@ function planRouteRules(p: Planner, raws: Raw[]): PlanRow[] {
       mccmncs: dest,
     };
     pr.extra = { vendors, percentage: shares.length > 0 };
+    refuseIncomplete(p, "route_rules", pr);
   });
   out.forEach((r, i) => r.action !== "error" && p.index("route_rules", i, r.externalId, lower(String(r.values.name))));
   return out;
@@ -934,10 +1300,10 @@ function planBalances(p: Planner, raws: Raw[]): PlanRow[] {
       kept++;
       return { ...pr, action: "skip" as const };
     }
-    return {
+    return checked(p, "opening_balances", {
       ...pr,
       values: { enterprise_id: ent, side: r.side!.trim().toLowerCase(), amount, currency, date: r.date!.trim() },
-    };
+    });
   });
   if (kept)
     p.issue(
@@ -980,7 +1346,7 @@ function planNamed(
       p.issue(entity, line, "name", `Department "${name}" was deleted: restore it on the Departments page first`);
       return { ...pr, action: "error" as const };
     }
-    return { ...pr, action: m.action, existingId: m.id, values: values(r, name) };
+    return checked(p, entity, { ...pr, action: m.action, existingId: m.id, values: values(r, name) });
   });
   out.forEach((r, i) => r.action !== "error" && p.index(entity, i, r.externalId, lower(String(r.values.name))));
   return out;
@@ -1028,13 +1394,13 @@ function planNumberLists(p: Planner, raws: Raw[], existing: Map<string, Set<stri
       (v) => !have.has(`${v}\u0000${content ?? ""}`) && !mine.has(`${v}\u0000${content ?? ""}`),
     );
     fresh.forEach((v) => mine.add(`${v}\u0000${content ?? ""}`));
-    return {
+    return checked(p, "number_lists", {
       ...pr,
       action: fresh.length ? ("create" as const) : ("skip" as const),
       existingId: system?.id ?? null,
       values: { name, list_type: type },
       extra: { entries: fresh.map((v) => ({ value: v, content })) },
-    };
+    });
   });
 }
 
@@ -1263,7 +1629,7 @@ function planHlrRules(p: Planner, raws: Raw[]): PlanRow[] {
       : [{ type: "all" as const, trunkKind: "customer" as const, id: null }];
     if (!targets) return { ...pr, action: "error" as const };
     const m = p.match("hlr_rules", line, ext, p.lk.hlrRules.get(lower(name)) ?? null);
-    return {
+    return checked(p, "hlr_rules", {
       ...pr,
       action: m.action,
       existingId: m.id,
@@ -1274,7 +1640,7 @@ function planHlrRules(p: Planner, raws: Raw[]): PlanRow[] {
         status: r.status?.trim().toLowerCase() || "active",
       },
       extra: { targets: targets.map((t) => ({ type: t.type, id: t.id })) },
-    };
+    });
   });
   out.forEach((r, i) => r.action !== "error" && p.index("hlr_rules", i, r.externalId, lower(String(r.values.name))));
   return out;

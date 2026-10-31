@@ -30,7 +30,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   const rrv = table("route_rule_vendors");
   const warnings: string[] = [];
   if (customerTrunks.length && !("username" in customerTrunks[0]!))
-    warnings.push("The package has no credentials: trunks get placeholder connection details");
+    warnings.push(
+      "The package has no credentials: vendor trunks get placeholder connection details, and new customer trunks " +
+        "are refused (they need their allowed IPs)",
+    );
 
   const name = (m: Map<string, Row>, id: string | undefined) => (id ? (m.get(id)?.name ?? "") : "");
   const out: { entity: MigrationImportEntity; rows: Row[] }[] = [];
@@ -72,6 +75,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       email: u.email!,
       department: name(departments, u.department_id),
       accessGroup: name(groups, u.access_group_id),
+      // What a new user needs besides (§13.22).
+      businessCompany: name(companies, u.business_company_id),
+      address: u.address1 ?? "",
+      country: u.country_iso?.trim() ?? "",
       isAccountManager: u.is_account_manager === "t" ? "yes" : "no",
       status: u.status!,
     })),
