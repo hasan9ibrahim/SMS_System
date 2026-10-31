@@ -149,6 +149,36 @@ describe("rate history (spec §6.2, §13.32)", () => {
     for (const r of backDated) assert.ok(Date.parse(r.stated_valid_from!) < Date.parse(r.valid_from!));
   });
 
+  test("a live customer trunk is priced by a live rate table (QA 2026-10-31, §5.4, §13.29)", async () => {
+    // A table made for an archived trunk is archived with it; it must not be shared with a live trunk. Enough
+    // enterprises for archived trunks to own tables (the shared world above has too few).
+    const dir = mkdtempSync(join(tmpdir(), "gen-live-"));
+    try {
+      const sink = new TableSink(dir);
+      await generateWorld({ seed: "test", profile: { ...profile, enterprises: 120 }, anchor: ANCHOR, sink });
+      await sink.close();
+      const archived = new Set(
+        readCsv(dir, "rate_tables")
+          .filter((r) => r.deleted_at !== "")
+          .map((r) => r.id),
+      );
+      assert.ok(archived.size > 0, "some tables are archived");
+      const byTrunk = new Map<string, string[]>();
+      for (const r of readCsv(dir, "customer_trunk_rate_tables"))
+        byTrunk.set(r.customer_trunk_id!, [...(byTrunk.get(r.customer_trunk_id!) ?? []), r.rate_table_id!]);
+      for (const t of readCsv(dir, "customer_trunks")) {
+        const tables = byTrunk.get(t.id!) ?? [];
+        if (t.deleted_at !== "" || !tables.length) continue;
+        assert.ok(
+          tables.some((id) => !archived.has(id)),
+          `live trunk ${t.name} has only archived tables ${tables}`,
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("every vendor trunk has exactly one vendor table", () => {
     for (const v of world.vendorTrunks) assert.equal(world.rateTableById.get(v.rateTableId)?.vendorTrunkId, v.id);
   });
