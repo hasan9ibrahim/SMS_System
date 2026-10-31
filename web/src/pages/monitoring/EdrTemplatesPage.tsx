@@ -126,6 +126,8 @@ export function EdrTemplatesPage() {
   return (
     <ListScreen<EdrTemplateRow>
       list="edr_templates"
+      noExport
+      bulkDelete={{ noun: "EDR template", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["edr_template"] }}

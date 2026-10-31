@@ -731,7 +731,7 @@ export function cloneRouteRule(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
-async function ruleDependencies(db: Db, id: number) {
+export async function ruleDependencies(db: Db, id: number) {
   const traffic = await chRows<{ n: string }>(
     `SELECT count() AS n FROM edr WHERE route_rule_id = ${Number(id)} AND submit_time > now() - INTERVAL 30 DAY`,
   );

@@ -459,6 +459,7 @@ export function ReratingPage() {
   return (
     <ListScreen<ReratingRequest>
       list="rerating_requests"
+      listExport
       page={page}
       noSelection
       // The detail panel's Edit, Approve and Decline, per row (§6.3).

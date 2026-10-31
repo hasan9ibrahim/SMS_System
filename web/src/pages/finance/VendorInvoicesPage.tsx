@@ -753,6 +753,7 @@ function InvoicesView() {
   return (
     <ListScreen<VendorInvoiceRow>
       list="vendor_invoices"
+      bulkDelete={{ noun: "vendor invoice", restore: true }}
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["vendor_invoice"] }}
@@ -1077,6 +1078,8 @@ function RulesView() {
   return (
     <ListScreen<ReconRuleRow>
       list="recon_rules"
+      listExport
+      bulkDelete={{ noun: "partner rule", restore: true }}
       page={page}
       title="Reconciliation rules"
       noSelection

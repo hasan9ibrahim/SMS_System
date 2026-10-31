@@ -698,6 +698,7 @@ function ProfilesView() {
   return (
     <ListScreen<LcrProfileRow>
       list="lcr_profiles"
+      listExport
       page={page}
       above={<ViewSwitch />}
       noSelection
@@ -808,6 +809,7 @@ function ChangesView() {
   return (
     <ListScreen<LcrChangeRow>
       list="lcr_changes"
+      listExport
       page={page}
       above={<ViewSwitch />}
       noSelection

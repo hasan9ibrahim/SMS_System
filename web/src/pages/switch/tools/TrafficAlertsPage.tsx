@@ -321,6 +321,8 @@ export function TrafficAlertsPage() {
   return (
     <ListScreen<TrafficAlertRow>
       list="traffic_alerts"
+      noExport
+      bulkDelete={{ noun: "traffic alert", restore: true }}
       page={page}
       selectId={selectId}
       noSelection

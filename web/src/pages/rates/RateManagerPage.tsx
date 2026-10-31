@@ -138,6 +138,8 @@ function FullList({ compact = false }: { compact?: boolean }) {
   return (
     <ListScreen<RateTableRow>
       list="rate_tables"
+      listExport
+      bulkDelete={{ noun: "rate table", restore: true }}
       page={page}
       {...(compact ? { onlyColumns: ["name"] } : {})}
       // Average margin on request (team trial round 7): Columns shows it.

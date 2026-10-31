@@ -138,6 +138,8 @@ export function BillingCyclesPage() {
   return (
     <ListScreen<BillingCycleRow>
       list="billing_cycles"
+      listExport
+      bulkDelete={{ noun: "billing cycle", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["billing_cycle"] }}
       rowActions={(r) => [

@@ -5,6 +5,7 @@ import { fillBody } from "../email/html.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
+  BillingReportParams,
   BillingReportQuery,
   DailyTrafficAlertInput,
   MasterReportExportInput,
@@ -308,6 +309,59 @@ export function salesInsights(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- billing report
 
+/**
+ * The Billing report's rows for a period (§10): each enterprise's billable traffic from the EDR store, and the list
+ * definition that reads it from the `br_traffic` temp table, which `fill` makes on a client inside a transaction
+ * (dropped on commit). The list and its export (§13.22, lists/export) share it. A string is a bad period.
+ */
+export async function billingReportSource(
+  params: BillingReportParams,
+): Promise<{ def: ListDef<unknown>; fill: (c: pg.PoolClient) => Promise<void> } | string> {
+  const w = windowOf({ period: params.period, from: params.from, to: params.to, timezone: "UTC" }, await reportNow());
+  if (typeof w === "string") return w;
+  const factor = decFactor(await sysToPlatformFactor());
+  const src = periodSource(await reportNow(), w);
+  const n = counter(src);
+  const neg = negMargin(src);
+  const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
+  const inWindow = `start_time >= ${t(w.from)} AND start_time < ${t(w.to)}`;
+  const [cust, vend] = await Promise.all([
+    chQuery<Record<string, string>>(
+      `SELECT c_enterprise_id AS id, ${n("is_customer_billable = 1")} AS billable,
+              toFloat64(sumIf(${dec("revenue_sys")} * c_ex_rate, is_customer_billable = 1)) AS amount,
+              ${n(`is_customer_billable = 1 AND ${neg}`)} AS neg,
+              toFloat64(sumIf((${dec("cost_sys")} - ${dec("revenue_sys")}) * ${factor}, is_customer_billable = 1 AND ${neg})) AS neg_amount
+         FROM ${src} WHERE ${inWindow} GROUP BY id`,
+    ),
+    chQuery<Record<string, string>>(
+      `SELECT v_enterprise_id AS id, ${n("is_vendor_billable = 1")} AS billable, toFloat64(sumIf(cost, is_vendor_billable = 1)) AS amount
+         FROM ${src} WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
+    ),
+  ]);
+  const traffic = new Map<number, number[]>();
+  for (const r of cust)
+    traffic.set(Number(r.id), [Number(r.billable), Number(r.amount), 0, 0, Number(r.neg), Number(r.neg_amount)]);
+  for (const r of vend) {
+    const x = traffic.get(Number(r.id)) ?? [0, 0, 0, 0, 0, 0];
+    x[2] = Number(r.billable);
+    x[3] = Number(r.amount);
+    traffic.set(Number(r.id), x);
+  }
+  const fill = async (c: pg.PoolClient) => {
+    await c.query(
+      `CREATE TEMP TABLE br_traffic (enterprise_id bigint PRIMARY KEY, c_billable bigint, c_amount numeric, v_billable bigint,
+         v_amount numeric, neg_msgs bigint, neg_amount numeric) ON COMMIT DROP`,
+    );
+    const ids = [...traffic.keys()];
+    const col = (i: number) => ids.map((id) => traffic.get(id)![i]);
+    await c.query(
+      `INSERT INTO br_traffic SELECT * FROM unnest($1::bigint[], $2::bigint[], $3::numeric[], $4::bigint[], $5::numeric[], $6::bigint[], $7::numeric[])`,
+      [ids, col(0), col(1), col(2), col(3), col(4), col(5)],
+    );
+  };
+  return { def: billingReportDef(w.from, w.to) as ListDef<unknown>, fill };
+}
+
 export function queryBillingReport(request: FastifyRequest, reply: FastifyReply) {
   const { params, query } = request.body as BillingReportQuery;
   const errors = checkListQuery(query, listFields.billing_report);
@@ -317,51 +371,11 @@ export function queryBillingReport(request: FastifyRequest, reply: FastifyReply)
     });
   return withDb(reply, async (pool) => {
     try {
-      const w = windowOf(
-        { period: params.period, from: params.from, to: params.to, timezone: "UTC" },
-        await reportNow(),
-      );
-      if (typeof w === "string") return badInput(reply, [{ path: "/params/period", message: w }]);
-      const factor = decFactor(await sysToPlatformFactor());
-      const src = periodSource(await reportNow(), w);
-      const n = counter(src);
-      const neg = negMargin(src);
-      const t = (d: Date) => `toDateTime64(${lit(iso(d).replace("T", " ").replace("Z", ""))}, 3, 'UTC')`;
-      const inWindow = `start_time >= ${t(w.from)} AND start_time < ${t(w.to)}`;
-      const [cust, vend] = await Promise.all([
-        chQuery<Record<string, string>>(
-          `SELECT c_enterprise_id AS id, ${n("is_customer_billable = 1")} AS billable,
-                  toFloat64(sumIf(${dec("revenue_sys")} * c_ex_rate, is_customer_billable = 1)) AS amount,
-                  ${n(`is_customer_billable = 1 AND ${neg}`)} AS neg,
-                  toFloat64(sumIf((${dec("cost_sys")} - ${dec("revenue_sys")}) * ${factor}, is_customer_billable = 1 AND ${neg})) AS neg_amount
-             FROM ${src} WHERE ${inWindow} GROUP BY id`,
-        ),
-        chQuery<Record<string, string>>(
-          `SELECT v_enterprise_id AS id, ${n("is_vendor_billable = 1")} AS billable, toFloat64(sumIf(cost, is_vendor_billable = 1)) AS amount
-             FROM ${src} WHERE ${inWindow} AND v_enterprise_id > 0 GROUP BY id`,
-        ),
-      ]);
-      const traffic = new Map<number, number[]>();
-      for (const r of cust)
-        traffic.set(Number(r.id), [Number(r.billable), Number(r.amount), 0, 0, Number(r.neg), Number(r.neg_amount)]);
-      for (const r of vend) {
-        const x = traffic.get(Number(r.id)) ?? [0, 0, 0, 0, 0, 0];
-        x[2] = Number(r.billable);
-        x[3] = Number(r.amount);
-        traffic.set(Number(r.id), x);
-      }
-      const def = billingReportDef(w.from, w.to) as ListDef<unknown>;
+      const source = await billingReportSource(params);
+      if (typeof source === "string") return badInput(reply, [{ path: "/params/period", message: source }]);
+      const { def, fill } = source;
       return await inTransaction(pool, async (c) => {
-        await c.query(
-          `CREATE TEMP TABLE br_traffic (enterprise_id bigint PRIMARY KEY, c_billable bigint, c_amount numeric, v_billable bigint,
-             v_amount numeric, neg_msgs bigint, neg_amount numeric) ON COMMIT DROP`,
-        );
-        const ids = [...traffic.keys()];
-        const col = (i: number) => ids.map((id) => traffic.get(id)![i]);
-        await c.query(
-          `INSERT INTO br_traffic SELECT * FROM unnest($1::bigint[], $2::bigint[], $3::numeric[], $4::bigint[], $5::numeric[], $6::bigint[], $7::numeric[])`,
-          [ids, col(0), col(1), col(2), col(3), col(4), col(5)],
-        );
+        await fill(c);
         const cq = compileQuery(def, query);
         const [pageRes, count] = await Promise.all([
           c.query(cq.sql, cq.values),

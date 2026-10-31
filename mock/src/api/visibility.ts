@@ -145,6 +145,7 @@ export const getVisibilityPolicy = policies.get;
 export const createVisibilityPolicy = clearing(policies.create);
 export const updateVisibilityPolicy = clearing(policies.update);
 export const archiveVisibilityPolicy = clearing(policies.archive);
+export const visibilityPolicySpec = policies.spec;
 export const restoreVisibilityPolicy = clearing(policies.restore);
 
 function listHandler<Row>(

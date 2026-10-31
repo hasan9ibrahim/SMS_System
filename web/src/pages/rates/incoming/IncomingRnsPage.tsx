@@ -677,6 +677,7 @@ function RnQueue() {
   return (
     <ListScreen<RnRow>
       list="rate_notifications"
+      listExport
       page={page}
       selection={{
         summary: (rows, ids) => {

@@ -384,8 +384,8 @@ export async function exportRows<Row>(pool: pg.Pool, def: ListDef<Row>, query: L
   });
 }
 
-/** Puts masked names into the row and withholds hidden values (§13.17). */
-function applyVisibility(
+/** Puts masked names into the row and withholds hidden values (§13.17); the list export shows their text too. */
+export function applyVisibility(
   def: ListDef<unknown>,
   r: Record<string, unknown>,
   row: Record<string, unknown>,

@@ -220,6 +220,7 @@ export function BroadcastPage() {
   return (
     <ListScreen<BroadcastRow>
       list="broadcasts"
+      noExport
       page={page}
       noSelection
       historyScope={null}

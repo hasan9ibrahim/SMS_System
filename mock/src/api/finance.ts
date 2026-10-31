@@ -777,7 +777,7 @@ export function updateBillingCycle(request: FastifyRequest, reply: FastifyReply)
   });
 }
 
-async function cycleDependencies(db: Db, id: number) {
+export async function cycleDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     "SELECT count(DISTINCT enterprise_id)::int AS n FROM enterprise_billing WHERE billing_cycle_id = $1",
     [id],

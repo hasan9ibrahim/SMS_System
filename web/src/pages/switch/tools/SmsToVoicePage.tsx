@@ -149,6 +149,8 @@ export function SmsToVoicePage() {
   return (
     <ListScreen<SmsVoiceRuleRow>
       list="sms_voice_rules"
+      noExport
+      bulkDelete={{ noun: "SMS to voice rule", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["sms_voice_rule"] }}

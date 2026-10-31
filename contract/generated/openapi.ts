@@ -193,6 +193,96 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  "/lists/{list}/export": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Export the rows matching a list's filters as CSV (§13.22, §13.25)
+     * @description One export for every list page that has no export of its own. The body carries the same query the page sends
+     *     (column filters, the multi-field builder with AND/OR, quick search, sort) and the visible columns in their
+     *     order; the answer is a CSV of every matching row, streamed, with the columns' labels as the header row and the
+     *     values as the grid shows them: enum labels, Yes / No, lists joined with ", ", times in `timezone`. Filtering
+     *     is the list's own, so the file holds exactly the rows the page finds.
+     *
+     *     * Access: the list's page and its Export action (a page without one: its Edit, else its View), as for the
+     *       page's own calls; lists open to every signed-in user (Change history) are scoped as on the page.
+     *     * AM visibility (§13.17) applies as on the page: masked names stay masked, hidden values show as the page
+     *       shows them (Hidden, Low / Normal / High).
+     *     * Passwords, secrets and other credentials are never exported here; they stay in the Migration Center's
+     *       encrypted, administrator-only export (§13.22).
+     *     * A cell that would start a spreadsheet formula (`=`, `+`, `-`, `@`, tab, CR) gets a leading apostrophe;
+     *       numbers stay numbers.
+     *     * At most 100,000 rows: when more match, the file ends with a line saying so and the `X-Export-Capped`
+     *       header carries the cap; `X-Total-Rows` always carries how many rows matched.
+     *     * Lists with an export of their own (EDR search, reports, rate tables…) and lists of one parent record are
+     *       answered 400 here.
+     */
+    post: operations["exportList"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lists/{list}/bulk-delete": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Delete (archive) several records of a list as one change (§13.29, §13.10)
+     * @description Archives the selected records of a list whose rows have a Delete, as ONE change in History, so one Undo
+     *     restores them all (§13.10). The safe-delete rules of the single delete apply to each row (§13.29): rows that
+     *     cannot be deleted (dependencies, open billing items, live trunks, the default record…) are skipped and listed
+     *     in `refused` with the reason. An administrator may override the blockers an administrator may override, with
+     *     a written `reason`, as in the single delete; blockers nobody can override stay refused.
+     *
+     *     * `dryRun` changes nothing: it answers what would be deleted (with the warnings the single delete shows) and
+     *       what would be refused, for the confirmation dialog.
+     *     * Access: the list's own Delete (the access of its single delete). Records the user's visibility policy hides
+     *       or masks (§13.17) are refused, never deleted.
+     *     * Lists whose rows have no Delete are answered 400.
+     */
+    post: operations["bulkDeleteRecords"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/lists/{list}/bulk-restore": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Restore several deleted records of a list as one change (§13.29, §13.10)
+     * @description Brings archived records back as ONE change in History. The rules of the single restore apply to each row:
+     *     administrators only where the single restore is (most lists), a live record with the same name or code, or
+     *     an archived parent (an enterprise, an HLR provider), refuses that row. `override` and `reason` are not used.
+     *     Access: the list's own Restore.
+     */
+    post: operations["bulkRestoreRecords"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/enterprises/query": {
     parameters: {
       query?: never;
@@ -19180,6 +19270,52 @@ export type components = {
       defaultSort: components["schemas"]["SortKey"][];
     };
     /**
+     * @description A list export (§13.22, §13.25): the page's query and the columns it shows, in order. `limit` and `cursor` of
+     *     the query are ignored (every matching row, up to the cap).
+     */
+    ListExportRequest: {
+      query: components["schemas"]["ListQuery"];
+      /** @description Fields of the list's catalogue, in the order the grid shows them. Filter-only fields and credential fields are left out. */
+      columns: string[];
+      /** @description IANA time zone the times are written in, as the page shows them (default UTC). */
+      timezone?: string;
+      /** @description The report's period, for the Billing report list only. */
+      params?: components["schemas"]["BillingReportParams"];
+    };
+    BulkRecordsRequest: {
+      ids: components["schemas"]["Id"][];
+      /**
+       * @description Change nothing; answer what would be done and refused.
+       * @default false
+       */
+      dryRun: boolean;
+      /** @description Written with the change; required with `override`. */
+      reason?: string;
+      /** @description Administrators only, with a reason. Deletes rows whose blockers an administrator may override. */
+      override?: boolean;
+    };
+    BulkRecordsResult: {
+      dryRun: boolean;
+      /** @description Records deleted or restored (a dry run - records that would be), with the warnings shown. */
+      done: {
+        id: components["schemas"]["Id"];
+        /** @description The record as the list shows it (masked names stay masked, §13.17). */
+        name: string;
+        /** @description What the single delete would point out without blocking, e.g. "Open incidents (they close) 3". */
+        warnings: string[];
+      }[];
+      /** @description Records left as they are, each with the reason. */
+      refused: {
+        id: components["schemas"]["Id"];
+        name: string;
+        reason: string;
+        /** @description An administrator could delete it with `override` and a reason. */
+        overridable: boolean;
+      }[];
+      /** @description The one change in History (null for a dry run or when nothing was done). */
+      change: components["schemas"]["Change"] | null;
+    };
+    /**
      * @description reciprocal = Bilateral (both customer and vendor; shown as Bilateral since team trial round 3).
      * @enum {string}
      */
@@ -20182,6 +20318,106 @@ export interface operations {
       401: components["responses"]["Unauthorized"];
       403: components["responses"]["Forbidden"];
       404: components["responses"]["NotFound"];
+    };
+  };
+  exportList: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Identifier of a list page. */
+        list: components["parameters"]["ListId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ListExportRequest"];
+      };
+    };
+    responses: {
+      /** @description CSV file, UTF-8 with BOM, header row of column labels */
+      200: {
+        headers: {
+          /** @description Rows matching the query. */
+          "X-Total-Rows"?: number;
+          /** @description Present when more rows matched than an export holds; the number of rows written. */
+          "X-Export-Capped"?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          "text/csv": string;
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  bulkDeleteRecords: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Identifier of a list page. */
+        list: components["parameters"]["ListId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BulkRecordsRequest"];
+      };
+    };
+    responses: {
+      /** @description What was (or, for a dry run, would be) deleted and refused, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BulkRecordsResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
+    };
+  };
+  bulkRestoreRecords: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Identifier of a list page. */
+        list: components["parameters"]["ListId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["BulkRecordsRequest"];
+      };
+    };
+    responses: {
+      /** @description What was (or, for a dry run, would be) restored and refused, with the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["BulkRecordsResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthorized"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["Unavailable"];
     };
   };
   queryEnterprises: {

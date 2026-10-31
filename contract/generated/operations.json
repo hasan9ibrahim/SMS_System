@@ -2871,6 +2871,39 @@
  },
  {
   "method": "POST",
+  "path": "/lists/{list}/bulk-delete",
+  "operationId": "bulkDeleteRecords",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lists/{list}/bulk-restore",
+  "operationId": "bulkRestoreRecords",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lists/{list}/export",
+  "operationId": "exportList",
+  "tag": "meta",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/lookups/{list}/query",
   "operationId": "queryLookup",
   "tag": "meta",

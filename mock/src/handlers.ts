@@ -513,6 +513,8 @@ import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseR
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { queryChanges, undoChange } from "./api/changes.js";
+import { exportList } from "./api/listExport.js";
+import { bulkDeleteRecords, bulkRestoreRecords } from "./api/bulkRecords.js";
 
 /** Routing costs and route maps are cached a minute; rate changes and undos clear them. */
 const clearRouteCaches = () => {
@@ -1227,6 +1229,10 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   portalQueryMessages,
   portalTraffic,
   queryChanges,
+  // Generic list calls (§13.22 export, §13.29 bulk delete and restore as one change).
+  exportList,
+  bulkDeleteRecords,
+  bulkRestoreRecords,
   undoChange: (request, reply) =>
     Promise.resolve(undoChange(request, reply)).finally(() => {
       clearRouteCaches();

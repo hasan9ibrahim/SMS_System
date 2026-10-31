@@ -159,6 +159,8 @@ function ProfileList({ open }: { open: (id: number) => void }) {
   return (
     <ListScreen<DialCodeProfile>
       list="dial_code_profiles"
+      listExport
+      bulkDelete={{ noun: "profile", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["dial_code_profile", "dial_code"] }}
       primary={{ label: "Add profile", icon: "plus", onClick: () => void addProfile() }}

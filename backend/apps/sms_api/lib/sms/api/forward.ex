@@ -88,6 +88,20 @@ defmodule Sms.Api.Forward do
     end
   end
 
+  # The generic list calls (§13.22, §13.29): checked by the list, whose page the operation table cannot name.
+  defp lookup_check(conn, session, %{operation_id: id})
+       when id in ["exportList", "bulkDeleteRecords", "bulkRestoreRecords"] do
+    kind =
+      %{"exportList" => :export, "bulkDeleteRecords" => :delete, "bulkRestoreRecords" => :restore}[
+        id
+      ]
+
+    case String.split(conn.request_path, "/", trim: true) do
+      ["api", "v1", "lists", list, _] -> Access.check_list(session.user_id, list, kind)
+      _ -> :ok
+    end
+  end
+
   defp lookup_check(_conn, _session, _op), do: :ok
 
   # A change to users, access groups, security settings or a password takes effect at once.

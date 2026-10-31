@@ -167,6 +167,8 @@ function Lists({ open }: { open: (id: number) => void }) {
   return (
     <ListScreen<NumberList>
       list="number_lists"
+      listExport
+      bulkDelete={{ noun: "number list", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["number_list", "number_list_entry"] }}
       rowActions={(r) => [

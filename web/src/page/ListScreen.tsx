@@ -14,8 +14,9 @@ import {
   type RefObject,
 } from "react";
 import { useLocation } from "react-router";
-import type { ListId, ListQuery } from "@sms/contract";
-import { fetchListPage, useListFields, type ListPage } from "../api/hooks";
+import type { BillingReportParams, ListId, ListQuery } from "@sms/contract";
+import { fetchListPage, useListFields, useMe, type ListPage } from "../api/hooks";
+import { downloadListExport } from "../api/listActions";
 import { DataGrid, type ColumnOverride, type GridMeta } from "../grid/DataGrid";
 import { FilterBuilder } from "../grid/FilterBuilder";
 import { PillSearch } from "../grid/PillSearch";
@@ -27,9 +28,13 @@ import {
   encodeState,
   isFiltered,
   switchOf,
+  toListQuery,
   withSwitch,
   type GridState,
 } from "../grid/filterModel";
+import { useBulkArchive } from "../records/bulkDelete";
+import { exportColumns, exportQuery } from "./listExportModel";
+import { displayTz } from "../ui/zonedCore";
 import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "../history/undo";
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
@@ -88,8 +93,20 @@ export interface ListScreenProps<Row extends { id: number }> {
    * actions apply to: the selected rows, else the active row.
    */
   actions?: ReactNode | ((targets: Row[]) => ReactNode);
-  /** Enables the header Export button; receives the current filters (§13.22). */
+  /** Enables the header Export button with the page's own export; receives the current filters (§13.22). */
   onExport?: (state: GridState) => void;
+  /**
+   * Export through the one list export (POST /lists/{list}/export, §13.22): the page's query and visible columns.
+   * `query` scopes it as the page's `fetchPage` does (a side, a list of IPs); `params` are the Billing report's.
+   */
+  listExport?: true | { query?: (q: ListQuery) => ListQuery; params?: BillingReportParams };
+  /** No Export button: a page whose rows are not worth a file. A page with no export at all has none either. */
+  noExport?: boolean;
+  /**
+   * Delete on a multi-row selection as one change (§13.29, §13.10), with two confirmations; Restore too for
+   * administrators when the selection is deleted rows and the page has a single Restore (`restore`).
+   */
+  bulkDelete?: BulkDeleteSpec<Row>;
   /** Export as the page's filled button, last in the header (EDR search, team trial round 2). */
   exportPrimary?: boolean;
   /** Leave out the quick search box (a page whose own toolbar has the search, e.g. EDR search). */
@@ -127,6 +144,23 @@ export interface ListScreenProps<Row extends { id: number }> {
   /** Hides selection (e.g. reports). */
   noSelection?: boolean;
 }
+
+/** Bulk delete on a list page (§13.29): the record's word and how a row tells it is deleted. */
+export interface BulkDeleteSpec<Row> {
+  noun: string;
+  plural?: string;
+  /** The page's word for its delete, e.g. Remove on Firewall. */
+  verb?: string;
+  /** A deleted (archived) row; default its `archived` flag or `archivedAt`. */
+  archived?: (row: Row) => boolean;
+  /** Restore deleted rows too (administrators, as the page's single Restore). */
+  restore?: boolean;
+}
+
+const archivedRow = (row: object) => {
+  const r = row as { archived?: unknown; archivedAt?: unknown };
+  return r.archived === true || (r.archivedAt !== null && r.archivedAt !== undefined);
+};
 
 /** Grid state in the tab URL: ?g=<encoded>. Filter changes replace, not push. */
 /** The filters of a state, to tell whether Clear all would change anything. */
@@ -563,6 +597,9 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     toolbar,
     actions,
     onExport,
+    listExport,
+    noExport = false,
+    bulkDelete,
     exportPrimary = false,
     noQuickSearch = false,
     noRecordBar = false,
@@ -637,6 +674,75 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             visible: fields.data.fields.filter((f) => !f.hidden && !defaultHidden.includes(f.field)).map((f) => f.field),
           }
         : state;
+  // The one list export (§13.22): the page's query as the grid sends it, the columns in view, times in the zone
+  // the page shows them in.
+  const runListExport = (s: GridState) => {
+    if (!fields.data) return;
+    const opts = listExport === true || !listExport ? {} : listExport;
+    const columns = exportColumns(fields.data.fields, (s === state ? shownState : s).visible);
+    const base: ListQuery = { ...toListQuery(s), limit: 100, withTotal: false };
+    void downloadListExport(list, {
+      query: exportQuery(opts.query ? opts.query(base) : base),
+      columns,
+      timezone: displayTz(),
+      ...(opts.params ? { params: opts.params } : {}),
+    })
+      .then((r) => {
+        if (r.capped)
+          toast({
+            tone: "warning",
+            message: `Exported the first ${r.capped.toLocaleString("en-US")} of ${r.total.toLocaleString("en-US")} rows. Narrow the filters to export the rest.`,
+          });
+      })
+      .catch((e: Error) => toast({ tone: "error", message: e.message }));
+  };
+  const exportHandler = onExport ?? (listExport ? runListExport : undefined);
+  // Delete (and Restore) on the selection as one change (§13.29), next to the page's own selection actions.
+  const { data: me } = useMe();
+  const bulkArchive = useBulkArchive();
+  const bulkMenu =
+    selection?.bulk || bulkDelete
+      ? (ids: number[], clear: () => void, picked: Row[]): (MenuItem | "separator")[] => {
+          const own = selection?.bulk?.(ids, clear, picked) ?? [];
+          if (!bulkDelete) return own;
+          const isArchived = bulkDelete.archived ?? archivedRow;
+          const plural = bulkDelete.plural ?? `${bulkDelete.noun}s`;
+          const word = (n: number) => `${n.toLocaleString("en-US")} ${n === 1 ? bulkDelete.noun : plural}`;
+          const live = picked.filter((r) => !isArchived(r));
+          const gone = picked.filter((r) => isArchived(r));
+          const items: MenuItem[] = [
+            {
+              label: `${bulkDelete.verb ?? "Delete"} ${word(live.length)}…`,
+              icon: "trash",
+              danger: true,
+              disabled: !live.length,
+              ...(live.length ? {} : { hint: "Already deleted" }),
+              onSelect: () =>
+                void bulkArchive(
+                  list,
+                  "delete",
+                  live.map((r) => r.id),
+                  bulkDelete.noun,
+                  plural,
+                ).then((n) => n && clear()),
+            },
+          ];
+          if (bulkDelete.restore && gone.length && me?.permissions.includes("*"))
+            items.push({
+              label: `Restore ${word(gone.length)}…`,
+              icon: "undo",
+              onSelect: () =>
+                void bulkArchive(
+                  list,
+                  "restore",
+                  gone.map((r) => r.id),
+                  bulkDelete.noun,
+                  plural,
+                ).then((n) => n && clear()),
+            });
+          return own.length ? [...own, "separator", ...items] : items;
+        }
+      : null;
   const total = meta.total;
   usePageStatus({
     rows:
@@ -779,16 +885,11 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 </Button>
               </>
             )}
-            {!exportPrimary && (
+            {!exportPrimary && !noExport && exportHandler && (
               <Button
                 icon="download"
-                disabled={!onExport}
-                onClick={() => onExport?.(state)}
-                title={
-                  onExport
-                    ? "Export the rows matching the current filters (CSV)"
-                    : "Export follows the current filters; it arrives with import/export (§13.22)"
-                }
+                onClick={() => exportHandler(state)}
+                title="Export the rows matching the current filters (CSV)"
               >
                 Export
               </Button>
@@ -796,12 +897,11 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
             {typeof actions === "function"
               ? actions(selected.size ? rows.filter((r) => selected.has(r.id)) : activeRow ? [activeRow] : [])
               : actions}
-            {exportPrimary && (
+            {exportPrimary && !noExport && exportHandler && (
               <Button
                 variant="primary"
                 icon="download"
-                disabled={!onExport}
-                onClick={() => onExport?.(state)}
+                onClick={() => exportHandler(state)}
                 title="Export the rows matching the current filters"
               >
                 Export
@@ -831,9 +931,9 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
                 template={rows[0] ?? null}
                 count={selected.size}
                 {...(rowActions ? { rowActions } : {})}
-                {...(selection?.bulk && selected.size > 1
+                {...(bulkMenu && selected.size > 1
                   ? {
-                      bulk: selection.bulk(
+                      bulk: bulkMenu(
                         [...selected],
                         () => setSelected(new Set()),
                         rows.filter((r) => selected.has(r.id)),

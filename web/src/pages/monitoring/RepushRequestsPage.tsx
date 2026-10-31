@@ -34,6 +34,7 @@ export function RepushRequestsPage() {
   return (
     <ListScreen<RepushRequestRow>
       list="repush_requests"
+      listExport
       page={page}
       noSelection
       historyScope={null}

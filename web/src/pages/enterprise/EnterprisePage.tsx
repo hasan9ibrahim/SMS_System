@@ -356,7 +356,7 @@ function TrunkDelete({ kind, rows, done }: { kind: "customer" | "vendor"; rows: 
         const ok =
           live.length === 1
             ? await deleteOne(kind, live[0]!.id, live[0]!.name)
-            : await deleteMany(kind, live, `${what}s`);
+            : await deleteMany(kind, live, what);
         if (ok) done();
       }}
     >

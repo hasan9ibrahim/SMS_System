@@ -147,6 +147,7 @@ export function MoBookPage() {
   return (
     <ListScreen<MoNumber>
       list="mo_numbers"
+      bulkDelete={{ noun: "MO number", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["mo_number"] }}
       primary={{ label: "Add MO number", icon: "plus", onClick: () => void openDialog(null) }}

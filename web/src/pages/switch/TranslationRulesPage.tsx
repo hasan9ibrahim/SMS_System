@@ -1263,6 +1263,8 @@ export function TranslationRulesPage() {
   return (
     <ListScreen<TranslationRuleRow>
       list="translation_rules"
+      listExport
+      bulkDelete={{ noun: "translation rule", restore: true }}
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["translation_rule"] }}

@@ -50,6 +50,7 @@ export function PcapTracePage() {
   return (
     <ListScreen<PcapTraceRow>
       list="pcap_traces"
+      noExport
       page={page}
       noSelection
       historyScope={null}

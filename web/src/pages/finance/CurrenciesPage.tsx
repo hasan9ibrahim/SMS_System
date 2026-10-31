@@ -273,6 +273,7 @@ function ExchangeView() {
   return (
     <ListScreen<CurrencyRateRow>
       list="currency_rates"
+      listExport
       page={page}
       title="Currency Exchange"
       historyScope={{ entityTypes: ["currency"] }}
@@ -369,6 +370,7 @@ function HistoryView() {
   return (
     <ListScreen<CurrencyRateHistoryRow>
       list="currency_rate_history"
+      listExport
       page={page}
       title="Currency Exchange History"
       noSelection

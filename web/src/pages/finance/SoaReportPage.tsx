@@ -91,6 +91,7 @@ export function SoaReportPage() {
   return (
     <ListScreen<SoaReportRow>
       list="soa_reports"
+      listExport
       page={page}
       noSelection
       historyScope={null}

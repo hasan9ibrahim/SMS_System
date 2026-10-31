@@ -792,6 +792,7 @@ export function RouteRulesPage() {
       openRef={openRule}
       onOpen={() => setSection("edit")}
       list="route_rules"
+      bulkDelete={{ noun: "route rule", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["route_rule"] }}
       primary={{ label: "New rule", onClick: () => void newRule() }}

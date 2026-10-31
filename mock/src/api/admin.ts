@@ -140,6 +140,8 @@ export function records<I, R extends { archivedAt: string | null }>(spec: Spec<I
     });
   }
   return {
+    /** The record's rules, for the bulk delete and restore of its list (§13.29, api/bulkRecords.ts). */
+    spec,
     insert,
     created,
     get: (request: FastifyRequest, reply: FastifyReply) => {
@@ -421,6 +423,7 @@ export const getUser = users.get;
 export const getUserDependencies = users.dependencies;
 export const updateUser = users.update;
 export const archiveUser = users.archive;
+export const userSpec = users.spec;
 export const restoreUser = users.restore;
 
 export function createUser(request: FastifyRequest, reply: FastifyReply) {
@@ -881,6 +884,7 @@ export const getDepartmentDependencies = departments.dependencies;
 export const createDepartment = departments.create;
 export const updateDepartment = departments.update;
 export const archiveDepartment = departments.archive;
+export const departmentSpec = departments.spec;
 export const restoreDepartment = departments.restore;
 
 // ---------------------------------------------------------------- GUI access groups
@@ -948,6 +952,7 @@ export const getAccessGroupDependencies = groups.dependencies;
 export const createAccessGroup = groups.create;
 export const updateAccessGroup = groups.update;
 export const archiveAccessGroup = groups.archive;
+export const accessGroupSpec = groups.spec;
 export const restoreAccessGroup = groups.restore;
 export const getAccessCatalog = () => ({ actions: ACTIONS, sections: SECTIONS, modules: MODULES });
 
@@ -1212,6 +1217,7 @@ export const getEmailTemplateDependencies = templates.dependencies;
 export const createEmailTemplate = templates.create;
 export const updateEmailTemplate = templates.update;
 export const archiveEmailTemplate = templates.archive;
+export const emailTemplateSpec = templates.spec;
 export const restoreEmailTemplate = templates.restore;
 
 export function cloneEmailTemplate(request: FastifyRequest, reply: FastifyReply) {
@@ -1387,6 +1393,7 @@ const portalUsers = records<PortalUserInput, NonNullable<Awaited<ReturnType<type
 export const getPortalUser = portalUsers.get;
 export const updatePortalUser = portalUsers.update;
 export const archivePortalUser = portalUsers.archive;
+export const portalUserSpec = portalUsers.spec;
 export const restorePortalUser = portalUsers.restore;
 
 export function createPortalUser(request: FastifyRequest, reply: FastifyReply) {

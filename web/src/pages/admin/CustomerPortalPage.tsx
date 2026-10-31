@@ -160,6 +160,8 @@ export function CustomerPortalPage() {
   return (
     <ListScreen<PortalUserRow>
       list="customer_portal_users"
+      listExport
+      bulkDelete={{ noun: "portal user", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["portal_user", "portal_user_password"] }}
