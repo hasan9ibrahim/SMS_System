@@ -620,6 +620,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     error: null,
   });
   const [builderOpen, setBuilderOpen] = useState(false);
+  // Clear all also takes the quick search's empty pills (functional QA round 13).
+  const [clears, setClears] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { undoLast } = useUndoLast(historyScope);
   useUndoShortcut(historyScope, active);
@@ -740,6 +742,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       freeText={!noQuickSearch}
       exclude={toolbarFields}
       onAdvanced={() => setBuilderOpen(true)}
+      resetKey={clears}
     />
   );
 
@@ -871,7 +874,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               type="button"
               className="btn btn-ghost btn-sm"
               // Back to the page's own defaults (e.g. EDR search's today), not to nothing (team trial round 2).
-              onClick={() => setState(cleared)}
+              onClick={() => {
+                setState(cleared);
+                setClears((n) => n + 1);
+              }}
             >
               Clear all
             </button>
