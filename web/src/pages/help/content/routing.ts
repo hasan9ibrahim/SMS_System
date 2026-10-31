@@ -168,7 +168,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial there is no live SMPP traffic, so the Test and the Simulator only fail over on margin: a vendor is skipped when its margin is below the minimum.",
+            text: "The Test and the Simulator do not know whether a vendor is down, rejects messages or is at its capacity limit. They skip a vendor only when its margin is below the minimum or it cannot take the message (its own translation rules or rates block it, or it does not accept the coding, TON / NPI or length).",
           },
         ],
       },
@@ -236,13 +236,13 @@ export const topics: HelpTopic[] = [
             items: [
               "**Test** tab on a rule: runs a sample message through that one rule and shows every condition with a tick or a cross, then the vendors tried with their cost and margin.",
               "**Simulate** button on Route rules: runs a sample message through all rules in priority order and shows which rules were tried, which one decided, and the vendor.",
-              "[[simulator|Simulator]] page: the full path of a message on a customer trunk, including translation rules, the customer rate, the route and the margin. It can also send a simulated test SMS.",
+              "[[simulator|Simulator]] page: the full path of a message on a customer trunk, including translation rules, the customer rate, the route and the margin. It can also send a real test SMS.",
               "[[route-map|Route map]]: today's rule and vendor for every destination a customer trunk sells.",
             ],
           },
           {
             kind: "tip",
-            text: "Nothing in the Test, Simulate or Simulator sends a real message or writes an EDR (the record of a sent message).",
+            text: "The Test, Simulate and the Simulator never send a message or write an EDR (the record of a sent message), unless you tick **Also send a real test SMS** on the Simulator.",
           },
         ],
       },
@@ -865,7 +865,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial the traffic figures come from the fake traffic generator. If the EDR store is not answering, the section says so instead of showing numbers.",
+            text: "If the EDR store is not answering, the section says so instead of showing numbers.",
           },
         ],
       },
@@ -1099,7 +1099,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial the Test and Simulate check the conditions, whitelists, warm-up, levels, backups and margin. They do not apply the TPS capacity skip, the volume cap, the HLR action, the Multipart condition or the margin inside a revenue condition.",
+            text: "The Test and Simulate check the conditions (Multipart too), whitelists, warm-up, levels, backups and margin. They do not apply the TPS capacity skip, the volume cap, the HLR action or the margin inside a revenue condition; the switch applies those to real traffic.",
           },
         ],
       },
@@ -1785,7 +1785,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: 'The Route Simulator follows one message from a customer trunk all the way to a vendor. NOC staff use it to answer "why did this message fail?" or "where will this go?", and to check a new route before a client starts sending. It can also send a simulated test SMS.',
+            text: 'The Route Simulator follows one message from a customer trunk all the way to a vendor. NOC staff use it to answer "why did this message fail?" or "where will this go?", and to check a new route before a client starts sending. It can also send a real test SMS.',
           },
         ],
       },
@@ -1878,7 +1878,7 @@ export const topics: HelpTopic[] = [
               "The **Test** section of a route rule and **Simulate** on Route rules list **Vendors skipped** the same way: a vendor whose own vendor translation rule blocks the test message is passed over (its Note says so) and the next vendor is chosen.",
               "**Vendor translation**: the egress rules on the chosen vendor trunk, run after routing — the sender, receiver and text the vendor would actually receive, and each rule's result. Routing and the customer rate use the message before this step. A vendor whose own rule blocks the message is skipped and the next vendor is tried; the skipped vendors are listed under **Vendors skipped**. A block on the customer trunk rejects the message before routing.",
               "With several receivers or destinations, each result is headed by the number (if any), then **country · network** and the MCCMNC.",
-              "**Test SMS**: a message ID and a receipt status (DELIVRD, UNDELIV, EXPIRED or REJECTD).",
+              "**Test SMS**: the message ID and its status: **ACCEPTD** when the switch took it, or **REJECTD** with the reason.",
               "The status bar counts how many of the messages would be routed.",
             ],
           },
@@ -1897,7 +1897,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial the test SMS is simulated: no real message is sent, no EDR is written, and the receipt status is random (mostly DELIVRD).",
+            text: "The test SMS goes through the switch as an internal message: the customer is not billed and gets no receipt, and a chosen vendor trunk is not failed over. Its delivery receipt shows in [[edr-search|EDR search]]. On the test system it is simulated: nothing is sent, no EDR is written, and the result shows a random receipt status (mostly DELIVRD).",
           },
           { kind: "text", text: "For the routing logic itself see [[routing-basics|How routing works]]." },
         ],
