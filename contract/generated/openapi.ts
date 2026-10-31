@@ -14338,7 +14338,7 @@ export type components = {
        */
       kind: "traffic" | "proforma";
       enterpriseIds: components["schemas"]["Id"][];
-      /** @description IANA zone; null = each enterprise's billing time zone. */
+      /** @description IANA zone; null = the time zone of each enterprise's customer billing (Billing tab), as auto invoicing uses; the enterprise's billing time zone when it has none. */
       timezone: string | null;
       /** Format: date */
       usageStart: string;
@@ -14441,7 +14441,7 @@ export type components = {
       periodFrom: string;
       /** Format: date */
       periodTo: string;
-      /** @description null = the partner's billing time zone. */
+      /** @description null = the time zone of the partner's vendor billing (Billing tab); the enterprise's billing time zone when it has none. */
       timezone: string | null;
       remarks: string | null;
       /** @description Per-destination lines from the invoice, when it has them. Omitted on update = kept. */

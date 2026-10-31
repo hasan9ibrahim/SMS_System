@@ -649,7 +649,9 @@ export function createInvoiceRequest(request: FastifyRequest, reply: FastifyRepl
   if (errors.length) return badInput(reply, errors);
   return withDb(reply, async (pool) => {
     const { rows: ents } = await pool.query(
-      `SELECT e.id, e.name, e.billing_timezone, cb.id AS billing_id FROM enterprises e
+      // The zone a run cuts usage days in when none is given: the customer billing's, as auto invoicing (§7, §13.31).
+      `SELECT e.id, e.name, COALESCE(cb.timezone, e.billing_timezone, 'UTC') AS billing_tz, cb.id AS billing_id
+         FROM enterprises e
          LEFT JOIN enterprise_billing cb ON cb.enterprise_id = e.id AND cb.side = 'customer'
         WHERE e.id = ANY($1) AND e.deleted_at IS NULL`,
       [ids],
@@ -677,7 +679,7 @@ export function createInvoiceRequest(request: FastifyRequest, reply: FastifyRepl
         [
           b.kind,
           id,
-          b.timezone ?? e.billing_timezone,
+          b.timezone ?? e.billing_tz,
           b.usageStart,
           b.usageEnd,
           b.dueDateType,
