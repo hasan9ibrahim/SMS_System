@@ -149,7 +149,12 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
   `edr_receipt` row per receipt from a vendor and per receipt to the customer (ClickHouse migration
   `003_edr_receipt.sql`), appended, never updated. Rows go through the bus (`sms.edr.*`) to a writer that inserts
   them in batches of up to 1,000 and retries until ClickHouse takes them; only a row ClickHouse cannot read is
-  dropped (logged), never a batch.
+  dropped (logged), never a batch. Each row is stored once even when the bus hands its batch out again (S-7.3,
+  ClickHouse `010_edr_row_key.sql`): it keeps its bus key as `row_key`, one query per batch leaves out the keys the
+  same days already hold, each insert carries an `insert_deduplication_token` from its rows' stream sequence numbers
+  (with `deduplicate_blocks_in_dependent_materialized_views`, so the totals' views drop it too), and the ack wait
+  (90 s) outlasts the lookup and insert timeouts. Copies left from before are removed nightly by the mock service's
+  repair job (`mock/src/jobs/edrRepair.ts`), which also puts the totals right.
 - **Billing** (`Pipeline.Billing`, §7): revenue, cost and the billable flags at the rates in force when the message
   was submitted, per trunk Billing Type. Attempt and submit are decided when the attempt ends (on the `edr` row);
   reported and delivery when its final status is known, on an `edr_receipt` **outcome** row (ClickHouse
