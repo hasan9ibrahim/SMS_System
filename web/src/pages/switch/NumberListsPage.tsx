@@ -55,6 +55,7 @@ export function NumberListDialog({
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add number list"}
       saveLabel={row ? "Save" : "Add list"}
       saving={save.isPending}

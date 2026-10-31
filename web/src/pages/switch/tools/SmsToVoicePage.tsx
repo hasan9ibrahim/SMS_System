@@ -39,6 +39,7 @@ function VoiceDialog({ row, done }: { row: SmsVoiceRuleRow | null; done: () => v
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit SMS to voice rule ${row.id}` : "Add SMS to voice rule"}
       saveLabel={row ? "Save" : "Add rule"}
       saving={save.isPending}

@@ -112,6 +112,7 @@ function UserDialog({ row, done }: { row: UserRow | null; done: () => void }) {
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.displayName}` : "Add user"}
       saveLabel={row ? "Save" : "Add user"}
       saving={save.isPending}

@@ -232,7 +232,10 @@ export function AddRatesDialog({ table, done }: { table: RateTableDetail; done: 
   const submit = (notice: NoticeChoice | null = null) => {
     const value = Number(rate);
     if (!picked.length) return setError("Choose at least one destination.");
-    if (!rate || !Number.isFinite(value) || value < 0) return setError(`Enter the ${noun}.`);
+    // What is wrong, said plainly (functional QA round 13: a negative rate was asked to be entered).
+    if (!rate.trim()) return setError(`Enter the ${noun}.`);
+    if (!Number.isFinite(value)) return setError(`The ${noun} must be a number, e.g. 0.0125.`);
+    if (value < 0) return setError(`The ${noun} cannot be negative.`);
     const items: RateLineEdit[] = picked.map((mccmnc) => ({
       action: "set",
       mccmnc,

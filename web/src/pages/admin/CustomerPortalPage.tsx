@@ -48,6 +48,7 @@ function PortalUserDialog({ row, done }: { row: PortalUserRow | null; done: () =
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.username}` : "Add portal user"}
       saveLabel={row ? "Save" : "Add portal user"}
       saving={save.isPending}
