@@ -109,8 +109,8 @@ function NotificationsMenu({ enterpriseId, trunks }: { enterpriseId: number; tru
   );
 }
 
+// The type is a category, so its tag stays neutral (§15.3: colour only carries meaning).
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
-const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
 
 export function EnterprisePage() {
   const raw = useParams().id;
@@ -222,7 +222,7 @@ export function EnterprisePage() {
         meta={
           e && (
             <>
-              <span className={`chip-tag ${TYPE_TONE[e.type]}`}>{TYPE_LABEL[e.type]}</span>
+              <span className="chip-tag">{TYPE_LABEL[e.type]}</span>
               <span className="chip-tag">{e.tier.replace("tier", "Tier ")}</span>
               <StatusPill active={e.status === "active"} />
               <span className="meta">

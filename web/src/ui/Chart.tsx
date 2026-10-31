@@ -1,4 +1,4 @@
-// ECharts wrapper (§14). Colours come from the §15.2 tokens, read from CSS variables, and
+// ECharts wrapper (§14). Colours come from the tokens (§15.2), read from CSS variables, and
 // the chart redraws when the theme switches, so charts follow light and dark themes.
 import { useEffect, useRef, useState } from "react";
 import * as echarts from "echarts/core";
@@ -18,6 +18,8 @@ export interface ChartColors {
   warning: string;
   error: string;
   panel: string;
+  /** Series colours that only tell things apart (--chart-1…4, §15.3), in a fixed order. */
+  series: string[];
 }
 
 function readColors(): ChartColors {
@@ -32,6 +34,7 @@ function readColors(): ChartColors {
     warning: v("--color-warning"),
     error: v("--color-error"),
     panel: v("--color-panel"),
+    series: [v("--chart-1"), v("--chart-2"), v("--chart-3"), v("--chart-4")],
   };
 }
 

@@ -12,6 +12,7 @@ const colors = {
   warning: "#c90",
   error: "#c33",
   panel: "#fff",
+  series: ["#36c", "#c48", "#73e", "#09a"],
 };
 const vendor = (name: string, moved: boolean): MarketMoveVendor => ({
   vendorTrunkId: 1,
@@ -41,9 +42,11 @@ describe("market move model (§13.14)", () => {
       "EUR",
       Date.parse("2026-11-01T00:00:00Z"),
     ) as {
-      series: { lineStyle: { type?: string }; data: number[][] }[];
+      series: { lineStyle: { type?: string }; data: number[][]; color: string }[];
     };
     assert.equal(o.series[0]!.lineStyle.type, undefined);
+    // §15.3: a vendor line is never painted in the good / warning / problem colours.
+    assert.equal(o.series[0]!.color, colors.series[0]);
     assert.equal(o.series[1]!.lineStyle.type, "dashed");
     assert.equal(o.series[0]!.data.length, 3, "extended past the last change");
   });

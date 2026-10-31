@@ -338,14 +338,6 @@
   text-align: right;
   font-weight: 700;
 }
-.la-grid td.la-warn {
-  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  color: #1d1d1d;
-}
-.la-grid td.la-bad {
-  background: var(--color-error);
-  color: #fff;
-}
 .la-total td {
   background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
   font-weight: 700;
@@ -574,14 +566,6 @@
 .la-grid td.la-good {
   color: var(--color-good);
 }
-.la-grid td.la-warn {
-  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  color: #1d1d1d;
-}
-.la-grid td.la-bad {
-  background: var(--color-error);
-  color: #1d1d1d;
-}
 .la-total td.num {
   font-weight: 700;
 }
@@ -608,14 +592,7 @@
   border-radius: 5px;
   text-align: right;
 }
-.la-warn .la-pill {
-  background: #ffa500;
-  color: #1d1d1d;
-}
-.la-bad .la-pill {
-  background: #f00;
-  color: #fff;
-}
+/* The amber and red chip colours live in calm.css (team request, §13.7). */
 /* Sortable headers (team trial round 1). */
 .la-grid th .la-sort {
   border: 0;

@@ -696,9 +696,7 @@ button.chip.accent {
   border-bottom: var(--border-width) solid var(--color-border);
   background: color-mix(in srgb, var(--color-accent) 5%, var(--color-panel));
 }
-.sl-head-vendor {
-  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-panel));
-}
+/* The vendor side differs by its icon and title, not by a warning tint (§15.3). */
 .sl-head-icon {
   display: grid;
   place-items: center;
@@ -707,10 +705,6 @@ button.chip.accent {
   border-radius: 8px;
   background: var(--accent-soft);
   color: var(--color-accent);
-}
-.sl-head-vendor .sl-head-icon {
-  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-  color: var(--color-warning);
 }
 .sl-head-title {
   display: flex;
