@@ -1,6 +1,6 @@
-// Every page of the app: the top menu (§15.1), sibling links in page headers, the Ctrl K
-// page search, tab titles and routes. Pages not built yet show a placeholder that names
-// their spec section and build step (CLAUDE.md "Build order").
+// Every page of the app: the top menu (§15.1), the Ctrl K page search, tab titles and routes.
+// `spec` and `step` keep the spec section and build step for traceability (CLAUDE.md "Build
+// order"); they are never shown to users.
 import type { IconName } from "../ui/Icon";
 
 export interface PageDef {
@@ -10,7 +10,7 @@ export interface PageDef {
   section: SectionKey;
   icon: IconName;
   spec: string;
-  /** Build-order step that delivers the screen; "3" = built in the app shell step. */
+  /** Build-order step that delivered the screen; "3" = built in the app shell step. Not shown. */
   step: string;
   /** One-line purpose, shown on placeholders and in Ctrl K. */
   summary: string;
