@@ -3,10 +3,12 @@ defmodule Sms.Switch.Pipeline.Queries do
   `query_sm` and `cancel_sm` from a customer (docs/SMPP_SCENARIOS.md S-2.15, decision D8). A customer only ever sees
   its own messages (the same business partner, any of its trunks); someone else's id answers as unknown.
 
-    * **cancel_sm**: only while the message is still queued with us (not yet taken by the sender): the sender then
-      drops it, with an EDR row and no receipt. Otherwise 0x11 (cancel failed). Cancelling by source and destination
-      without a message id is not supported (0x11).
-    * **query_sm**: from our records. Queued or waiting for its receipt (Redis) → ENROUTE; cancelled → DELETED;
+    * **cancel_sm**: a scheduled message still held for its time is taken out, with an EDR row and a DELETED receipt
+      if asked (S-2.12, `Sms.Switch.Pipeline.Scheduled`); otherwise only while the message is still queued with us (not
+      yet taken by the sender): the sender then drops it, with an EDR row and no receipt. Otherwise 0x11 (cancel
+      failed). Cancelling by source and destination without a message id is not supported (0x11).
+    * **query_sm**: from our records. Held for its scheduled time, queued or waiting for its receipt (Redis) → ENROUTE
+      (SMPP 3.4 has no scheduled state); cancelled → DELETED;
       otherwise from the EDRs: the customer's receipt (its status after the DLR maps, and when it was made) or, with
       none yet, ENROUTE / REJECTED by the attempt. Not found → 0x67 (query failed). A message finished in the last
       few seconds may not be in the EDRs yet (they are written in batches) and also answers 0x67.
@@ -17,7 +19,7 @@ defmodule Sms.Switch.Pipeline.Queries do
   import Bitwise
   require Logger
   alias Sms.Core.ClickHouse
-  alias Sms.Switch.Pipeline.{Config, MessageId, Store}
+  alias Sms.Switch.Pipeline.{Config, MessageId, Scheduled, Store}
 
   # How long a cancelled message is remembered for query_sm.
   @keep_s 86_400
@@ -44,7 +46,7 @@ defmodule Sms.Switch.Pipeline.Queries do
 
     with {:ok, ent} <- enterprise(context),
          true <- id != "" || :not_queued,
-         :ok <- Store.cancel_queued(ent, id, @keep_s) do
+         :ok <- cancel_held_or_queued(ent, id) do
       Logger.info("message #{id} cancelled while queued (S-2.15)")
       {:ok, %{}, []}
     else
@@ -57,6 +59,14 @@ defmodule Sms.Switch.Pipeline.Queries do
       {:error, reason} ->
         Logger.error("cancel_sm of #{id} not checked: #{inspect(reason)}")
         {:error, :esme_rsyserr}
+    end
+  end
+
+  # S-2.12: held for its time → taken out; else the queued cancel.
+  defp cancel_held_or_queued(ent, id) do
+    case Scheduled.cancel(ent, id) do
+      :not_held -> Store.cancel_queued(ent, id, @keep_s)
+      other -> other
     end
   end
 
@@ -97,7 +107,16 @@ defmodule Sms.Switch.Pipeline.Queries do
     case Store.queued(ent, id) do
       {:ok, :queued} -> {:ok, {"ENROUTE", nil, 0}}
       {:ok, :cancelled} -> {:ok, {"DELETED", nil, 0}}
-      {:ok, :none} -> pending_or_edr(ent, id, ms)
+      {:ok, :none} -> held_or_pending(ent, id, ms)
+      {:error, _} = error -> error
+    end
+  end
+
+  # S-2.12: held for its scheduled time.
+  defp held_or_pending(ent, id, ms) do
+    case Scheduled.held?(ent, id) do
+      {:ok, true} -> {:ok, {"ENROUTE", nil, 0}}
+      {:ok, false} -> pending_or_edr(ent, id, ms)
       {:error, _} = error -> error
     end
   end

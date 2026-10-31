@@ -2482,6 +2482,176 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "scheduled messages held in the switch (S-2.12, decided 2026-10-31)" do
+    # The resp (or another answer) and the receipt, in either order: the in-memory bus forwards a receipt the switch
+    # makes inside the request that made it.
+    defp answer_and_receipt(client, command) do
+      {client, pdus} =
+        Enum.reduce(1..2, {client, []}, fn _, {client, pdus} ->
+          assert {client, pdu} = Client.recv(client, 5_000)
+
+          if pdu.command == :deliver_sm,
+            do: Client.send_pdu(client, Pdu.response(pdu, :esme_rok, %{message_id: ""}))
+
+          {client, [pdu | pdus]}
+        end)
+
+      [resp] = Enum.filter(pdus, &(&1.command == command))
+      [dlr] = Enum.filter(pdus, &(&1.command == :deliver_sm))
+      {client, resp, dlr}
+    end
+
+    defp five_minutes, do: "000000000500000R"
+
+    test "+5 min: accepted at once, not sent before its time, sent after it without a schedule" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {_client, resp} =
+        submit(client, %{
+          short_message: "in five minutes",
+          schedule_delivery_time: five_minutes(),
+          validity_period: "000000001000000R"
+        })
+
+      assert resp.status == 0
+      id = resp.fields.message_id
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      # Four minutes on: still held.
+      :ok = Pipeline.Scheduled.release_due(before + 4 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert edr("edr.attempt") == []
+
+      :ok = Pipeline.Scheduled.release_due(before + 5 * 60_000 + 1_000)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      # Held by us, so it goes at once; the validity as an absolute time in UTC (S-2.13).
+      assert sent.fields.schedule_delivery_time == ""
+      {:ok, until} = Sms.Switch.Smpp.Time.parse(sent.fields.validity_period, 0)
+      assert_in_delta div(until, 1_000), div(before, 1_000) + 600, 3
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [row] = edr("edr.attempt")
+      assert %{"c_message_id" => ^id, "is_submit_success" => 1, "c_rate" => "0.05"} = row
+      # Released once.
+      :ok = Pipeline.Scheduled.release_due(before + 6 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "before its time: query_sm answers ENROUTE; cancel_sm takes it out with a DELETED receipt, nothing sent" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "cancel me later",
+          registered_delivery: 1,
+          schedule_delivery_time: five_minutes()
+        })
+
+      id = resp.fields.message_id
+      {client, q} = query(client, id)
+      assert {q.status, q.fields.message_state} == {0, 1}
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:cancel_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: 4)
+      )
+
+      {client, c, dlr} = answer_and_receipt(client, :cancel_sm_resp)
+      assert c.status == 0
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:DELETED"
+
+      {client, q} = query(client, id, 5)
+      assert q.fields.message_state == 4
+
+      :ok = Pipeline.Scheduled.release_due(before + 6 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+
+      assert [%{"c_msg_status" => "DELETED", "c_message_id" => ^id, "revenue" => "0"}] =
+               edr("edr.attempt")
+
+      # Cancelled already: OK again, as for a queued message (S-2.15), and no second receipt.
+      {client, c} = cancel(client, id, 6)
+      assert c.status == 0
+      assert {:error, :timeout} = Client.recv(client, 300)
+    end
+
+    test "a validity period that ends before its time: EXPIRED at its release, never sent (S-2.13)" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "too late",
+          registered_delivery: 1,
+          schedule_delivery_time: "000000000001000R",
+          validity_period: "000000000002000R"
+        })
+
+      assert resp.status == 0
+      Process.sleep(2_100)
+      :ok = Pipeline.Scheduled.release_due()
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:EXPIRED"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert [%{"c_msg_status" => "EXPIRED", "is_customer_billable" => 0}] = edr("edr.attempt")
+    end
+
+    test "checked at intake without a hold, rated and held at its release; refused then: REJECTD, not billed" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "scheduled",
+          registered_delivery: 1,
+          schedule_delivery_time: five_minutes()
+        })
+
+      assert resp.status == 0
+      id = resp.fields.message_id
+      # Checked, nothing held until it goes.
+      assert exposure("c11") == {0, 0}
+
+      {client, %{status: 0}} = submit(client, %{short_message: "sent now"}, 3)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+
+      # At its time the balance no longer covers it.
+      :ok = Pipeline.Scheduled.release_due(before + 5 * 60_000 + 1_000)
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:REJECTD"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      row = Enum.find(edr("edr.attempt"), &(&1["c_message_id"] == id))
+      assert %{"is_customer_billable" => 0, "command_status" => 0x45, "attempt_no" => 0} = row
+      assert exposure("c11") == {50_000, 0}
+    end
+
+    test "refused at intake when it could not go now; a schedule over 7 days ahead is refused 0x61" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.01"]])
+      %{client: client} = start_all()
+      now = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{short_message: "no credit", schedule_delivery_time: five_minutes()})
+
+      assert resp.status == 0x45
+
+      far = Sms.Switch.Smpp.Time.absolute(now + 8 * 86_400_000)
+
+      {_client, resp} =
+        submit(client, %{short_message: "too far", schedule_delivery_time: far}, 3)
+
+      assert resp.status == 0x61
+    end
+  end
+
   describe "accumulated revenue conditions (§13.9)" do
     test "the customer's revenue today above a value sends its traffic to the rule's vendor" do
       start_supervised!(Pipeline.Ledger.Charges)

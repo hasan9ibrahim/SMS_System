@@ -706,6 +706,133 @@ defmodule Sms.Switch.Pipeline.Store do
 
   defp hold_member(account, id), do: "#{account}|#{id}"
 
+  # ---------------------------------------------------------------- scheduled messages (S-2.12)
+
+  # Moves a member from one sorted set to another (or the same) when its score is due: one server takes each.
+  # KEYS: from, to; ARGV: member, now (Unix ms), the new score.
+  @move_due """
+  local at = redis.call('ZSCORE', KEYS[1], ARGV[1])
+  if at and tonumber(at) <= tonumber(ARGV[2]) then
+    redis.call('ZREM', KEYS[1], ARGV[1])
+    redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+    return 1
+  end
+  return 0
+  """
+
+  @doc false
+  # Holds a scheduled message until `at_ms` (`Sms.Switch.Pipeline.Scheduled`): `sch:<id>` its data, enterprise and
+  # customer message ids, `sp:<enterprise>:<customer id>` the way query_sm and cancel_sm find it, `sch` the sorted set
+  # by its time. Kept `ttl_s` at most.
+  @spec schedule(String.t(), integer(), [String.t()], binary(), integer(), pos_integer()) ::
+          :ok | {:error, term()}
+  def schedule(id, enterprise_id, ids, blob, at_ms, ttl_s) do
+    key = "sch:#{id}"
+
+    commands =
+      [
+        ["HSET", key, "m", blob, "e", Integer.to_string(enterprise_id), "i", Enum.join(ids, ",")],
+        ["EXPIRE", key, ttl_s]
+      ] ++
+        Enum.map(ids, &["SET", "sp:#{enterprise_id}:#{&1}", id, "EX", ttl_s]) ++
+        [["ZADD", "sch", at_ms, id]]
+
+    ok(transaction(commands))
+  end
+
+  @doc false
+  # Up to `limit` scheduled messages due by `now_ms` (`:waiting`), or being released with a lease that ran out by then
+  # (`:leased`: the server releasing them stopped).
+  @spec due_scheduled(:waiting | :leased, integer(), pos_integer()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def due_scheduled(set, now_ms, limit),
+    do: run(["ZRANGEBYSCORE", scheduled_set(set), "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc false
+  # Takes a due scheduled message to release it: true for the one server that gets it. It stays leased until
+  # `lease_until_ms` (`finish_scheduled/3` ends the lease), so a server stopping mid-release never loses it.
+  @spec claim_scheduled(:waiting | :leased, String.t(), integer(), integer()) :: boolean()
+  def claim_scheduled(set, id, now_ms, lease_until_ms) do
+    keys = [scheduled_set(set), "schl"]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @move_due, 2 | keys ++ [id, now_ms, lease_until_ms]]
+        :local -> ["ZMOVE" | keys ++ [id, now_ms, lease_until_ms]]
+      end
+
+    match?({:ok, 1}, run(command))
+  end
+
+  defp scheduled_set(:waiting), do: "sch"
+  defp scheduled_set(:leased), do: "schl"
+
+  @doc false
+  # A scheduled message's data, enterprise and customer message ids.
+  @spec scheduled(String.t()) ::
+          {:ok, %{blob: binary(), enterprise_id: integer(), ids: [String.t()]}}
+          | :none
+          | {:error, term()}
+  def scheduled(id) do
+    case run(["HGETALL", "sch:#{id}"]) do
+      {:ok, []} ->
+        :none
+
+      {:ok, flat} ->
+        f = flat |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, v} end)
+        {:ok, %{blob: f["m"], enterprise_id: int(f["e"]), ids: String.split(f["i"] || id, ",")}}
+
+      error ->
+        error
+    end
+  end
+
+  @doc false
+  # Forgets a scheduled message that was released (or is gone): its data, its query keys and its lease.
+  @spec finish_scheduled(String.t(), integer() | nil, [String.t()]) :: :ok | {:error, term()}
+  def finish_scheduled(id, enterprise_id, ids) do
+    commands =
+      [["DEL", "sch:#{id}"], ["ZREM", "schl", id]] ++
+        Enum.map(ids, &["DEL", "sp:#{enterprise_id}:#{&1}"])
+
+    ok(transaction(commands))
+  end
+
+  @doc false
+  # The scheduled message a customer message id of the enterprise belongs to, while it is held.
+  @spec scheduled_id(integer(), String.t()) :: {:ok, String.t() | nil} | {:error, term()}
+  def scheduled_id(enterprise_id, customer_id),
+    do: run(["GET", "sp:#{enterprise_id}:#{customer_id}"])
+
+  @doc false
+  # Takes a scheduled message out before its release (cancel_sm): its data, or `:none` when a server is releasing it
+  # already or it is gone.
+  @spec take_scheduled(String.t()) ::
+          {:ok, %{blob: binary(), enterprise_id: integer(), ids: [String.t()]}}
+          | :none
+          | {:error, term()}
+  def take_scheduled(id) do
+    case run(["ZREM", "sch", id]) do
+      {:ok, 1} ->
+        with {:ok, held} <- scheduled(id) do
+          _ = finish_scheduled(id, held.enterprise_id, held.ids)
+          {:ok, held}
+        end
+
+      {:ok, 0} ->
+        :none
+
+      error ->
+        error
+    end
+  end
+
+  @doc false
+  # Marks a message's ids cancelled for query_sm (DELETED), for `keep_s`.
+  @spec mark_cancelled(integer(), [String.t()], pos_integer()) :: :ok | {:error, term()}
+  def mark_cancelled(enterprise_id, ids, keep_s),
+    do: ok(transaction(Enum.map(ids, &["SET", "q:#{enterprise_id}:#{&1}", "x", "EX", keep_s])))
+
   defp int_or_zero(nil), do: 0
   defp int_or_zero(v), do: int(v)
 
@@ -946,6 +1073,19 @@ defmodule Sms.Switch.Pipeline.Store do
     else
       exec(["ZREM", expiries, member])
       unhold(holds, held_total, Map.get(get_hash(holds), id), id)
+    end
+  end
+
+  # `@move_due`.
+  defp exec(["ZMOVE", from, to, member, now, score]) do
+    case Map.get(lookup(from) || %{}, member) do
+      at when is_integer(at) and at <= now ->
+        exec(["ZREM", from, member])
+        exec(["ZADD", to, score, member])
+        1
+
+      _ ->
+        0
     end
   end
 

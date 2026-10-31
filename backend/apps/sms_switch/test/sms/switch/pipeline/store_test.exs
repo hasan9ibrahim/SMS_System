@@ -70,6 +70,55 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         for key <- ["cht", "chh", "chht"], do: Store.command(["DEL", "#{key}:#{account}"])
       end
 
+      test "scheduled messages: held by time, taken by one server, leased until released, or cancelled (S-2.12)",
+           %{
+             id: id,
+             vt: ent
+           } do
+        now = System.os_time(:millisecond)
+        [a, b, part] = ["#{id}a", "#{id}b", "#{id}p"]
+        assert :ok = Store.schedule(a, ent, [a, part], "blob-a", now + 1_000, 60)
+        assert :ok = Store.schedule(b, ent, [b], "blob-b", now + 5_000, 60)
+
+        assert {:ok, ^a} = Store.scheduled_id(ent, part)
+        assert {:ok, nil} = Store.scheduled_id(ent + 1, part)
+        assert {:ok, due} = Store.due_scheduled(:waiting, now + 1_000, 1_000)
+        assert a in due
+        refute b in due
+
+        # One server takes it; not before its time.
+        refute Store.claim_scheduled(:waiting, b, now + 1_000, now + 61_000)
+        assert Store.claim_scheduled(:waiting, a, now + 1_000, now + 61_000)
+        refute Store.claim_scheduled(:waiting, a, now + 1_000, now + 61_000)
+        # Being released: cancel_sm cannot take it any more.
+        assert :none = Store.take_scheduled(a)
+
+        assert {:ok, %{blob: "blob-a", enterprise_id: ^ent, ids: [^a, ^part]}} =
+                 Store.scheduled(a)
+
+        # The releasing server stopped: once its lease runs out another takes it.
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 61_000, 1_000)
+        assert a in leased
+        refute Store.claim_scheduled(:leased, a, now + 30_000, now + 90_000)
+        assert Store.claim_scheduled(:leased, a, now + 61_000, now + 121_000)
+
+        assert :ok = Store.finish_scheduled(a, ent, [a, part])
+        assert :none = Store.scheduled(a)
+        assert {:ok, nil} = Store.scheduled_id(ent, part)
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 200_000, 1_000)
+        refute a in leased
+
+        # Cancelled before its time: out of the list, its keys gone, DELETED for query_sm.
+        assert {:ok, %{blob: "blob-b", ids: [^b]}} = Store.take_scheduled(b)
+        assert :none = Store.take_scheduled(b)
+        assert {:ok, nil} = Store.scheduled_id(ent, b)
+        assert {:ok, due} = Store.due_scheduled(:waiting, now + 10_000, 1_000)
+        refute b in due
+        assert :ok = Store.mark_cancelled(ent, [b], 60)
+        assert {:ok, :cancelled} = Store.queued(ent, b)
+        Store.command(["DEL", "q:#{ent}:#{b}"])
+      end
+
       test "queued marks: cancel while queued, the sender's take, query (S-2.15, D8)", %{
         id: id,
         vt: ent

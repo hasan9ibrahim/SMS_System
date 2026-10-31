@@ -49,6 +49,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     Queries,
     Reassembly,
     Router,
+    Scheduled,
     Store
   }
 
@@ -204,10 +205,59 @@ defmodule Sms.Switch.Pipeline.Intake do
   def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
          msg = hlr(msg),
-         {:ok, msg} <- rate(msg),
-         {:ok, msg} <- route_now(msg),
-         :ok <- credit(msg) do
-      stored_or_unreserved(msg)
+         {:ok, msg} <- rate(msg) do
+      if scheduled?(msg), do: schedule(msg), else: send_now(msg)
+    end
+  end
+
+  defp send_now(msg) do
+    with {:ok, msg} <- route_now(msg),
+         :ok <- credit(msg),
+         do: stored_or_unreserved(msg)
+  end
+
+  # S-2.12 (decided 2026-10-31): a message scheduled ahead is checked as if it went now (a route, the credit without a
+  # hold, its TPS not counted) and held until its time (`Sms.Switch.Pipeline.Scheduled`); rated, routed and its credit
+  # held again when it goes (`release/1`). A Test SMS or Repush always goes at once.
+  defp scheduled?(msg), do: Map.get(msg, :scheduled, false) and not is_map(msg[:internal])
+
+  defp schedule(msg) do
+    with {:ok, _route} <- route_check(msg),
+         :ok <- credit_check(msg),
+         do: Scheduled.hold(msg)
+  end
+
+  defp route_check(msg) do
+    case Router.route(router_input(msg)) do
+      {:ok, routed} -> {:ok, routed}
+      {:error, reason, _decision} -> {:reject, :esme_rsubmitfail, reason, msg}
+    end
+  end
+
+  defp credit_check(msg) do
+    case Credit.impl().check(msg) do
+      :ok -> :ok
+      {:error, status} -> {:reject, status, :credit, msg}
+    end
+  end
+
+  @doc false
+  # S-2.12: a scheduled message at its time, as the sender takes it: rated, routed (its TPS counted) and its credit held
+  # now, on the customer trunk as it is now (prices and routes valid when it goes). The ingress translation and HLR
+  # answer stay those of its intake.
+  @spec release(map()) :: {:ok, map()} | {:reject, atom(), term(), map()}
+  def release(msg) do
+    case Config.ready?() && Config.customer_trunk(msg.trunk.id) do
+      %{} = trunk ->
+        msg = msg |> Map.put(:trunk, trunk) |> Map.put(:rated_at, System.os_time(:millisecond))
+
+        with {:ok, msg} <- rate(msg),
+             {:ok, msg} <- route_now(msg),
+             :ok <- credit(msg),
+             do: {:ok, Map.put(msg, :credit_held, true)}
+
+      _ ->
+        {:reject, :esme_rsubmitfail, :unknown_trunk, msg}
     end
   end
 
@@ -493,17 +543,21 @@ defmodule Sms.Switch.Pipeline.Intake do
   end
 
   # S-2.12, S-2.13: the scheduled time and the end of the validity period as moments (`Sms.Switch.Smpp.Time`); a field
-  # that does not read is refused (0x61, 0x62), as is a validity period that ends before the message could go.
+  # that does not read is refused (0x61, 0x62), as is a schedule more than `:max_schedule_s` ahead (0x61, 7 days) and a
+  # validity period that ends before the message could go. A time still ahead holds the message (`scheduled`).
   defp times(msg) do
     f = msg.fields
 
     with {:sched, {:ok, scheduled}} <-
            {:sched, SmppTime.parse(f[:schedule_delivery_time], msg.received_at)},
+         {:sched, true} <-
+           {:sched, scheduled == nil or scheduled - msg.received_at <= Scheduled.max_ahead_ms()},
          {:expiry, {:ok, expires}} <-
            {:expiry, SmppTime.parse(f[:validity_period], msg.received_at)},
          {:expiry, true} <-
            {:expiry, expires == nil or expires > max(scheduled || 0, msg.received_at)} do
-      {:ok, Map.merge(msg, %{scheduled_at: scheduled, expires_at: expires})}
+      held = is_integer(scheduled) and scheduled > msg.received_at
+      {:ok, Map.merge(msg, %{scheduled_at: scheduled, expires_at: expires, scheduled: held})}
     else
       {:sched, _} -> {:reject, :esme_rinvsched, :invalid_schedule_delivery_time, msg}
       {:expiry, _} -> {:reject, :esme_rinvexpiry, :invalid_validity_period, msg}
@@ -615,13 +669,16 @@ defmodule Sms.Switch.Pipeline.Intake do
         msg = %{msg | destination: dest}
 
         # A blocked customer line refuses the message like no rate (blocked means blocked, decided 2026-10-30).
-        case Config.sell_price(msg.trunk.id, dest.mccmnc, msg.received_at, rate_sender(msg)) do
+        case Config.sell_price(msg.trunk.id, dest.mccmnc, rated_at(msg), rate_sender(msg)) do
           nil -> {:reject, :esme_rinvdstadr, :no_customer_rate, msg}
           :blocked -> {:reject, :esme_rinvdstadr, :customer_rate_blocked, msg}
           sell -> {:ok, %{msg | sell: sell}}
         end
     end
   end
+
+  # The rates in force when the message was received (S-6.1), or when a scheduled one is released (S-2.12).
+  defp rated_at(msg), do: Map.get(msg, :rated_at, msg.received_at)
 
   # Test SMS or Repush to a chosen vendor trunk (backend step 11c): that vendor, whatever the route rules say.
   defp route_now(%{internal: %{vendor_trunk_id: vt}} = msg) when is_integer(vt) do

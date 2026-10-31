@@ -3,8 +3,9 @@ defmodule Sms.Switch.Test.Cluster do
   Helpers for tests with a second BEAM node (`:peer`), standing in for the second server: the session registry runs
   on both, and fake sessions register on either.
   """
-  alias Sms.Core.Bus
+  alias Sms.Core.{Bus, Redis}
   alias Sms.Switch.Customer.{Sessions, Trunk}
+  alias Sms.Switch.Pipeline.Store
   alias Sms.Switch.Test.VendorCase
   alias Sms.Switch.Vendor
 
@@ -50,6 +51,32 @@ defmodule Sms.Switch.Test.Cluster do
     {:ok, pid} = Supervisor.start_link(children, strategy: :one_for_one)
     Process.unlink(pid)
     pid
+  end
+
+  @doc """
+  Starts the message store on Redis and the event bus in memory on this node, with the first node's configuration of
+  both (`redis`, `bus`), not linked to the caller: a second server sharing the first one's Redis (S-2.12).
+  """
+  def start_store(redis, bus) do
+    Application.put_env(:sms_core, Redis, redis)
+    Application.put_env(:sms_core, Bus, Keyword.put(bus, :adapter, Bus.Local))
+    Application.put_env(:sms_switch, Store, backend: :redis)
+
+    {:ok, pid} =
+      Supervisor.start_link([Redis, Store, Bus],
+        strategy: :one_for_one
+      )
+
+    Process.unlink(pid)
+    await_redis(50)
+  end
+
+  defp await_redis(tries) do
+    case Redis.command(["PING"]) do
+      {:ok, "PONG"} -> :ok
+      _ when tries > 0 -> Process.sleep(50) && await_redis(tries - 1)
+      error -> error
+    end
   end
 
   @doc "A process that registers as a session of `trunk` and stays until told to stop; returns `{pid, result}`."
