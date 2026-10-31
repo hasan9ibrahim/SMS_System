@@ -658,7 +658,7 @@
   font-variant-numeric: tabular-nums;
 }
 .mc-page .good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .mc-page .bad {
   color: var(--color-error);
@@ -742,7 +742,7 @@
 }
 .send-summary.good {
   background: color-mix(in srgb, var(--color-good) 10%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .send-summary.partial {
   background: color-mix(in srgb, var(--color-warning) 10%, var(--color-panel));

@@ -95,7 +95,7 @@
   text-align: left;
 }
 .mnav-page.current {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   background: var(--accent-soft);
 }
 

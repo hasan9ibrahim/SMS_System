@@ -117,7 +117,7 @@
 .gf-select.in-use {
   border-color: var(--color-accent);
   background: var(--accent-softer);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 .gf-input.invalid {
   border-color: var(--color-error);

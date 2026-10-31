@@ -129,6 +129,10 @@
   cursor: pointer;
   gap: 6px;
 }
+/* The rank on the chip's grey fill, a shade darker than secondary text (design QA round 13). */
+.dash-topdest .chip .muted {
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
+}
 
 /* ---------- 2. movers ---------- */
 .dash-mover-groups {
@@ -223,7 +227,7 @@
   font-variant-numeric: tabular-nums;
 }
 .dash-mover .chg.up {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .dash-mover .chg.down {
   color: var(--color-error);
@@ -485,7 +489,7 @@ button.dash-cols:hover {
   left: -1000px;
   padding: 6px 12px;
   border-radius: var(--radius-md);
-  background: var(--color-accent);
+  background: var(--color-accent-fill);
   color: #fff;
   font: 600 13px var(--font-family);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);

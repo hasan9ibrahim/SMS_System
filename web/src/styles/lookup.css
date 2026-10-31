@@ -373,7 +373,7 @@ button.chip {
   padding-right: 10px;
 }
 button.chip.accent {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 /* Rates open Rate Manager: plain text that underlines on hover, so colour keeps its meaning. */
 :where(.lk-link) {
@@ -718,7 +718,7 @@ button.chip.accent {
   height: 28px;
   border-radius: 8px;
   background: var(--accent-soft);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 .sl-head-vendor .sl-head-icon {
   background: color-mix(in srgb, var(--color-warning) 18%, transparent);

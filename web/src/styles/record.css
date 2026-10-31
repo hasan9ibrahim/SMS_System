@@ -408,7 +408,7 @@
   color: var(--color-warning);
 }
 .tone-good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .record-meta {
   margin-top: -4px;
@@ -566,7 +566,7 @@
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   text-decoration: none;
   font-size: 12.5px;
 }
@@ -716,7 +716,7 @@
 }
 .chip-tag.green {
   background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .chip-tag .dot-mini {
   width: 6px;
@@ -889,7 +889,7 @@
 .status-card.on {
   border-color: color-mix(in srgb, var(--color-good) 45%, var(--color-border));
   background: color-mix(in srgb, var(--color-good) 9%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 80%, var(--color-text));
   font-weight: 600;
 }
 .toggle-card {
@@ -944,7 +944,7 @@
   border-color: color-mix(in srgb, var(--color-good) 30%, var(--color-border));
 }
 .notice-tile.down .notice-tile-label {
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .notice-tile.new {
   background: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
@@ -1040,7 +1040,7 @@
 }
 .role-technical .role-tag {
   background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .role-rates .role-tag {
   background: color-mix(in srgb, var(--color-warning) 14%, var(--color-panel));
@@ -1139,7 +1139,7 @@
 }
 .bill-card.balance.credit .bill-card-value,
 .bill-card.balance.credit .bill-card-label {
-  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 80%, var(--color-text));
 }
 .bill-card.balance.owed {
   border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
