@@ -703,6 +703,19 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
   // so the selection actions never act on hidden rows.
   const filterKey = JSON.stringify([state.columns, state.pills, state.switches, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
+  // Rows that went away between two answers of the same list (deleted, or archived out of view) leave the selection
+  // too: "0 rows · 1 selected" after a Delete (functional QA round 13, §13.29). A new sort keeps the selection.
+  const settled = useRef<{ ids: Set<number>; sort: string } | null>(null);
+  useEffect(() => {
+    if (meta.fetching) return;
+    const ids = new Set(rows.map((r) => r.id));
+    const sort = JSON.stringify(state.sort);
+    const before = settled.current?.sort === sort ? settled.current.ids : null;
+    settled.current = { ids, sort };
+    if (!before || !selected.size) return;
+    const gone = [...selected].filter((id) => before.has(id) && !ids.has(id));
+    if (gone.length) setSelected(new Set([...selected].filter((id) => !gone.includes(id))));
+  }, [rows, meta.fetching]); // eslint-disable-line react-hooks/exhaustive-deps
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
   const builderCount = countConditions(state.builder);
   // Clear all: the page's own filters and switches, the columns and sort as they are.
