@@ -8,6 +8,7 @@ const ENTERPRISES: NameSource = { table: "enterprises e", name: "e.name", id: "e
 const CUSTOMER_TRUNKS: NameSource = { table: "customer_trunks t", name: "t.name", id: "t.id" };
 const VENDOR_TRUNKS: NameSource = { table: "vendor_trunks t", name: "t.name", id: "t.id" };
 const HLR_PROVIDERS: NameSource = { table: "hlr_providers p", name: "p.name", id: "p.id" };
+const VOICE_GATEWAYS: NameSource = { table: "voice_gateways g", name: "g.name", id: "g.id" };
 const CATEGORIES: NameSource = { table: "product_categories c", name: "c.name", id: "c.id" };
 // Destinations by MCCMNC code (team trial round 7): the code is all digits, so it serves as the ID.
 const DESTINATIONS: NameSource = {
@@ -159,7 +160,14 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorExRate: { sql: "toFloat64(v_ex_rate)" },
   vendorTranslationRuleIds: { sql: "v_translation_rule_ids", where: has("v_translation_rule_ids") },
   routeRuleId: { sql: "route_rule_id" },
+  routeType: { sql: "toString(route_type)" },
   routeDecidedBy: { sql: "route_decided_by" },
+  // SMS to voice (§8, ClickHouse 011): the call of an attempt with route type voice.
+  voiceGatewayId: { sql: "voice_gateway_id" },
+  voiceGateway: named(VOICE_GATEWAYS, "voice_gateway_id"),
+  voiceAnswered: { sql: "voice_answered" },
+  voiceHangupCause: { sql: "voice_hangup_cause" },
+  voiceDurationMs: { sql: "voice_duration_ms" },
   dlrReroute: { sql: "dlr_reroute" },
   repushRequestId: { sql: "repush_request_id" },
   attemptNo: { sql: "attempt_no" },
@@ -253,7 +261,8 @@ export const FAILED_COLUMNS: Record<string, ChColumn> = Object.fromEntries(
 export const failedEdrList: ChListDef<FailedEdrRow> = {
   fields: failedFields,
   table: "edr",
-  baseWhere: "v_trunk_id = 0 AND is_submit_success = 0",
+  // An SMS-to-voice call has no vendor trunk either (§8): it was taken, not rejected.
+  baseWhere: "v_trunk_id = 0 AND is_submit_success = 0 AND route_type != 'voice'",
   columns: FAILED_COLUMNS,
   search: ["senderId", "dnid", "customerMsgId", "customerIp"],
   searchNumbers: ["senderId", "dnid"],

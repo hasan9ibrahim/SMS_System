@@ -56,6 +56,7 @@ import { EmailLogsPage } from "./switch/tools/EmailLogsPage";
 import { FirewallPage } from "./switch/tools/FirewallPage";
 import { NotificationsPage } from "./switch/tools/NotificationsPage";
 import { SmsToVoicePage } from "./switch/tools/SmsToVoicePage";
+import { VoiceGatewaysPage } from "./switch/tools/VoiceGatewaysPage";
 import { TrafficAlertsPage } from "./switch/tools/TrafficAlertsPage";
 import { EdrDownloadPage } from "./monitoring/EdrDownloadPage";
 import { EdrSearchPage } from "./monitoring/EdrSearchPage";
@@ -120,6 +121,7 @@ const BUILT = new Set([
   "/switch/firewall",
   "/switch/traffic-alerts",
   "/switch/sms-to-voice",
+  "/switch/voice-gateways",
   "/switch/broadcast",
   "/monitoring/edr",
   "/monitoring/edr-download",
@@ -218,6 +220,7 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/switch/firewall" element={<FirewallPage />} />
       <Route path="/switch/traffic-alerts" element={<TrafficAlertsPage />} />
       <Route path="/switch/sms-to-voice" element={<SmsToVoicePage />} />
+      <Route path="/switch/voice-gateways" element={<VoiceGatewaysPage />} />
       <Route path="/switch/broadcast" element={<BroadcastPage />} />
       <Route path="/monitoring/edr" element={<EdrSearchPage />} />
       <Route path="/monitoring/edr-download" element={<EdrDownloadPage />} />

@@ -6,7 +6,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { Change, CurrentUser, ListQuery, UndoRequest } from "@sms/contract";
 import { withDb } from "../db.js";
-import { changeSelect, listDefs, mapChange } from "../lists/defs.js";
+import { changeSelect, listDefs, mapChange, publicDiffValue } from "../lists/defs.js";
 import { listFields } from "../lists/fields.js";
 import { runList, type ListDef } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
@@ -22,6 +22,8 @@ import { applyRateTableEntries } from "./rates.js";
 import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
 import { applyHlrField } from "./hlr.js";
+import { applySmsVoiceRecording } from "./switchTools.js";
+import { applyVoiceGatewayField } from "./voiceGateways.js";
 import { applyCurrencyRate, applyTransactionEntries } from "./finance.js";
 import { MIGRATION_TABLES, sameId, setAmFromNow } from "../migration/importer.js";
 
@@ -262,6 +264,7 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
   edr_template: { table: "edr_templates", columns: { name: "name", columns: "columns" } },
+  // SMS to voice (§8): the recording is written through applySmsVoiceRecording (its bytes travel in the diff).
   sms_voice_rule: {
     table: "sms_voice_rules",
     columns: {
@@ -270,9 +273,12 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       prefix: "prefix",
       repeat: "repeat_count",
       mccmnc: "mccmnc",
+      gatewayId: "gateway_id",
       status: "status",
     },
   },
+  // Voice gateways write their fields through applyVoiceGatewayField (the password is never put back).
+  voice_gateway: { table: "voice_gateways", columns: {} },
   recon_rule: {
     table: "recon_rules",
     columns: {
@@ -456,6 +462,14 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
       await applyTranslationRuleField(c, e.entity_id, e.field, e.before, userId);
       continue;
     }
+    if (entityType === "voice_gateway") {
+      await applyVoiceGatewayField(c, e.entity_id, e.field, e.before, userId);
+      continue;
+    }
+    if (entityType === "sms_voice_rule" && e.field === "recording") {
+      await applySmsVoiceRecording(c, e.entity_id, e.before, userId);
+      continue;
+    }
     if (entityType === "customer_trunk" || entityType === "vendor_trunk") {
       await applyTrunkField(
         c,
@@ -559,8 +573,9 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
           conflicts.push({
             entityId: d.entity_id,
             field: d.field,
-            mine: d.after,
-            current: hit.after,
+            // A recording's bytes stay on the server (SMS to voice, §8): the name is shown.
+            mine: publicDiffValue(target.entity_type, d.field, d.after),
+            current: publicDiffValue(target.entity_type, d.field, hit.after),
             changedBy: l.user_name,
             changedAt: l.inserted_at.toISOString(),
           });

@@ -505,10 +505,20 @@ import {
   sendRateNotifications,
   sendTechInfoNotifications,
   testSmsVoiceRules,
+  previewSmsVoiceRecording,
+  downloadSmsVoiceRecording,
   updateFirewallFilter,
   updateSmsVoiceRule,
   updateTrafficAlert,
 } from "./api/switchTools.js";
+import {
+  archiveVoiceGateway,
+  createVoiceGateway,
+  getVoiceGateway,
+  getVoiceGatewayDependencies,
+  restoreVoiceGateway,
+  updateVoiceGateway,
+} from "./api/voiceGateways.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
@@ -1043,6 +1053,16 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveSmsVoiceRule,
   restoreSmsVoiceRule,
   testSmsVoiceRules,
+  previewSmsVoiceRecording,
+  downloadSmsVoiceRecording,
+  // Voice gateways (§8 SMS To Voice, decided 2026-10-31)
+  queryVoiceGateways: queryList("voice_gateways"),
+  createVoiceGateway,
+  getVoiceGateway,
+  updateVoiceGateway,
+  getVoiceGatewayDependencies,
+  archiveVoiceGateway,
+  restoreVoiceGateway,
   previewBroadcast,
   sendBroadcast,
   queryBroadcasts: queryList("broadcasts"),

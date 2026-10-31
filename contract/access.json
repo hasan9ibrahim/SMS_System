@@ -545,7 +545,8 @@
     "vendor-trunks": "vendor-trunks",
     "visibility-assignments": "visibility",
     "visibility-grants": "visibility",
-    "visibility-policies": "visibility"
+    "visibility-policies": "visibility",
+    "voice-gateways": "sms-to-voice"
   },
   "operations": {
     "handOverEnterprise": {

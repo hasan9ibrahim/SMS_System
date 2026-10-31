@@ -878,6 +878,61 @@ textarea.mono {
 .voice-test {
   padding: 4px 0;
 }
+/* SMS to voice (§8): the test box's answer and a rule's recording with its player. */
+.voice-test-box {
+  display: grid;
+  gap: 6px;
+}
+.voice-result {
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-panel);
+  padding: 8px 12px;
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+}
+.voice-result-head {
+  margin: 0;
+}
+.voice-result-call {
+  display: grid;
+  grid-template-columns: max-content minmax(14em, max-content) max-content minmax(0, 1fr);
+  gap: 2px 16px;
+  margin: 6px 0 0;
+}
+.voice-result-call dt {
+  color: var(--color-text-secondary);
+}
+.voice-result-call dd {
+  margin: 0;
+  text-align: left;
+}
+.voice-result-call .voice-result-wide {
+  grid-column: 2 / -1;
+}
+@media (max-width: 760px) {
+  .voice-result-call {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+  .voice-result-call .voice-result-wide {
+    grid-column: 2;
+  }
+}
+.voice-recording {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.voice-recording audio {
+  height: 32px;
+  max-width: 100%;
+}
+.voice-recording-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .voice-test input {
   width: 160px;
 }

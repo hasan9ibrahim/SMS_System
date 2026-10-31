@@ -9,7 +9,7 @@ import { createPortal } from "react-dom";
 import { create } from "zustand";
 import type { SearchHit } from "@sms/contract";
 import { useRecordSearch } from "../api/hooks";
-import { PAGES, SECTIONS, HOME, type PageDef } from "../nav/registry";
+import { PAGES, SECTIONS, HOME, accessOf, type PageDef } from "../nav/registry";
 import { rolePages } from "../nav/roleOrder";
 import { Icon, type IconName } from "../ui/Icon";
 import { useOpener } from "./useOpener";
@@ -75,7 +75,7 @@ function matchPages(
   favourites: readonly string[],
 ): Item[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = [HOME, ...PAGES].filter((pg) => can(permissions, pg.key)); // §11: only pages the user may open
+  const all = [HOME, ...PAGES].filter((pg) => can(permissions, accessOf(pg))); // §11: only pages the user may open
   const important = rolePages(role);
   // Favourites first, then the role's pages in their order, then the rest.
   const rank = (key: string) => {

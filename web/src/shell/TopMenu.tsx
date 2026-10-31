@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { create } from "zustand";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import type { Theme } from "@sms/contract";
-import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
+import { SECTIONS, accessOf, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Menu, Popover } from "../ui/primitives";
@@ -57,7 +57,7 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
   };
   const ref = useRef<HTMLButtonElement>(null);
   const canView = useCanView();
-  const pages = pagesOf(section).filter((pg) => canView(pg.key)); // §11: pages the access group allows
+  const pages = pagesOf(section).filter((pg) => canView(accessOf(pg))); // §11: pages the access group allows
   const label = SECTIONS.find((s) => s.key === section)!.label;
   if (pages.length === 0) return null;
   if (pages.length === 1) {
@@ -316,7 +316,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {SECTIONS.map((sec) => {
-          const pages = pagesOf(sec.key).filter((pg) => canView(pg.key));
+          const pages = pagesOf(sec.key).filter((pg) => canView(accessOf(pg)));
           if (!pages.length) return null;
           const expanded = section === sec.key || pages.length === 1;
           return (

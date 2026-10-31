@@ -17,6 +17,7 @@ const ENTITY_TABLE: Record<string, { table: string; name: string }> = {
   translation_rule: { table: "translation_rules", name: "name" },
   hlr_rule: { table: "hlr_rules", name: "name" },
   hlr_provider: { table: "hlr_providers", name: "name" },
+  voice_gateway: { table: "voice_gateways", name: "name" },
   number_list: { table: "number_lists", name: "name" },
   product_category: { table: "product_categories", name: "name" },
   department: { table: "departments", name: "name" },
@@ -56,6 +57,7 @@ const REF_TABLE: Record<string, string> = {
   managerId: "user",
   departmentId: "department",
   routeRuleId: "route_rule",
+  gatewayId: "voice_gateway",
 };
 
 const LABELS: Record<string, string> = {
@@ -77,6 +79,11 @@ const LABELS: Record<string, string> = {
   // Periods (account managers, §13.30): "Jana Okafor from 2026-10-08: until — → 2026-10-30 16:49 UTC".
   startsAt: "From",
   endsAt: "Until",
+  // Voice gateways (§8 SMS To Voice).
+  callerIdMode: "Caller ID mode",
+  fixedCallerId: "Fixed caller ID",
+  ringTimeoutS: "Ring timeout (s)",
+  retryDelayS: "Retry delay (s)",
 };
 
 const partLabel = (part: string): string =>
