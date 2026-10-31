@@ -56,6 +56,7 @@ export function RnReportPage() {
   return (
     <ListScreen<RnReportRow>
       list="rn_reports"
+      listExport
       page={page}
       noSelection
       historyScope={null}

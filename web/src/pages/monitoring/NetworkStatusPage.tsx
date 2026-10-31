@@ -153,6 +153,7 @@ export function NetworkStatusPage() {
     <ListScreen<Row>
       key={side}
       list="network_binds"
+      listExport={{ query: withSide }}
       page={page}
       title={`Network Status · ${vendor ? "Vendor" : "Customer"}`}
       queryScope={side}

@@ -6,14 +6,14 @@ export const ACTIONS: AccessCatalog["actions"] = [
   { key: "view", label: "View", description: "Open the page and read its records" },
   { key: "add", label: "Add", description: "Create records" },
   { key: "edit", label: "Edit", description: "Change records" },
-  { key: "delete", label: "Delete", description: "Archive records (§13.29)" },
+  { key: "delete", label: "Delete", description: "Archive records" },
   { key: "export", label: "Export", description: "Download lists and files" },
   { key: "import", label: "Import", description: "Upload files that change records" },
   { key: "send", label: "Send", description: "E-mail partners (rates, invoices, statements)" },
   { key: "approve", label: "Approve", description: "Approve or reject requests (maker-checker)" },
   { key: "start_stop", label: "Start / stop", description: "Start or stop binds and jobs" },
   { key: "change_password", label: "Change passwords", description: "Set other users' temporary passwords" },
-  { key: "export_credentials", label: "Export credentials", description: "Sensitive exports, 2FA required (§13.22)" },
+  { key: "export_credentials", label: "Export credentials", description: "Sensitive exports, 2FA required" },
 ];
 
 export const SECTIONS: AccessCatalog["sections"] = [

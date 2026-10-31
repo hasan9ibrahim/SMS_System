@@ -50,6 +50,7 @@ export function BillingReportPage() {
   return (
     <ListScreen<BillingReportRow>
       list="billing_report"
+      listExport={{ params }}
       page={page}
       title="Billing report"
       noSelection

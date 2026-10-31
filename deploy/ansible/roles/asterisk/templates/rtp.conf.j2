@@ -1,0 +1,5 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). The calls' audio, on a fixed range the firewall opens to
+; voice_switch_cidrs only (two ports a call: RTP and RTCP).
+[general]
+rtpstart = {{ voice_rtp_start }}
+rtpend = {{ voice_rtp_end }}

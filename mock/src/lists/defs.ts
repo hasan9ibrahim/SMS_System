@@ -22,6 +22,7 @@ import { teamTimelineList } from "../api/team.js";
 import { cleanupFindingList } from "../api/cleanup.js";
 import { rnReportList } from "../api/rnReports.js";
 import { money, PLATFORM_CURRENCY, toPlatformSql } from "../currency.js";
+import { storedDurationMs } from "../audio/wav.js";
 import type {
   PcapTraceRow,
   Change,
@@ -44,6 +45,7 @@ import type {
   FirewallFilterRow,
   TrafficAlertRow,
   SmsVoiceRuleRow,
+  VoiceGatewayRow,
   BroadcastRow,
   EdrTemplateRow,
   EdrDownloadRow,
@@ -79,7 +81,7 @@ import type {
 import type { ListQuery } from "@sms/contract";
 import { listFields } from "./fields.js";
 import { PRESETS } from "../reports/presets.js";
-import type { ListDef } from "./engine.js";
+import type { ColumnSql, ListDef } from "./engine.js";
 import { isNameValue, mccmncByNameSql } from "./mccmncNames.js";
 import { byEnterprise, enterpriseLabel, hide, lit, maskName, vis, visCol } from "../visibility/sql.js";
 import { RECORDING_DAYS } from "../recording.js";
@@ -108,6 +110,41 @@ const entTrunkNames = (table: string, name: string, alias: string) =>
   `ARRAY(SELECT ${name} FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL
     ORDER BY ${alias}.name LIMIT 100)`;
 
+/**
+ * Filters on an enterprise's trunks column match its live trunks by name, as the viewer sees them (QA 2026-10-31,
+ * §5): the column shows names, so "ALDEX" finds the enterprises with a trunk whose name starts with ALDEX.
+ */
+function entTrunkWhere(table: string, alias: string, label: string): NonNullable<ColumnSql["where"]> {
+  const name = vis(trunkMask(alias, label));
+  const live = `FROM ${table} ${alias} WHERE ${alias}.enterprise_id = e.id AND ${alias}.deleted_at IS NULL`;
+  const some = (cond: string) => `EXISTS (SELECT 1 ${live} AND ${cond})`;
+  return (op, c, p) => {
+    const lower = (vs: unknown[]) => `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
+    switch (op) {
+      case "like":
+        return some(`(${name}) ILIKE ${p(String(c.value))}`);
+      case "not_like":
+        return `NOT ${some(`(${name}) ILIKE ${p(String(c.value))}`)}`;
+      case "eq":
+        return some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`);
+      case "neq":
+        return `NOT ${some(`lower(${name}) = ${p(String(c.value).toLowerCase())}`)}`;
+      case "in":
+        return some(`lower(${name}) = ANY(${lower(c.values ?? [])})`);
+      case "not_in":
+        return `NOT ${some(`lower(${name}) = ANY(${lower(c.values ?? [])})`)}`;
+      case "empty":
+        return `NOT EXISTS (SELECT 1 ${live})`;
+      case "not_empty":
+        return `EXISTS (SELECT 1 ${live})`;
+      case "regex":
+        return some(`(${name}) ~* ${p(String(c.value))}`);
+      default:
+        return "TRUE";
+    }
+  };
+}
+
 export const enterpriseList: ListDef<Enterprise> = {
   fields: listFields.enterprises,
   from: `enterprises e
@@ -130,8 +167,17 @@ export const enterpriseList: ListDef<Enterprise> = {
     accountManager: { sql: fullName("am") },
     accountManagerId: { sql: "e.account_manager_id" },
     country: { sql: "co.iso" },
-    customerTrunkCount: { sql: entTrunkCount("customer_trunks") },
-    vendorTrunkCount: { sql: entTrunkCount("vendor_trunks") },
+    // Filtered by trunk name, sorted by how many (QA 2026-10-31).
+    customerTrunkCount: {
+      sql: entTrunkCount("customer_trunks"),
+      sort: entTrunkCount("customer_trunks"),
+      where: entTrunkWhere("customer_trunks", "t", "Customer trunk"),
+    },
+    vendorTrunkCount: {
+      sql: entTrunkCount("vendor_trunks"),
+      sort: entTrunkCount("vendor_trunks"),
+      where: entTrunkWhere("vendor_trunks", "vt", "Vendor trunk"),
+    },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "e.updated_at" },
     archived: { sql: "(e.deleted_at IS NOT NULL)" },
@@ -473,12 +519,13 @@ export const rateLineList: ListDef<RateLineRow> = {
     mccmnc: { sql: "l.mccmnc" },
     senderId: { sql: "l.sender_id" },
     rate: visCol(rateHide("l.rate")),
-    routedCost: visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))),
+    // Filters compare what the row shows (round: decimals, QA 2026-10-31).
+    routedCost: { ...visCol(hide("cost", bestBuySql, byEnterprise("bv.enterprise_id"))), round: 6 },
     routedVendor: visCol(trunkMask("bv", "Vendor trunk")),
-    margin: visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })),
-    marginPct: visCol(hide("margin", marginPctSql, ownedTable)),
+    margin: { ...visCol(hide("margin", marginSql, ownedTable, { pct: marginPctSql })), round: 6 },
+    marginPct: { ...visCol(hide("margin", marginPctSql, ownedTable)), round: 1 },
     changeType: { sql: changeTypeSql },
-    changePct: { sql: changePctSql },
+    changePct: { sql: changePctSql, round: 1 },
     validFrom: { sql: "l.valid_from" },
     validTo: { sql: "l.valid_to" },
     nextRate: visCol(rateHide("nxt.rate")),
@@ -486,7 +533,7 @@ export const rateLineList: ListDef<RateLineRow> = {
     isBlocked: { sql: "l.is_blocked" },
     negativeMargin: { sql: `(COALESCE(l.rate < ${bestBuySql}, false))` },
     dialCode: { sql: "l.dial_code" },
-    sysRate: visCol(rateHide(toPlatformSql("l.rate"))),
+    sysRate: { ...visCol(rateHide(toPlatformSql("l.rate"))), round: 6 },
     rateNote: { sql: "l.rate_note" },
     updatedBy: { sql: "ub.username" },
     updatedAt: { sql: "l.updated_at" },
@@ -1026,6 +1073,22 @@ const dlrTargetSql = `CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r
     SELECT min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) FROM unnest(r.mccmncs) AS c(code)
       LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)) END) END`;
 
+/**
+ * The same target for every rule in one pass (QA 2026-10-31, §13.8): filtering or sorting on the per-row subquery
+ * above ran it for every rule, 2–6 s at the seeded volume. Joined only when the list filters or sorts on the target;
+ * the page's rows keep the subquery.
+ */
+const DESTINATION_TARGETS = `LEFT JOIN (
+    SELECT x.id, min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) AS pct
+      FROM route_rules x CROSS JOIN LATERAL unnest(x.mccmncs) AS c(code)
+      LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)
+     WHERE x.mccmnc_mode = 'inclusive' AND x.dlr_target_pct IS NULL AND x.route_type <> 'block'
+     GROUP BY x.id) dt ON dt.id = r.id`;
+const dlrTargetJoinedSql = "CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r.dlr_target_pct, dt.pct) END";
+const usesDlrTarget = (query: ListQuery) =>
+  /"field":"dlr(Target|BelowTarget)"/.test(JSON.stringify(query.filter ?? {})) ||
+  (query.sort ?? []).some((s) => s.field === "dlrTarget" || s.field === "dlrBelowTarget");
+
 const ruleTrunkName = vis(trunkMask("t", "Customer trunk"));
 const ruleVendorName = vis(trunkMask("vt", "Vendor trunk"));
 /** A rule is own when it names only own clients' trunks. */
@@ -1089,7 +1152,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
   // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
   from: (query) => `route_rules r
     LEFT JOIN route_rule_traffic tr ON tr.route_rule_id = r.id AND tr.time_window = '${trafficWindow(query)}'
-    LEFT JOIN users ub ON ub.id = r.updated_by_id`,
+    LEFT JOIN users ub ON ub.id = r.updated_by_id${usesDlrTarget(query) ? `\n    ${DESTINATION_TARGETS}` : ""}`,
   baseWhere: "r.deleted_at IS NULL",
   archivedField: "archived",
   columns: {
@@ -1165,8 +1228,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
-    dlrTarget: { sql: dlrTargetSql },
-    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetSql})` },
+    dlrTarget: { sql: dlrTargetJoinedSql },
+    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetJoinedSql})` },
     margin: visCol(hide("margin", "tr.margin", ownedRule)),
     status: { sql: "r.status" },
     window: { sql: "NULL", where: () => "TRUE" },
@@ -1281,14 +1344,29 @@ export const changeSelect = `c.id, c.entity_type, c.entity_ids, c.change_type, c
   ${fullName("u")} AS user_name, host(c.ip) AS ip, c.inserted_at,
   (SELECT max(x.id) FROM changes x WHERE x.undo_of_id = c.id) AS undone_by_id`;
 
+/**
+ * A diff value as the history shows it. An SMS-to-voice rule's recording keeps its WAV in the diff so undo can put it
+ * back (§8, §13.10); outside the server it is only its file name, or "Default phrase".
+ */
+export function publicDiffValue(entityType: string, field: string, v: unknown): unknown {
+  if (entityType !== "sms_voice_rule" || field !== "recording") return v;
+  return v && typeof v === "object" ? String((v as { name?: unknown }).name ?? "recording") : "Default phrase";
+}
+
 export function mapChange(r: Record<string, unknown>): Change {
   const diff = (r.diff as { entity_id: number; field: string; before: unknown; after: unknown }[]) ?? [];
+  const type = r.entity_type as string;
   return {
     id: r.id as number,
-    entityType: r.entity_type as string,
+    entityType: type,
     entityIds: (r.entity_ids as number[]).map(Number),
     changeType: r.change_type as Change["changeType"],
-    diff: diff.map((d) => ({ entityId: d.entity_id, field: d.field, before: d.before, after: d.after })),
+    diff: diff.map((d) => ({
+      entityId: d.entity_id,
+      field: d.field,
+      before: publicDiffValue(type, d.field, d.before),
+      after: publicDiffValue(type, d.field, d.after),
+    })),
     note: (r.note as string | null) ?? null,
     userId: r.user_id as number,
     userName: r.user_name as string,
@@ -1320,6 +1398,13 @@ export const changeList: ListDef<Change> = {
     userId: { sql: "c.user_id" },
     undoOfId: { sql: "c.undo_of_id" },
     ip: { sql: "host(c.ip)" },
+    // Entry changes of one number list (QA 2026-10-31, §6.4): entries are archived, never deleted, so every change
+    // still finds its list.
+    numberListId: {
+      sql: "NULL",
+      where: (_op, c, p) => `(c.entity_type = 'number_list_entry' AND c.entity_ids && ARRAY(
+        SELECT ne.id FROM number_list_entries ne WHERE ne.number_list_id = ${p(Number(c.value))}::bigint))`,
+    },
   },
   search: ["note", "userName", "entityType"],
   idSql: "c.id",
@@ -2271,8 +2356,12 @@ export function mapTrafficAlert(r: Record<string, unknown>): TrafficAlertRow {
 /** SMS To Voice (§8). */
 const voiceDestSql = `(SELECT co.name || COALESCE(' · ' || m.network, '') FROM mccmnc m LEFT JOIN countries co ON co.id = m.country_id
     WHERE m.mccmnc = sv.mccmnc AND m.deleted_at IS NULL LIMIT 1)`;
-export const SMS_VOICE_FROM = "sms_voice_rules sv LEFT JOIN users u ON u.id = sv.updated_by_id";
-export const SMS_VOICE_SELECT = `sv.*, ${voiceDestSql} AS destination, u.username AS updated_by`;
+export const SMS_VOICE_FROM = `sms_voice_rules sv LEFT JOIN users u ON u.id = sv.updated_by_id
+    LEFT JOIN voice_gateways vg ON vg.id = sv.gateway_id`;
+// Every column but the recording's bytes (up to 1 MB a rule): only its name, hash and size (migration 106).
+export const SMS_VOICE_SELECT = `sv.id, sv.sender_id, sv.receiver_id, sv.prefix, sv.repeat_count, sv.mccmnc, sv.status,
+    sv.gateway_id, vg.name AS gateway, sv.prompt_wav_name, sv.prompt_wav_sha256, octet_length(sv.prompt_wav) AS prompt_wav_bytes,
+    sv.updated_at, sv.deleted_at, ${voiceDestSql} AS destination, u.username AS updated_by`;
 export const smsVoiceRuleList: ListDef<SmsVoiceRuleRow> = {
   fields: listFields.sms_voice_rules,
   from: SMS_VOICE_FROM,
@@ -2285,6 +2374,10 @@ export const smsVoiceRuleList: ListDef<SmsVoiceRuleRow> = {
     prefix: { sql: "sv.prefix" },
     repeat: { sql: "sv.repeat_count" },
     destination: { sql: voiceDestSql },
+    gateway: { sql: "vg.name" },
+    gatewayId: { sql: "sv.gateway_id" },
+    // "Default" while the rule has no recording of its own, as the list shows it.
+    recording: { sql: "COALESCE(sv.prompt_wav_name, 'Default')" },
     status: { sql: "sv.status" },
     updatedBy: { sql: "u.username" },
     updatedAt: { sql: "sv.updated_at" },
@@ -2297,6 +2390,7 @@ export const smsVoiceRuleList: ListDef<SmsVoiceRuleRow> = {
 };
 
 export function mapSmsVoiceRule(r: Record<string, unknown>): SmsVoiceRuleRow {
+  const bytes = Number(r.prompt_wav_bytes ?? 0);
   return {
     id: Number(r.id),
     senderId: (r.sender_id as string | null) ?? null,
@@ -2304,8 +2398,88 @@ export function mapSmsVoiceRule(r: Record<string, unknown>): SmsVoiceRuleRow {
     prefix: (r.prefix as string | null) ?? null,
     repeat: Number(r.repeat_count),
     mccmnc: (r.mccmnc as string | null) ?? null,
+    gatewayId: r.gateway_id == null ? null : Number(r.gateway_id),
     status: r.status as SmsVoiceRuleRow["status"],
     destination: (r.destination as string | null) ?? null,
+    gateway: (r.gateway as string | null) ?? null,
+    recording:
+      r.prompt_wav_name != null && bytes
+        ? {
+            name: String(r.prompt_wav_name),
+            sha256: String(r.prompt_wav_sha256 ?? ""),
+            bytes,
+            durationMs: storedDurationMs(bytes),
+          }
+        : null,
+    updatedBy: (r.updated_by as string | null) ?? null,
+    updatedAt: iso(r.updated_at)!,
+    archivedAt: iso(r.deleted_at),
+  };
+}
+
+/** Voice gateways (§8 SMS To Voice, decided 2026-10-31). */
+const gatewayRulesSql =
+  "(SELECT count(*)::int FROM sms_voice_rules x WHERE x.gateway_id = vg.id AND x.deleted_at IS NULL)";
+export const VOICE_GATEWAY_FROM = "voice_gateways vg LEFT JOIN users u ON u.id = vg.updated_by_id";
+// Never the password itself (§13.22): only whether one is stored.
+export const VOICE_GATEWAY_SELECT = `vg.id, vg.name, vg.host, vg.port, vg.transport, vg.username, vg.from_domain,
+    vg.caller_id_mode, vg.fixed_caller_id, vg.dial_prefix, vg.codecs, vg.max_calls, vg.ring_timeout_s, vg.retry_delay_s,
+    vg.priority, vg.status, (vg.password_enc IS NOT NULL) AS password_set, ${gatewayRulesSql} AS rules,
+    vg.updated_at, vg.deleted_at, u.username AS updated_by`;
+export const voiceGatewayList: ListDef<VoiceGatewayRow> = {
+  fields: listFields.voice_gateways,
+  from: VOICE_GATEWAY_FROM,
+  baseWhere: "vg.deleted_at IS NULL",
+  archivedField: "archived",
+  columns: {
+    id: { sql: "vg.id" },
+    name: { sql: "vg.name" },
+    host: { sql: "vg.host" },
+    port: { sql: "vg.port" },
+    transport: { sql: "vg.transport" },
+    username: { sql: "vg.username" },
+    fromDomain: { sql: "vg.from_domain" },
+    callerIdMode: { sql: "vg.caller_id_mode" },
+    fixedCallerId: { sql: "vg.fixed_caller_id" },
+    dialPrefix: { sql: "vg.dial_prefix" },
+    codecs: { sql: "array_to_string(vg.codecs, ', ')" },
+    maxCalls: { sql: "vg.max_calls" },
+    ringTimeoutS: { sql: "vg.ring_timeout_s" },
+    retryDelayS: { sql: "vg.retry_delay_s" },
+    priority: { sql: "vg.priority" },
+    status: { sql: "vg.status" },
+    rules: { sql: gatewayRulesSql },
+    updatedBy: { sql: "u.username" },
+    updatedAt: { sql: "vg.updated_at" },
+    archived: { sql: "(vg.deleted_at IS NOT NULL)" },
+  },
+  search: ["name", "host", "fixedCallerId"],
+  searchPrefix: true,
+  idSql: "vg.id",
+  select: VOICE_GATEWAY_SELECT,
+  mapRow: (r) => mapVoiceGateway(r),
+};
+
+export function mapVoiceGateway(r: Record<string, unknown>): VoiceGatewayRow {
+  return {
+    id: Number(r.id),
+    name: r.name as string,
+    host: r.host as string,
+    port: Number(r.port),
+    transport: r.transport as VoiceGatewayRow["transport"],
+    username: (r.username as string | null) ?? null,
+    fromDomain: (r.from_domain as string | null) ?? null,
+    callerIdMode: r.caller_id_mode as VoiceGatewayRow["callerIdMode"],
+    fixedCallerId: (r.fixed_caller_id as string | null) ?? null,
+    dialPrefix: (r.dial_prefix as string | null) ?? "",
+    codecs: ((r.codecs as string[] | null) ?? []) as VoiceGatewayRow["codecs"],
+    maxCalls: Number(r.max_calls),
+    ringTimeoutS: Number(r.ring_timeout_s),
+    retryDelayS: Number(r.retry_delay_s),
+    priority: Number(r.priority),
+    status: r.status as VoiceGatewayRow["status"],
+    passwordSet: Boolean(r.password_set),
+    rules: Number(r.rules ?? 0),
     updatedBy: (r.updated_by as string | null) ?? null,
     updatedAt: iso(r.updated_at)!,
     archivedAt: iso(r.deleted_at),
@@ -2977,7 +3151,11 @@ export const BALANCE_FROM = `enterprises e
         (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'customer') AS customer,
         (SELECT balance FROM balance_ledger WHERE enterprise_id = e.id AND side = 'vendor') AS vendor) bal ON true
     LEFT JOIN currency_latest ccl ON ccl.iso = cb.currency
-    LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency`;
+    LEFT JOIN currency_latest vcl ON vcl.iso = vb.currency
+    -- Credit held for messages in flight, written by the switch (migration 103, §7, decided 2026-10-31).
+    LEFT JOIN credit_reservations cr ON cr.enterprise_id = e.id`;
+/** Reserved for messages in flight: customer billing only, 0 when the switch has written nothing. */
+const reservedSql = "CASE WHEN cb.id IS NOT NULL THEN round(COALESCE(cr.reserved, 0), 4) END";
 const netSql = `round(COALESCE(bal.customer, 0)
     - COALESCE(bal.vendor * COALESCE(ccl.rate_per_eur, vcl.rate_per_eur) / vcl.rate_per_eur, 0), 4)`;
 /** Credit used: what the client owes us (a negative balance) as a share of the limit, never below 0. */
@@ -2992,6 +3170,7 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
     enterprise: visCol(enterpriseMask("e")),
     enterpriseType: { sql: "e.type" },
     customerBalance: visCol(hide("balances", "round(bal.customer, 4)", byEnterprise("e.id"))),
+    customerReserved: visCol(hide("balances", reservedSql, byEnterprise("e.id"))),
     customerCurrency: { sql: "cb.currency" },
     vendorBalance: visCol(hide("balances", "round(bal.vendor, 4)", byEnterprise("e.id"))),
     vendorCurrency: { sql: "vb.currency" },
@@ -3005,8 +3184,8 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
   },
   search: ["enterprise", "accountManager"],
   idSql: "e.id",
-  select: `e.id, e.name, e.type, round(bal.customer, 4) AS customer_balance, cb.currency AS customer_currency,
-    round(bal.vendor, 4) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
+  select: `e.id, e.name, e.type, round(bal.customer, 4) AS customer_balance, ${reservedSql} AS customer_reserved,
+    cb.currency AS customer_currency, round(bal.vendor, 4) AS vendor_balance, vb.currency AS vendor_currency, ${netSql} AS net_balance,
     ${fullName("am")} AS account_manager, cb.billing_type, cb.credit_limit, ${creditUsedSql} AS credit_used_pct,
     bcy.name AS billing_cycle, COALESCE(cb.currency, vb.currency) AS currency`,
   mapRow: (r) => ({
@@ -3014,6 +3193,7 @@ export const enterpriseBalanceList: ListDef<EnterpriseBalanceRow> = {
     enterprise: r.name as string,
     enterpriseType: r.type as string,
     customerBalance: r.customer_balance === null ? null : Number(r.customer_balance),
+    customerReserved: r.customer_reserved == null ? null : Number(r.customer_reserved),
     customerCurrency: r.customer_currency === null ? null : String(r.customer_currency).trim(),
     vendorBalance: r.vendor_balance === null ? null : Number(r.vendor_balance),
     vendorCurrency: r.vendor_currency === null ? null : String(r.vendor_currency).trim(),
@@ -3222,6 +3402,7 @@ export const listDefs: Record<PgListId, ListDef<unknown>> = {
   firewall_filters: firewallFilterList as ListDef<unknown>,
   traffic_alerts: trafficAlertList as ListDef<unknown>,
   sms_voice_rules: smsVoiceRuleList as ListDef<unknown>,
+  voice_gateways: voiceGatewayList as ListDef<unknown>,
   broadcasts: broadcastList as ListDef<unknown>,
   edr_templates: edrTemplateList as ListDef<unknown>,
   edr_downloads: edrDownloadList as ListDef<unknown>,

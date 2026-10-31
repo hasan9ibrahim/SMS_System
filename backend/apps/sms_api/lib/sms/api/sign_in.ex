@@ -9,6 +9,8 @@ defmodule Sms.Api.SignIn do
       verification Off); such a user is signed in at once.
     * The code is checked against a challenge: an opaque token (only its hash is stored) that works for 10 minutes
       and 5 tries; a wrong code uses one try. An e-mailed code can be sent again once a minute.
+    * Every code works once (§13.28): the challenge is used once, and an authenticator code whose 30-second step is
+      not later than the user's last accepted one is refused ("This code was already used"), also inside its window.
 
   E-mailed codes are written to the e-mail log, as the mock does. In production (`SMS_MODE=production`, backend step 11)
   they are written as queued and the TypeScript service's e-mail job sends them over SMTP (mock/src/jobs/mailer.ts).
@@ -21,6 +23,7 @@ defmodule Sms.Api.SignIn do
   @code_minutes 10
   @code_tries 5
   @resend_gap_s 60
+  @code_used "This code was already used. Wait for the next one."
 
   @type result ::
           {:signed_in, pos_integer()}
@@ -165,7 +168,11 @@ defmodule Sms.Api.SignIn do
      )}
   end
 
-  @doc "Checks the code of a challenge; signs in or refuses (a wrong code uses one try)."
+  @doc """
+  Checks the code of a challenge; signs in or refuses (a wrong code uses one try). A code works once (§13.28): an
+  authenticator code whose step was already accepted for the user is refused without using a try, and a challenge
+  (with its e-mailed code) is marked used in one conditional UPDATE, so a parallel double-submit signs in once.
+  """
   @spec code(String.t(), String.t()) :: {:signed_in, pos_integer()} | {:error, Problem.t()}
   def code(challenge, code) do
     case open_challenge(challenge) do
@@ -173,29 +180,40 @@ defmodule Sms.Api.SignIn do
         {:error, expired()}
 
       c ->
-        if code_ok?(c, code) do
-          _ = Repo.query!("UPDATE sign_in_challenges SET used_at = now() WHERE id = $1", [c.id])
-          {:signed_in, c.user_id}
-        else
-          _ = Repo.query!("UPDATE sign_in_challenges SET tries = tries + 1 WHERE id = $1", [c.id])
-
-          # Wrong codes count toward the user's lockout like wrong passwords (security audit, team trial round 12):
-          # signing in again with the password no longer buys fresh tries without end.
-          _ = failed_code(c.user_id)
-          left = @code_tries - c.tries - 1
-
-          {:error,
-           if(left > 0,
-             do:
-               Problem.new(401, "The code does not match",
-                 detail: "#{left} tries left.",
-                 code: "wrong_code"
-               ),
-             else:
-               Problem.new(401, "Too many wrong codes. Sign in again.", code: "challenge_expired")
-           )}
+        case check_code(c, code) do
+          :ok -> use_challenge(c)
+          :used -> {:error, Problem.new(401, @code_used, code: "code_used")}
+          :wrong -> {:error, wrong_code(c)}
         end
     end
+  end
+
+  # Of two requests for one challenge only the first gets the row.
+  defp use_challenge(c) do
+    case Repo.query!(
+           "UPDATE sign_in_challenges SET used_at = now() WHERE id = $1 AND used_at IS NULL RETURNING id",
+           [c.id]
+         ) do
+      %{rows: [_]} -> {:signed_in, c.user_id}
+      %{rows: []} -> {:error, expired()}
+    end
+  end
+
+  defp wrong_code(c) do
+    _ = Repo.query!("UPDATE sign_in_challenges SET tries = tries + 1 WHERE id = $1", [c.id])
+
+    # Wrong codes count toward the user's lockout like wrong passwords (security audit, team trial round 12):
+    # signing in again with the password no longer buys fresh tries without end.
+    _ = failed_code(c.user_id)
+    left = @code_tries - c.tries - 1
+
+    if left > 0,
+      do:
+        Problem.new(401, "The code does not match",
+          detail: "#{left} tries left.",
+          code: "wrong_code"
+        ),
+      else: Problem.new(401, "Too many wrong codes. Sign in again.", code: "challenge_expired")
   end
 
   defp failed_code(user_id) do
@@ -203,13 +221,33 @@ defmodule Sms.Api.SignIn do
     failed_password(user_id, failed)
   end
 
-  defp code_ok?(%{method: "authenticator", totp_secret: secret}, code),
-    do: Totp.valid?(Secret.reveal(secret), code)
+  defp check_code(%{method: "authenticator", totp_secret: secret, user_id: user_id}, code) do
+    case Totp.step(Secret.reveal(secret), code) do
+      {:ok, step} -> if use_step?(user_id, step), do: :ok, else: :used
+      :error -> :wrong
+    end
+  end
 
-  defp code_ok?(%{method: "email", id: id, code_hash: want}, code) when is_binary(want),
-    do: :crypto.hash_equals(code_hash(id, code), want)
+  defp check_code(%{method: "email", id: id, code_hash: want}, code) when is_binary(want),
+    do: if(:crypto.hash_equals(code_hash(id, code), want), do: :ok, else: :wrong)
 
-  defp code_ok?(_challenge, _code), do: false
+  defp check_code(_challenge, _code), do: :wrong
+
+  # The user's last accepted authenticator step moves forward in one conditional UPDATE (users.totp_last_step,
+  # migration 102, as the TypeScript service does): false when this step or a later one was accepted already, by an
+  # earlier sign-in or a parallel request with the same code.
+  defp use_step?(user_id, step) do
+    %{num_rows: rows} =
+      Repo.query!(
+        """
+        UPDATE users SET totp_last_step = $2
+         WHERE id = $1 AND (totp_last_step IS NULL OR totp_last_step < $2)
+        """,
+        [user_id, step]
+      )
+
+    rows == 1
+  end
 
   @doc "E-mails a new code for a challenge (e-mailed codes only, once a minute)."
   @spec resend(String.t()) :: {:code_required, map()} | {:error, Problem.t()}

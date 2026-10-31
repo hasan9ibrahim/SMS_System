@@ -1,0 +1,30 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). SMS to voice (docs/SMS_TO_VOICE.md): SIP to the operator's
+; voice switch. The firewall accepts SIP and RTP from voice_switch_cidrs only.
+[global]
+type = global
+; No version in SIP headers.
+user_agent = Asterisk
+
+[transport-udp]
+type = transport
+protocol = udp
+bind = {{ asterisk_sip_bind }}:{{ ports.sip }}
+
+[transport-tcp]
+type = transport
+protocol = tcp
+bind = {{ asterisk_sip_bind }}:{{ ports.sip }}
+{% if asterisk_tls_certfile | length > 0 %}
+
+; The server's certificate (asterisk_tls_certfile; a copy Asterisk can read).
+[transport-tls]
+type = transport
+protocol = tls
+bind = {{ asterisk_sip_bind }}:{{ ports.sip_tls }}
+cert_file = /etc/asterisk/keys/sms-voice.crt
+priv_key_file = /etc/asterisk/keys/sms-voice.key
+{% endif %}
+
+; The voice gateways (endpoint, aor and auth smsvoice-gw<id> for each active one): written by the switch from the
+; Voice gateways page, which then reloads res_pjsip. Never edit it here.
+#include {{ asterisk_pjsip_include }}

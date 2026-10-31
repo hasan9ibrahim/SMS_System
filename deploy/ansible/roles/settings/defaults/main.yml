@@ -1,5 +1,8 @@
-# Settings shared by every environment (backend step 8). The inventory's group_vars hold what differs (addresses,
-# storage, alert targets) and the secrets.
+# Settings shared by every environment (backend step 8, §14), as role defaults: the lowest precedence Ansible has, so
+# anything an inventory sets (its group_vars/all, a group's or a host's vars) wins over these. Every play in site.yml and
+# deploy.yml lists this role first. (They used to sit in group_vars/all.yml next to the playbooks, which Ansible ranks
+# above an inventory's group_vars/all: an inventory's smpp_cidrs or pcap_local_days was silently ignored.) The
+# inventory's group_vars hold what differs (addresses, storage, alert targets) and the secrets.
 
 # --- the machines
 # Either the full cluster (two servers and the witness VM) or one server alone (inventories/single.example): the same
@@ -63,6 +66,9 @@ ports:
   prometheus: 9090
   alertmanager: 9093
   grafana: 3000
+  sip: 5060             # Asterisk, SMS to voice (UDP and TCP; only from voice_switch_cidrs)
+  sip_tls: 5061
+  asterisk_ami: 5038    # Asterisk's manager interface, on 127.0.0.1 only
 
 # --- application
 pg_database: sms_config
@@ -100,3 +106,24 @@ web_cidrs: [0.0.0.0/0]
 # Platform e-mail: sign-in and password codes, alerts, reminders. The address the team's mail system accepts mail from;
 # the server and its login are vault_smtp_url (smtp://user:password@host:587 or smtps://...:465).
 smtp_from_name: Xpert
+
+# SMS to voice (docs/SMS_TO_VOICE.md, roles/asterisk, README.md "SMS to voice (Asterisk)"): a message matching an
+# SMS-to-voice rule becomes a call from a local Asterisk on each server to the operator's own voice switch over SIP.
+# Off by default: no Asterisk, no SIP port open, no Asterisk settings for the switch (it sends such messages as SMS).
+# It is turned on in the inventory (group_vars/all/main.yml):
+#   sms_voice_enabled: true
+#   voice_switch_cidrs: [...]   the voice switch's addresses; SIP and the calls' audio are accepted from these only
+#   asterisk_rtp_start, asterisk_rtp_end   the calls' audio (RTP) ports, 10000-10999 by default: two per call (RTP
+#                                          and RTCP), so 500 calls at once per server
+# and vault_asterisk_ami_secret in the secrets; then run site.yml.
+voice_enabled: "{{ sms_voice_enabled | default(false) | bool }}"
+voice_cidrs: "{{ voice_switch_cidrs | default([]) }}"
+voice_rtp_start: "{{ asterisk_rtp_start | default(10000) | int }}"
+voice_rtp_end: "{{ asterisk_rtp_end | default(10999) | int }}"
+# The switch's login to Asterisk's manager interface (AMI, 127.0.0.1:ports.asterisk_ami); its secret is
+# vault_asterisk_ami_secret.
+asterisk_ami_user: sms_switch
+# Ubuntu's sound folder (astdatadir/sounds). The default phrase and the rules' own recordings are in en/custom.
+asterisk_sounds_dir: /usr/share/asterisk/sounds
+# The voice gateways' SIP endpoints, written by the switch (included from pjsip.conf).
+asterisk_pjsip_include: /etc/asterisk/pjsip_sms_voice.conf

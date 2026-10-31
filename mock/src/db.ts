@@ -61,6 +61,17 @@ function isUnavailable(err: unknown): boolean {
 }
 
 /** Runs a handler body; a missing or unseeded database becomes the contract's 503. */
+/**
+ * PostgreSQL data exceptions a request's own values cause (QA 2026-10-31): a value that is not a number, a date or a
+ * regular expression PostgreSQL takes, out of range, a NUL character, a LIKE pattern ending in its escape. A 400, not
+ * a 500; the checks before the query catch most of them with a better message.
+ */
+const INPUT_ERRORS = new Set(["22P02", "22003", "22007", "22008", "22021", "22025", "2201B"]);
+export const isInputError = (err: unknown): boolean =>
+  err instanceof Error && INPUT_ERRORS.has(String((err as { code?: unknown }).code));
+export const inputProblem = (reply: FastifyReply, err: unknown) =>
+  sendProblem(reply, 400, "A value in the request is not valid here", { detail: (err as Error).message });
+
 export async function withDb<T>(reply: FastifyReply, fn: (pool: pg.Pool) => Promise<T>): Promise<T | FastifyReply> {
   try {
     return await fn(db());
@@ -70,6 +81,7 @@ export async function withDb<T>(reply: FastifyReply, fn: (pool: pg.Pool) => Prom
         detail: "Start and seed the local databases: npm run db:up && npm run seed:small",
       });
     }
+    if (isInputError(err)) return inputProblem(reply, err);
     throw err;
   }
 }

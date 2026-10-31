@@ -505,14 +505,26 @@ import {
   sendRateNotifications,
   sendTechInfoNotifications,
   testSmsVoiceRules,
+  previewSmsVoiceRecording,
+  downloadSmsVoiceRecording,
   updateFirewallFilter,
   updateSmsVoiceRule,
   updateTrafficAlert,
 } from "./api/switchTools.js";
+import {
+  archiveVoiceGateway,
+  createVoiceGateway,
+  getVoiceGateway,
+  getVoiceGatewayDependencies,
+  restoreVoiceGateway,
+  updateVoiceGateway,
+} from "./api/voiceGateways.js";
 import { exportEnterpriseReport, queryEnterpriseReport } from "./api/enterpriseReport.js";
 import { search } from "./api/search.js";
 import { createView, deleteView, listViews, updateView } from "./api/views.js";
 import { queryChanges, undoChange } from "./api/changes.js";
+import { exportList } from "./api/listExport.js";
+import { bulkDeleteRecords, bulkRestoreRecords } from "./api/bulkRecords.js";
 
 /** Routing costs and route maps are cached a minute; rate changes and undos clear them. */
 const clearRouteCaches = () => {
@@ -591,6 +603,7 @@ import {
   updateScheduledReport,
 } from "./api/reports.js";
 import { downloadEmailAsset, listEmailAssets, uploadEmailAsset } from "./api/emailAssets.js";
+import { reportCspViolation } from "./api/cspReports.js";
 
 const VERSION = "0.32.0";
 MIGRATION_VERSION.value = VERSION;
@@ -603,6 +616,7 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
     serverTime: new Date().toISOString(),
     backend: "mock",
   }),
+  reportCspViolation,
 
   getCurrentUser: () => getCurrentUser(),
   signIn,
@@ -1039,6 +1053,16 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   archiveSmsVoiceRule,
   restoreSmsVoiceRule,
   testSmsVoiceRules,
+  previewSmsVoiceRecording,
+  downloadSmsVoiceRecording,
+  // Voice gateways (§8 SMS To Voice, decided 2026-10-31)
+  queryVoiceGateways: queryList("voice_gateways"),
+  createVoiceGateway,
+  getVoiceGateway,
+  updateVoiceGateway,
+  getVoiceGatewayDependencies,
+  archiveVoiceGateway,
+  restoreVoiceGateway,
   previewBroadcast,
   sendBroadcast,
   queryBroadcasts: queryList("broadcasts"),
@@ -1227,6 +1251,10 @@ export const handlers: Partial<Record<OperationId, Handler>> = {
   portalQueryMessages,
   portalTraffic,
   queryChanges,
+  // Generic list calls (§13.22 export, §13.29 bulk delete and restore as one change).
+  exportList,
+  bulkDeleteRecords,
+  bulkRestoreRecords,
   undoChange: (request, reply) =>
     Promise.resolve(undoChange(request, reply)).finally(() => {
       clearRouteCaches();

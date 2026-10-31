@@ -26,20 +26,22 @@ defmodule Sms.Switch.Customer.Session do
     * Our own requests to the client (`deliver_sm` receipts, `enquire_link`) use sequence numbers 1–0x7FFFFFFF,
       wrapping and never reusing one still waiting (S-1.14). At most `:outbound_window` `deliver_sm` wait for their
       response; a full window answers `{:error, :window_full}` at once and the caller keeps the receipt (never this
-      process's memory).
+      process's memory). After a `deliver_sm` the client did not answer in time, the session takes no new one for
+      `:deliver_timeout_ms` (`{:error, :slow}`) unless the client answers one meanwhile, so a slow reader never
+      keeps the switch's receipt workers waiting (S-1.18, S-5.14).
 
   ## Keep-alive
 
   After `:enquire_link_interval_ms` without any PDU from the client, the session sends `enquire_link`. If nothing
   at all arrives within `:enquire_link_timeout_ms` after it, the client is gone (S-1.5, also a half-open TCP
-  connection, S-1.6) and the session closes. TCP keepalive is on as a second net.
+  connection, S-1.6) and the session closes. TCP keepalive is on as a second net. While the inbound window is full
+  the session reads nothing, so the time it does not read never counts against the client.
   """
   use GenServer
   require Logger
   alias Sms.Switch.Customer
   alias Sms.Switch.Customer.{Events, Firewall, Intake, Sessions, Trunk, TrunkStore}
   alias Sms.Switch.Smpp.{Command, Pdu}
-  alias Sms.Switch.Throttle
 
   @task_supervisor Sms.Switch.Customer.Tasks
   @max_sequence 0x7FFFFFFF
@@ -91,6 +93,7 @@ defmodule Sms.Switch.Customer.Session do
     :unbind_timer,
     :enquire,
     :stop_reason,
+    :slow_until,
     phase: :open,
     buffer: <<>>,
     armed: false,
@@ -111,8 +114,9 @@ defmodule Sms.Switch.Customer.Session do
   @doc """
   Sends a `deliver_sm` (a receipt or MO) to the client on this session and waits for its response:
   `{:ok, %{status: code, message_id: id}}` (a non-zero status is the client refusing it), or `{:error, reason}`:
-  `:window_full`, `:not_receiver` (a TX bind), `:closed` (try another session or hold), `:timeout` (the client may
-  have it; retry on this session, S-5.14), `{:invalid_pdu, reason}`.
+  `:window_full`, `:slow` (it did not answer the last one in time), `:not_receiver` (a TX bind), `:closed` (try
+  another session or hold), `:timeout` (the client may have it; retry on this session, S-5.14), `{:invalid_pdu,
+  reason}`.
   """
   @spec deliver(pid(), map(), list()) :: {:ok, map()} | {:error, term()}
   def deliver(pid, fields, tlvs \\ []) do
@@ -296,9 +300,17 @@ defmodule Sms.Switch.Customer.Session do
         if entry.from, do: GenServer.reply(entry.from, {:error, :timeout})
         state = %{state | out: out}
 
-        if entry.command == :unbind,
-          do: {:stop, {:shutdown, state.unbind_request || :unbind_timeout}, state},
-          else: {:noreply, state}
+        case entry.command do
+          :unbind ->
+            {:stop, {:shutdown, state.unbind_request || :unbind_timeout}, state}
+
+          # A slow reader: no new receipt for a while (S-1.18).
+          :deliver_sm ->
+            {:noreply, %{state | slow_until: now() + state.settings.deliver_timeout_ms}}
+
+          _ ->
+            {:noreply, state}
+        end
     end
   end
 
@@ -544,7 +556,7 @@ defmodule Sms.Switch.Customer.Session do
 
     with :ok <- check(not Firewall.blocked?(state.ip), :esme_rbindfail, :ip_banned, nil),
          :ok <- check(TrunkStore.ready?(), :esme_rsyserr, :trunks_not_loaded, nil),
-         {:ok, trunk} <- lookup(system_id),
+         {:ok, trunk} <- lookup(system_id, state.ip),
          :ok <- check(Trunk.ip_allowed?(trunk, state.ip), :esme_rbindfail, :ip_not_allowed, trunk),
          :ok <-
            check(
@@ -578,10 +590,17 @@ defmodule Sms.Switch.Customer.Session do
   defp check(true, _status, _reason, _trunk), do: :ok
   defp check(false, status, reason, trunk), do: {:error, status, reason, trunk}
 
-  defp lookup(system_id) do
+  # S-1.1, S-8.1: an unknown system_id is answered 0x0F only to an IP some trunk lets in (a customer with a typo); any
+  # other IP gets 0x0D, as a known system_id (or a wrong password) does from there, so binds from a stranger's IP
+  # cannot tell which system_ids exist. Audited and counted as an unknown system_id either way.
+  defp lookup(system_id, ip) do
     case TrunkStore.lookup(system_id) do
-      {:ok, trunk} -> {:ok, trunk}
-      :error -> {:error, :esme_rinvsysid, :unknown_system_id, nil}
+      {:ok, trunk} ->
+        {:ok, trunk}
+
+      :error ->
+        status = if TrunkStore.known_ip?(ip), do: :esme_rinvsysid, else: :esme_rbindfail
+        {:error, status, :unknown_system_id, nil}
     end
   end
 
@@ -759,18 +778,14 @@ defmodule Sms.Switch.Customer.Session do
   # Over the TPS limit, a trunk with an overflow buffer has the message accepted and queued while the buffer has room
   # (S-2.4); the pipeline sends it when the trunk's TPS allows.
   defp throttled(state) do
-    cond do
-      Customer.draining?() ->
-        :esme_rthrottled
-
-      Throttle.acquire(Trunk.tps_counters(state.trunk)) == :ok ->
-        nil
-
-      Throttle.buffer_take(Trunk.buffer_key(state.trunk), state.trunk.overflow_buffer) ->
-        :buffered
-
-      true ->
-        :esme_rthrottled
+    if Customer.draining?() do
+      :esme_rthrottled
+    else
+      case Trunk.admit(state.trunk) do
+        :ok -> nil
+        :buffered -> :buffered
+        :full -> :esme_rthrottled
+      end
     end
   end
 
@@ -859,29 +874,47 @@ defmodule Sms.Switch.Customer.Session do
   end
 
   defp deliver_now(state, fields, tlvs, from) do
+    case refuse_deliver(state) do
+      nil -> write_deliver(state, fields, tlvs, from)
+      reason -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  # Why this session cannot take a deliver_sm now, or nil.
+  defp refuse_deliver(state) do
     cond do
       state.phase != :bound ->
-        {:reply, {:error, :closed}, state}
+        :closed
 
       state.bind == :tx ->
-        {:reply, {:error, :not_receiver}, state}
+        :not_receiver
 
       Enum.count(state.out, fn {_, e} -> e.command == :deliver_sm end) >=
           state.settings.outbound_window ->
-        {:reply, {:error, :window_full}, state}
+        :window_full
+
+      state.slow_until != nil and now() < state.slow_until ->
+        :slow
 
       true ->
-        {seq, state} = next_sequence(state)
-        pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
+        nil
+    end
+  end
 
-        case Pdu.encode(pdu) do
-          {:ok, bytes} ->
-            write(state, bytes)
-            {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
+  defp write_deliver(state, fields, tlvs, from) do
+    {seq, state} = next_sequence(state)
 
-          {:error, reason} ->
-            {:reply, {:error, {:invalid_pdu, reason}}, state}
-        end
+    # S-1.4: TLVs only to a client that speaks 3.4 or later; a 3.3 client reads the receipt from its text.
+    tlvs = if state.interface_version >= 0x34, do: tlvs, else: []
+    pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
+
+    case Pdu.encode(pdu) do
+      {:ok, bytes} ->
+        write(state, bytes)
+        {:noreply, track(state, seq, :deliver_sm, from, state.settings.deliver_timeout_ms)}
+
+      {:error, reason} ->
+        {:reply, {:error, {:invalid_pdu, reason}}, state}
     end
   end
 
@@ -909,6 +942,9 @@ defmodule Sms.Switch.Customer.Session do
   # ---------------------------------------------------------------- our requests and their responses
 
   defp handle_response(state, %Pdu{sequence: seq} = pdu) do
+    # Any answer to a receipt, even a late one, shows a slow reader reading again.
+    state = if pdu.command == :deliver_sm_resp, do: %{state | slow_until: nil}, else: state
+
     case Map.pop(state.out, seq) do
       {nil, _} ->
         Logger.warning("#{pdu.command} #{seq} answers nothing we sent; ignored")
@@ -936,6 +972,11 @@ defmodule Sms.Switch.Customer.Session do
 
     state
   end
+
+  # Reading paused by our own inbound window (S-1.18): the client's answers wait unread in the socket, so it counts as
+  # heard from until reading starts again; a client really gone is caught once it does (or by TCP keepalive).
+  defp keepalive(state) when map_size(state.inflight) >= state.settings.inbound_window,
+    do: {:noreply, %{state | last_rx: now()}}
 
   defp keepalive(state) do
     s = state.settings

@@ -8,6 +8,7 @@ const ENTERPRISES: NameSource = { table: "enterprises e", name: "e.name", id: "e
 const CUSTOMER_TRUNKS: NameSource = { table: "customer_trunks t", name: "t.name", id: "t.id" };
 const VENDOR_TRUNKS: NameSource = { table: "vendor_trunks t", name: "t.name", id: "t.id" };
 const HLR_PROVIDERS: NameSource = { table: "hlr_providers p", name: "p.name", id: "p.id" };
+const VOICE_GATEWAYS: NameSource = { table: "voice_gateways g", name: "g.name", id: "g.id" };
 const CATEGORIES: NameSource = { table: "product_categories c", name: "c.name", id: "c.id" };
 // Destinations by MCCMNC code (team trial round 7): the code is all digits, so it serves as the ID.
 const DESTINATIONS: NameSource = {
@@ -37,18 +38,30 @@ const has = (arr: string) => (c: { op: string; value?: unknown; values?: unknown
         ? `notEmpty(${arr})`
         : any;
 };
+/**
+ * Vendor Msg ID: one ID per part, comma-joined. eq / in match any part's ID, any case like every text column; like and
+ * regex the whole value (QA 2026-10-31: not_like and regex used to match like eq).
+ */
 const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
-  const ids = (c.values ?? [c.value]).map((v) => lit(String(v)));
-  const any = `hasAny(splitByChar(',', v_message_id), [${ids.join(",")}])`;
-  return c.op === "neq" || c.op === "not_in"
-    ? `NOT ${any}`
-    : c.op === "empty"
-      ? "v_message_id = ''"
-      : c.op === "not_empty"
-        ? "v_message_id != ''"
-        : c.op === "like"
-          ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
-          : any;
+  const ids = (c.values ?? [c.value]).map((v) => lit(String(v).toLowerCase()));
+  const any = `hasAny(splitByChar(',', lower(v_message_id)), [${ids.join(",")}])`;
+  switch (c.op) {
+    case "neq":
+    case "not_in":
+      return `NOT ${any}`;
+    case "empty":
+      return "v_message_id = ''";
+    case "not_empty":
+      return "v_message_id != ''";
+    case "like":
+      return `v_message_id ILIKE ${lit(String(c.value))}`;
+    case "not_like":
+      return `NOT (v_message_id ILIKE ${lit(String(c.value))})`;
+    case "regex":
+      return `match(v_message_id, ${lit(`(?i)${String(c.value)}`)})`;
+    default:
+      return any;
+  }
 };
 /**
  * Number, sender or Msg ID (team trial round 2, §9.1): each value is the start of a receiver number, a sender ID,
@@ -147,7 +160,14 @@ export const EDR_COLUMNS: Record<string, ChColumn> = {
   vendorExRate: { sql: "toFloat64(v_ex_rate)" },
   vendorTranslationRuleIds: { sql: "v_translation_rule_ids", where: has("v_translation_rule_ids") },
   routeRuleId: { sql: "route_rule_id" },
+  routeType: { sql: "toString(route_type)" },
   routeDecidedBy: { sql: "route_decided_by" },
+  // SMS to voice (§8, ClickHouse 011): the call of an attempt with route type voice.
+  voiceGatewayId: { sql: "voice_gateway_id" },
+  voiceGateway: named(VOICE_GATEWAYS, "voice_gateway_id"),
+  voiceAnswered: { sql: "voice_answered" },
+  voiceHangupCause: { sql: "voice_hangup_cause" },
+  voiceDurationMs: { sql: "voice_duration_ms" },
   dlrReroute: { sql: "dlr_reroute" },
   repushRequestId: { sql: "repush_request_id" },
   attemptNo: { sql: "attempt_no" },
@@ -224,6 +244,8 @@ export const edrList: ChListDef<EdrRow> = {
   searchNumbers: ["senderId", "dnid"],
   searchNames: ["customerEnterprise", "customerTrunk", "vendorEnterprise", "vendorTrunk"],
   idSql: "edr_id",
+  // An attempt the switch wrote twice is listed once (ClickHouse 010, S-7.3).
+  rowKey: true,
   mapRow: (r, names) => edrValues(edrFields.fields, EDR_COLUMNS, r, names) as unknown as EdrRow,
   owners: {
     customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" },
@@ -239,12 +261,14 @@ export const FAILED_COLUMNS: Record<string, ChColumn> = Object.fromEntries(
 export const failedEdrList: ChListDef<FailedEdrRow> = {
   fields: failedFields,
   table: "edr",
-  baseWhere: "v_trunk_id = 0 AND is_submit_success = 0",
+  // An SMS-to-voice call has no vendor trunk either (§8): it was taken, not rejected.
+  baseWhere: "v_trunk_id = 0 AND is_submit_success = 0 AND route_type != 'voice'",
   columns: FAILED_COLUMNS,
   search: ["senderId", "dnid", "customerMsgId", "customerIp"],
   searchNumbers: ["senderId", "dnid"],
   searchNames: ["customerEnterprise", "customerTrunk"],
   idSql: "edr_id",
+  rowKey: true,
   mapRow: (r, names) => edrValues(failedFields.fields, FAILED_COLUMNS, r, names) as unknown as FailedEdrRow,
   owners: { customer: { sql: "c_enterprise_id", key: "customerEnterpriseId" } },
 };

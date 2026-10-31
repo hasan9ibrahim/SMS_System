@@ -68,7 +68,7 @@ export const EDR_TEMPLATES: { name: string; columns: string[] }[] = [
     ],
   },
   {
-    name: "Session affinity (§13.1)",
+    name: "Session affinity",
     columns: [
       "startTime",
       "customerTrunk",

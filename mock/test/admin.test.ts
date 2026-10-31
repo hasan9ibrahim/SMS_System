@@ -17,10 +17,14 @@ import {
   encryptSecret,
   hashPassword,
   passwordRules,
+  TOTP_USED,
   totpCode,
+  totpMatch,
+  totpStep,
   verifyPassword,
   verifyTotp,
 } from "../src/admin/passwords.js";
+import { withFreshTotp } from "./totp.js";
 import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
 import { fillTemplate } from "../src/api/admin.js";
 import { tableOf } from "../src/api/audit.js";
@@ -134,6 +138,9 @@ describe("§13.28 password and 2FA helpers", () => {
     const now = Date.now();
     assert.ok(verifyTotp(DEMO_TOTP_SECRET, totpCode(DEMO_TOTP_SECRET, now - 30_000), now));
     assert.ok(!verifyTotp(DEMO_TOTP_SECRET, totpCode(DEMO_TOTP_SECRET, now - 120_000), now));
+    // The step a code belongs to, which the server remembers so the code works once (§13.28).
+    assert.equal(totpMatch(DEMO_TOTP_SECRET, totpCode(DEMO_TOTP_SECRET, now - 30_000), now), totpStep(now) - 1);
+    assert.equal(totpMatch(DEMO_TOTP_SECRET, totpCode(DEMO_TOTP_SECRET, now + 30_000), now), totpStep(now) + 1);
   });
   test("secrets round-trip and never decrypt when tampered", () => {
     const enc = encryptSecret("fake-secret");
@@ -169,9 +176,20 @@ describe("§11 access group catalogue", () => {
     const src = readFileSync(new URL("../../web/src/nav/registry.ts", import.meta.url), "utf8");
     const body = src.slice(src.indexOf("export const PAGES"), src.indexOf("export const HOME"));
     // The help center (§15.1) is open to every user, so it has no access-group entry.
-    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!).filter((k) => k !== "help");
+    // A page opened with another page's access ({ ...p(...), access: "x" }, e.g. Voice gateways with SMS to voice)
+    // has no entry of its own; the page it borrows from must be in the catalogue.
+    const borrowed = new Map(
+      [...body.matchAll(/\.\.\.p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"[^}]*?\),\s*access:\s*"([a-z0-9-]+)"/g)].map(
+        (m) => [m[1]!, m[2]!] as const,
+      ),
+    );
+    assert.ok(borrowed.has("voice-gateways"));
+    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)]
+      .map((m) => m[1]!)
+      .filter((k) => k !== "help" && !borrowed.has(k));
     assert.ok(keys.length > 50);
     assert.deepEqual([...keys].sort(), MODULES.map((m) => m.key).sort());
+    for (const target of borrowed.values()) assert.ok(keys.includes(target), target);
   });
   test("permission checks need View and known actions", () => {
     assert.deepEqual(checkPermissions({ "route-rules": ["view", "edit"], "*": ["view"] }), []);
@@ -347,8 +365,22 @@ describe("§11 users, §13.28 passwords", { skip }, () => {
       call("POST", `/users/${record.id}/totp/confirm`, { code: totpCode(setup.secret) }),
     );
     assert.equal(on.record.totpEnabled, true);
+    // §13.28: the confirming code is used up, so it cannot sign in afterwards.
+    const stepOf = async () =>
+      (await db().query("SELECT totp_last_step FROM users WHERE id = $1", [record.id])).rows[0].totp_last_step;
+    assert.ok(Number(await stepOf()) >= totpStep() - 1);
     const off = await ok("disableUserTotp", call("POST", `/users/${record.id}/totp/disable`));
     assert.equal(off.record.totpEnabled, false);
+    assert.equal(await stepOf(), null, "a removed secret's last step goes with it");
+    // Confirm sent twice at once: enabled once. The other finds the code used, or (when it starts after the first
+    // ended) no enrolment left to confirm.
+    const again = await ok("setupUserTotp", call("POST", `/users/${record.id}/totp/setup`));
+    const code = totpCode(again.secret);
+    const answers = await Promise.all([1, 2].map(() => call("POST", `/users/${record.id}/totp/confirm`, { code })));
+    assert.deepEqual(answers.map((r) => r.statusCode).sort(), [200, 400], answers.map((r) => r.body).join(" | "));
+    const refused = answers.find((r) => r.statusCode === 400)!;
+    check("confirmUserTotp", refused);
+    assert.ok([TOTP_USED, "start the QR enrolment first"].includes(refused.json().errors[0].message), refused.body);
   });
 
   test("my own password change checks the current password, 2FA and rules, and ends other sessions", async () => {
@@ -363,14 +395,31 @@ describe("§11 users, §13.28 passwords", { skip }, () => {
       400,
     );
     assert.deepEqual(wrong.errors.map((e: { path: string }) => e.path).sort(), ["/currentPassword", "/totpCode"]);
-    const okRes = await ok(
-      "changeMyPassword",
-      call("POST", "/me/password", {
-        currentPassword: SEED_PASSWORD,
-        newPassword: STRONG,
-        totpCode: totpCode(DEMO_TOTP_SECRET),
-      }),
-    );
+    const okRes = await withFreshTotp(1, async (code) => {
+      // A refusal for another field does not use the code up (§13.28): it still works once the field is fixed...
+      const weak = await fails(
+        "changeMyPassword",
+        call("POST", "/me/password", { currentPassword: SEED_PASSWORD, newPassword: "short", totpCode: code }),
+        400,
+      );
+      assert.deepEqual(weak.errors.map((e: { path: string }) => e.path), ["/newPassword"]);
+      const res = await ok(
+        "changeMyPassword",
+        call("POST", "/me/password", { currentPassword: SEED_PASSWORD, newPassword: STRONG, totpCode: code }),
+      );
+      // ...and after the change it is used: the same code cannot change the password again.
+      const reused = await fails(
+        "changeMyPassword",
+        call("POST", "/me/password", {
+          currentPassword: STRONG,
+          newPassword: "Yet-another-fake-passphrase-31",
+          totpCode: code,
+        }),
+        400,
+      );
+      assert.deepEqual(reused.errors, [{ path: "/totpCode", message: TOTP_USED }]);
+      return res;
+    });
     assert.ok(okRes.signedOutSessions >= 1);
     const sessions = await ok("queryUserSessions", call("POST", "/user-sessions/query", { limit: 500 }));
     assert.equal(sessions.rows.filter((s: { current: boolean }) => s.current).length, 1, "this session stays open");

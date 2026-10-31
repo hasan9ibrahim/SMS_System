@@ -7,6 +7,7 @@ defmodule Sms.Switch.Customer.Trunk do
   (migration 034, decision Q13). `company_tps_limit` is the business company's limit on top (S-2.4), `nil` for none.
   """
   alias Sms.Switch.Customer.IpRange
+  alias Sms.Switch.Throttle
 
   @enforce_keys [:id, :username, :password]
   defstruct [
@@ -78,6 +79,56 @@ defmodule Sms.Switch.Customer.Trunk do
   @spec buffer_key(t() | pos_integer()) :: String.t()
   def buffer_key(%__MODULE__{id: id}), do: buffer_key(id)
   def buffer_key(id) when is_integer(id), do: "ct:#{id}"
+
+  @doc """
+  Whether one more message fits on the trunk in `second` (S-2.4): within its TPS and its company's (`:ok`, counted), over
+  it with a place taken in its overflow buffer (`:buffered`), or neither (`:full`). Asked by the session for each submit,
+  and again for a scheduled message when its time comes (`Sms.Switch.Pipeline.Scheduled`, S-2.12).
+  """
+  #
+  # `submits`: the TPS places the message takes, one per submit the customer sent for it (a scheduled multipart message
+  # sent as parts takes one per part, as it did at intake; S-2.12), capped at the trunk's TPS (`Throttle.places/2`). A
+  # buffered message takes one buffer place whatever its parts; the drain counts its submits when it lets it go.
+  @spec admit(t(), integer(), pos_integer()) :: :ok | :buffered | :full
+  def admit(%__MODULE__{} = trunk, second \\ System.os_time(:second), submits \\ 1) do
+    cond do
+      Throttle.acquire_many(tps_counters(trunk), submits, second) == :ok -> :ok
+      Throttle.buffer_take(buffer_key(trunk), trunk.overflow_buffer) -> :buffered
+      true -> :full
+    end
+  end
+
+  @doc """
+  Takes the rest of a message's TPS places in `second` when one was taken before the message was read (a scheduled
+  message off its trunk's waiting set, S-2.12): `:ok` with all of them, or `:full` with that one given back too.
+  """
+  @spec admit_rest(t(), integer(), pos_integer()) :: :ok | :full
+  def admit_rest(%__MODULE__{} = trunk, second, submits) do
+    counters = tps_counters(trunk)
+
+    case Throttle.places(counters, submits) - 1 do
+      0 ->
+        :ok
+
+      rest ->
+        if Throttle.acquire_many(counters, rest, second) == :ok do
+          :ok
+        else
+          Throttle.release(counters, second)
+          :full
+        end
+    end
+  end
+
+  @doc "Gives back what `admit/3` took in `second` for a message that did not go after all."
+  @spec unadmit(t(), :ok | :buffered, integer(), pos_integer()) :: :ok
+  def unadmit(trunk, admission, second, submits \\ 1)
+
+  def unadmit(%__MODULE__{} = trunk, :ok, second, submits),
+    do: Throttle.release_many(tps_counters(trunk), submits, second)
+
+  def unadmit(%__MODULE__{} = trunk, :buffered, _second, _submits),
+    do: Throttle.buffer_release(buffer_key(trunk))
 
   @doc "Whether a client at `ip` may bind (spec §5.4 Host Name)."
   @spec ip_allowed?(t(), :inet.ip_address()) :: boolean()

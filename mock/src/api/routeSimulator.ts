@@ -10,18 +10,22 @@ import { PLATFORM_CURRENCY } from "../currency.js";
 import { withDb } from "../db.js";
 import { messageEncoding } from "../smpp.js";
 import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOptions } from "./routeRules.js";
-import { skipEgressBlocked } from "./egress.js";
+import { skipEgressBlocked, vendorView } from "./egress.js";
+import { natural, type MessageForm } from "../routing/coding.js";
 import { customerPrice, priced, vendorPrice } from "./linePrice.js";
 import { badInput } from "./switchTools.js";
-import { runTrunkRules } from "./translationRules.js";
+import { runTrunkTranslation } from "./translationRules.js";
+import { withTonNpiMode } from "../routing/tonNpi.js";
 import { production } from "../mode.js";
 import { switchTestSms } from "../switch/operations.js";
+import { decideVoice, loadVoiceConfig, simulateCall } from "../routing/smsVoice.js";
 
 export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as RouteSimulatorInput;
   return withDb(reply, async (pool): Promise<RouteSimulatorResult | FastifyReply> => {
     const { rows: tr } = await pool.query(
-      `SELECT t.id, t.name, e.name AS enterprise FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+      `SELECT t.id, t.name, t.default_coding, t.ton_npi_mode, e.name AS enterprise FROM customer_trunks t
+         JOIN enterprises e ON e.id = t.enterprise_id
         WHERE t.id = $1 AND t.deleted_at IS NULL`,
       [b.customerTrunkId],
     );
@@ -39,15 +43,38 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       const prefix = String(dc[0].prefix);
       receiverIn = prefix + "1234567890123".slice(0, Math.max(4, 12 - prefix.length));
     }
-    const translation = (await runTrunkRules(pool, "customer", b.customerTrunkId, {
+    const ingress = (await runTrunkTranslation(pool, "customer", b.customerTrunkId, {
       sender: b.senderId ?? "",
       receiver: receiverIn,
       text: b.text ?? "",
       senderTon: b.sourceTon,
       senderNpi: b.sourceNpi,
     }))!;
-    const sender = translation.after.sender;
-    const receiver = translation.after.receiver.replace(/\D/g, "") || receiverIn;
+    const translation = ingress.result;
+    // S-4.7: a customer trunk set to auto fixes TON / NPI after its ingress translation, as the switch's intake does;
+    // routing and every vendor see the fixed sender and values. A field an ingress rule set stays as the rule left it.
+    const sent = withTonNpiMode(
+      tr[0].ton_npi_mode,
+      {
+        sender: translation.after.sender,
+        receiver: translation.after.receiver,
+        senderTon: translation.after.senderTon ?? b.sourceTon ?? null,
+        senderNpi: translation.after.senderNpi ?? b.sourceNpi ?? null,
+        destTon: translation.after.destTon ?? b.destTon ?? null,
+        destNpi: translation.after.destNpi ?? b.destNpi ?? null,
+      },
+      ingress.pinned,
+    );
+    const sender = sent.sender;
+    const receiver = sent.receiver.replace(/\D/g, "") || receiverIn;
+    // What the vendors' egress translation starts from (the message after ingress, S-4.8).
+    const afterIngress = {
+      sender,
+      receiver,
+      text: translation.after.text,
+      senderTon: sent.senderTon,
+      senderNpi: sent.senderNpi,
+    };
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(
       pool,
@@ -63,24 +90,38 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       b.senderId ?? "",
     );
     const options = await vendorOptions(pool, m.mccmnc, null);
+    // The message as the customer sent it: Deny Multipart counts its parts, and a vendor that cannot take it as it
+    // would get it (TON / NPI, coding, multipart, Max Msg Len) is passed over (§6.3, §5.5, S-3.9, S-4.4).
+    const form: MessageForm = {
+      text: b.text ?? "",
+      dataCoding: b.dataCoding,
+      defaultCoding: Number(tr[0].default_coding ?? 0),
+    };
+    m.parts = natural(form)?.parts || 1;
     // A vendor whose own egress rules block the message is skipped and the next vendor tried
     // (decided 2026-10-18); a block on the customer trunk rejects the message before routing.
-    const { result: route, skipped: egressSkipped } =
+    const {
+      result: route,
+      skipped: egressSkipped,
+      senderOnly,
+    } =
       !translation.blocked && !b.vendorTrunkId
         ? await skipEgressBlocked(
             pool,
             m,
-            {
-              sender,
-              receiver,
-              text: translation.after.text,
-              senderTon: translation.after.senderTon,
-              senderNpi: translation.after.senderNpi,
-            },
+            afterIngress,
             (mm) => routeThrough(rules, mm, options),
             (r) => r.decision?.vendor,
+            {
+              form,
+              senderTon: sent.senderTon,
+              senderNpi: sent.senderNpi,
+              destTon: sent.destTon,
+              destNpi: sent.destNpi,
+              pinned: ingress.pinned,
+            },
           )
-        : { result: routeThrough(rules, m, options), skipped: [] };
+        : { result: routeThrough(rules, m, options), skipped: [], senderOnly: false };
 
     // The customer's rate as the switch prices it (linePrice.ts): the sender's own line first; a blocked line that
     // applies refuses the message (blocked means blocked, decided 2026-10-30).
@@ -114,6 +155,18 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
           .slice(0, 16)
           .replace("T", " ")} UTC`;
     }
+    // SMS to voice (§8, decided 2026-10-31): after ingress translation and before routing, a message an active rule
+    // takes (with a 4 to 8 digit code) is a call through a voice gateway, never a vendor attempt. Not for a message the
+    // customer side refuses, nor when a vendor trunk is tested directly.
+    const refused = translation.blocked || !m.mccmnc || customerBlocked || !customerRate;
+    const voiceCall =
+      !refused && !b.vendorTrunkId
+        ? await loadVoiceConfig(pool).then(
+            ({ rules: voiceRules, gateways }) =>
+              decideVoice(voiceRules, gateways, { sender, receiver, text: translation.after.text, mccmnc: m.mccmnc })
+                .call,
+          )
+        : null;
     // Straight to one vendor: priced below, once its egress translation gives the sender it receives.
     let forcedVendor: RouteSimulatorResult["forcedVendor"] = null;
     if (b.vendorTrunkId) {
@@ -126,30 +179,27 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
     const d = route.decision;
     // Egress translation (§6.4, §13.2): the chosen vendor trunk's rules run after routing, on the
     // message as ingress translation left it; shows what the vendor would receive.
-    const egressId = forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
+    const egressId = voiceCall ? null : forcedVendor ? forcedVendor.vendorTrunkId : (d?.vendor?.vendorTrunkId ?? null);
     const egressName = forcedVendor ? forcedVendor.name : (d?.vendor?.name ?? "");
-    const egress =
+    const view =
       egressId !== null && !translation.blocked
-        ? await runTrunkRules(pool, "vendor", egressId, {
-            sender,
-            receiver,
-            text: translation.after.text,
-            senderTon: translation.after.senderTon,
-            senderNpi: translation.after.senderNpi,
-          })
+        ? await vendorView(pool, egressId, afterIngress, sent, ingress.pinned)
         : null;
+    const egress = view?.egress ?? null;
     const vendorTranslation: RouteSimulatorResult["vendorTranslation"] =
       egress && egressId !== null ? { vendorTrunkId: egressId, vendorTrunk: egressName, result: egress } : null;
     // The vendor's cost as the switch prices it: its Sender ID lines match the sender it receives after its egress
-    // translation (§6.2, decided 2026-10-30); a blocked line means it takes no traffic there.
+    // translation (§6.2, decided 2026-10-30) and its auto TON / NPI (S-4.7); a blocked line means it takes no traffic
+    // there.
     const vendorPriced =
       egressId !== null && m.mccmnc && !egress?.blocked
-        ? await vendorPrice(pool, egressId, m.mccmnc, egress?.after.sender ?? sender)
+        ? await vendorPrice(pool, egressId, m.mccmnc, view?.got.sender ?? sender)
         : null;
     const vp = priced(vendorPriced);
     if (forcedVendor && vp)
       forcedVendor = { ...forcedVendor, rate: vp.rate, currency: vp.currency, platformRate: vp.platformRate };
-    const cost = vp?.platformRate ?? null;
+    // A call costs nothing on the vendor side: the operator's own voice switch.
+    const cost = voiceCall ? 0 : (vp?.platformRate ?? null);
     const vendorCost = cost === null ? null : { rate: cost, currency: PLATFORM_CURRENCY };
     const sell = customerRate?.platformRate ?? null;
     const marginPct = sell && cost !== null ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
@@ -169,12 +219,16 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                 : forcedVendor.rate === null
                   ? `${forcedVendor.name} has no rate for the destination`
                   : null
-              : !d
+              : voiceCall
+                ? null
+                : senderOnly && (!d || d.outcome === "no_vendor")
+                ? "Every vendor that could take the message refuses its sender (Refuse invalid senders); the switch refuses it at once (0x0A)"
+                : !d
                 ? "No route rule matches"
                 : d.outcome === "block"
                   ? `Blocked by route rule ${d.ruleId}`
                   : d.outcome === "no_vendor"
-                    ? `Route rule ${d.ruleId} matched but no vendor qualifies`
+                    ? `Route rule ${d.ruleId} matched but no vendor can take the message; the switch refuses it at once (0x45)`
                     : egress?.blocked
                       ? `Blocked by a translation rule on vendor trunk ${egressName}`
                       : null;
@@ -198,7 +252,22 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
         .toString(16)
         .padStart(12, "0");
       if (blocked) testSms = { messageId, status: "REJECTD", detail: blocked };
-      else {
+      else if (voiceCall) {
+        // The test system places no call: answered about 80 % of the time, else UNDELIV after the retry.
+        const c = simulateCall();
+        const times = `${voiceCall.repeat} time${voiceCall.repeat === 1 ? "" : "s"}`;
+        testSms = c.answered
+          ? {
+              messageId,
+              status: "DELIVRD",
+              detail: `Called ${voiceCall.dialled} through ${voiceCall.gateway}: answered, code said ${times}, ${(c.durationMs / 1000).toFixed(1)} s (simulated)`,
+            }
+          : {
+              messageId,
+              status: "UNDELIV",
+              detail: `Called ${voiceCall.dialled} through ${voiceCall.gateway}: not answered (${c.hangupCause}), tried again after ${voiceCall.retryDelayS} s; not charged (simulated)`,
+            };
+      } else {
         const roll = Math.random();
         const status = roll < 0.85 ? "DELIVRD" : roll < 0.95 ? "UNDELIV" : "EXPIRED";
         testSms = {
@@ -225,6 +294,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       forcedVendor,
       vendorTranslation,
       egressSkipped,
+      voiceCall,
     };
   });
 }

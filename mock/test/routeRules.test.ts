@@ -9,12 +9,19 @@ import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { refreshRouteTraffic } from "../src/api/routeTraffic.js";
+import { removeNeverAdded } from "../src/api/routeRules.js";
+import { inTransaction } from "../src/api/views.js";
+import { sweepRouteRuleDrafts } from "../src/jobs/routeRuleDrafts.js";
+import { deleteTestRouteRules } from "./testRules.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
 const skip = ready ? false : "seeded database not available (npm run db:up && npm run seed:small)";
 if (ready) await refreshRouteTraffic();
 after(async () => {
+  // Every rule this run made goes, live or archived (QA 2026-10-31): Test rule, Levels, Edit, Warm, Clone (copy) and
+  // the others were left active and routed live traffic.
+  if (ready) await deleteTestRouteRules(run);
   await app.close();
   await closeDb();
 });
@@ -116,6 +123,28 @@ describe("route rules grid (§15.4)", { skip }, () => {
     assert.ok(off.rows.every((r: { status: string }) => r.status === "inactive"));
     const bad = await call("POST", "/route-rules/query", and({ field: "window", op: "eq", value: "2h" }));
     assert.equal(bad.statusCode, 200, "an unknown window falls back to 24h");
+  });
+
+  test("DLR target filters and sorts agree with the target each row shows, at seeded volume (§13.8)", async () => {
+    type R = { id: number; dlrTarget: number | null };
+    const all = (await query({ limit: 4000, withTotal: true })) as { rows: R[]; total: number };
+    const withTarget = all.rows.filter((r) => r.dlrTarget !== null);
+    const set = (await query({ ...and({ field: "dlrTarget", op: "not_empty" }), limit: 4000 })) as { rows: R[]; total: number };
+    assert.equal(set.total, withTarget.length);
+    assert.deepEqual(new Set(set.rows.map((r) => r.id)), new Set(withTarget.map((r) => r.id)));
+    const high = (await query({ ...and({ field: "dlrTarget", op: "gte", value: 80 }), limit: 4000 })) as { rows: R[] };
+    assert.equal(high.rows.length, withTarget.filter((r) => r.dlrTarget! >= 80).length);
+    for (const dir of ["asc", "desc"] as const) {
+      const sorted = ((await query({ sort: [{ field: "dlrTarget", dir }], limit: 200 })) as { rows: R[] }).rows;
+      const values = sorted.map((r) => r.dlrTarget).filter((v): v is number => v !== null);
+      assert.deepEqual(values, [...values].sort((a, b) => (dir === "asc" ? a - b : b - a)), dir);
+    }
+    // A page of the grid: was 4–6 s with a subquery per rule, one aggregate pass now (QA 2026-10-31). Generous for a
+    // shared database.
+    const t0 = Date.now();
+    await query({ ...and({ field: "dlrTarget", op: "not_empty" }), sort: [{ field: "dlrTarget", dir: "desc" }], limit: 100 });
+    const ms = Date.now() - t0;
+    assert.ok(ms < 2000, `filter and sort on the DLR target took ${ms} ms`);
   });
 
   test("the category filter lists categories from the database", async () => {
@@ -377,6 +406,66 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     await ok("archiveRouteRule", call("POST", `/route-rules/${live.id}/archive`, {}));
   });
 
+  test("New rule drafts never saved are removed after 24 hours, with their history (§6.3, §13.10)", async () => {
+    const f = await fixtures();
+    const made: number[] = [];
+    const add = async (body: object) => {
+      const { record } = await ok("createRouteRule", call("POST", "/route-rules", body), 201);
+      made.push(record.id);
+      return record.id as number;
+    };
+    const block = (name: string, over: object = {}) => ({
+      name: `${name} ${run}`,
+      priority: 90,
+      status: "inactive",
+      routeType: "block",
+      ...over,
+    });
+    const draftOf = async (id: number) =>
+      (await db().query("SELECT draft FROM route_rules WHERE id = $1", [id])).rows[0]?.draft as boolean | undefined;
+    try {
+      // Left behind: a draft with vendors, a whitelist and an edit made inside the window, never saved.
+      const left = await add(ruleInput(f, { name: `Left ${run}`, status: "inactive", draft: true }));
+      await ok(
+        "updateRouteRule",
+        call("PUT", `/route-rules/${left}`, ruleInput(f, { name: `Left ${run} b`, status: "inactive" })),
+      );
+      assert.equal(await draftOf(left), true, "an edit inside the window leaves it a draft");
+      // A fresh draft: still in its window.
+      const fresh = await add(block("Fresh", { draft: true }));
+      // Saved with nothing changed: Save keeps it all the same.
+      const saved = await add(block("Saved", { draft: true }));
+      const kept = await ok("updateRouteRule", call("PUT", `/route-rules/${saved}`, block("Saved", { draft: false })));
+      assert.equal(kept.change, null);
+      assert.equal(await draftOf(saved), false);
+      // Added outside New rule, and a draft turned on once (from the grid): neither is a draft that may go.
+      const plain = await add(block("Plain"));
+      const wasOn = await add(block("Was on", { draft: true }));
+      await ok("updateRouteRule", call("PUT", `/route-rules/${wasOn}`, block("Was on", { status: "active" })));
+      await ok("updateRouteRule", call("PUT", `/route-rules/${wasOn}`, block("Was on")));
+      await db().query("UPDATE route_rules SET inserted_at = now() - interval '25 hours' WHERE id = ANY($1)", [
+        [left, saved, plain, wasOn],
+      ]);
+
+      const gone = await sweepRouteRuleDrafts(db());
+      assert.ok(gone.includes(left), `swept ${gone.join(",")}`);
+      for (const id of [fresh, saved, plain, wasOn]) assert.ok(!gone.includes(id), `rule ${id} is kept`);
+      assert.equal((await call("GET", `/route-rules/${left}`)).statusCode, 404);
+      for (const id of [fresh, saved, plain, wasOn]) await ok("getRouteRule", call("GET", `/route-rules/${id}`));
+      const { rows } = await db().query(
+        `SELECT (SELECT count(*) FROM changes WHERE entity_type = 'route_rule' AND $1 = ANY(entity_ids))::int
+                  AS changes,
+                (SELECT count(*) FROM route_rule_vendors WHERE route_rule_id = $1)::int AS vendors,
+                (SELECT count(*) FROM route_rule_whitelists WHERE route_rule_id = $1)::int AS whitelists`,
+        [left],
+      );
+      assert.deepEqual(rows[0], { changes: 0, vendors: 0, whitelists: 0 }, "nothing of the draft is left");
+    } finally {
+      for (const id of made)
+        await inTransaction(db(), (c) => removeNeverAdded(c, id)).catch(() => undefined);
+    }
+  });
+
   test("DLR target: the rule's own, else its destinations' lowest; block rules have none", async () => {
     const f = await fixtures();
     // Two networks of one country, the country with a target and one network with its own.
@@ -435,6 +524,26 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     const sum = t.byCustomer.reduce((a: number, r: { messages: number }) => a + r.messages, 0);
     assert.ok(sum <= t.total.messages);
     assert.ok(t.series.length > 0);
+  });
+
+  // The day windows come from the 15-minute totals (QA 2026-10-31): the grid's figures, the rule's breakdown, and
+  // no "Trunk 0" among the vendors (not routed is not a vendor).
+  test("7 and 30 day traffic from the totals: grid and breakdown agree; no trunk 0 (§13.27)", async () => {
+    await refreshRouteTraffic();
+    for (const w of ["7d", "30d"]) {
+      const busiest = await query({
+        ...and({ field: "window", op: "eq", value: w }),
+        sort: [{ field: "messages", dir: "desc" }],
+        limit: 1,
+      });
+      const row = busiest.rows[0];
+      const t = await ok("getRouteRuleTraffic", call("GET", `/route-rules/${row.id}/traffic?window=${w}`));
+      if (!t.available) continue;
+      assert.ok(row.messages > 0, w);
+      assert.ok(Math.abs(t.total.messages - row.messages) <= Math.max(5, row.messages * 0.01), w);
+      for (const v of t.byVendor) assert.ok(v.vendorTrunkId >= 1, `${w}: vendor trunk ${v.vendorTrunkId}`);
+      for (const c of t.byCustomer) assert.ok(c.customerTrunkId >= 1, `${w}: customer trunk ${c.customerTrunkId}`);
+    }
   });
 });
 

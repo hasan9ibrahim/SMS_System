@@ -100,7 +100,7 @@ function columnsFor(section: Section, r: TeamReport, onOpen: (row: TeamMemberRow
       return [
         name,
         dept,
-        num("clients", "Active clients", (x) => int(b(x)?.activeClients)),
+        num("clients", "Active clients", (x) => int(b(x)?.activeClients), 116),
         num(
           "new",
           "New",
@@ -281,12 +281,12 @@ function HourlyChart({ hours, label }: { hours: number[]; label: string }) {
         type: "category",
         data: hours.map((_, h) => String(h).padStart(2, "0")),
         axisLine: { lineStyle: { color: c.border } },
-        axisLabel: { color: c.secondary, fontSize: 10, interval: 2 },
+        axisLabel: { color: c.secondary, fontSize: 11, interval: 2 },
       },
       yAxis: {
         type: "value",
         splitLine: { lineStyle: { color: c.border } },
-        axisLabel: { color: c.secondary, fontSize: 10 },
+        axisLabel: { color: c.secondary, fontSize: 11 },
       },
       series: [
         {
@@ -321,7 +321,7 @@ function RankingChart({ rows, ccy }: { rows: TeamMemberRow[]; ccy: string }) {
       xAxis: {
         type: "value",
         splitLine: { lineStyle: { color: c.border } },
-        axisLabel: { color: c.secondary, fontSize: 10 },
+        axisLabel: { color: c.secondary, fontSize: 11 },
       },
       yAxis: {
         type: "category",
@@ -340,7 +340,7 @@ function RankingChart({ rows, ccy }: { rows: TeamMemberRow[]; ccy: string }) {
             show: true,
             position: "right",
             color: c.secondary,
-            fontSize: 10,
+            fontSize: 11,
             formatter: (p: { value: number }) =>
               metric.money ? money(p.value) : metric.pct ? pct(p.value) : int(p.value),
           },
@@ -394,15 +394,15 @@ function TrendChart({
         type: "category",
         data: points.map((p) => p.date.slice(5)),
         axisLine: { lineStyle: { color: c.border } },
-        axisLabel: { color: c.secondary, fontSize: 10 },
+        axisLabel: { color: c.secondary, fontSize: 11 },
       },
       yAxis: [
         {
           type: "value",
           splitLine: { lineStyle: { color: c.border } },
-          axisLabel: { color: c.secondary, fontSize: 10 },
+          axisLabel: { color: c.secondary, fontSize: 11 },
         },
-        { type: "value", splitLine: { show: false }, axisLabel: { color: c.secondary, fontSize: 10 } },
+        { type: "value", splitLine: { show: false }, axisLabel: { color: c.secondary, fontSize: 11 } },
       ],
       series: [
         {
@@ -771,8 +771,8 @@ export function TeamReportPage() {
           </>
         }
       />
-      <div className="lcr-controls">
-        <div className="field">
+      <div className="team-controls">
+        <div className="field team-period">
           <span>Period</span>
           {/* Shared period style (design refresh, team trial round 2); the range chip sets a custom period. */}
           <span className="period-line">

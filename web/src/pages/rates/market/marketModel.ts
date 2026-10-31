@@ -31,7 +31,8 @@ export function vendorChart(
   currency: string,
   now = Date.now(),
 ): EChartsCoreOption {
-  const palette = [c.accent, c.error, c.warning, c.good, c.secondary];
+  // Vendors are told apart by neutral series colours, never good / warning / problem colours (§15.3).
+  const palette = c.series;
   let k = 0;
   return {
     grid: { left: 52, right: 12, top: 10, bottom: 24 },

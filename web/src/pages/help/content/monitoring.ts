@@ -165,10 +165,6 @@ export const topics: HelpTopic[] = [
               },
             ],
           },
-          {
-            kind: "tip",
-            text: "In the trial, rules scoped to a country, network, sender ID or product category are measured on all traffic. Customer, vendor and trunk scopes are measured exactly.",
-          },
         ],
       },
       {
@@ -398,7 +394,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial, rules run on the simulated live traffic, and baselines for yesterday and last week use each trunk's usual levels.",
+            text: "On the test system, the **Same time yesterday** and **Same weekday last week** baselines of customer, vendor and trunk rules are each trunk's usual level.",
           },
         ],
       },
@@ -951,10 +947,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Only final attempts that were not delivered are re-sent; the others are skipped. Each re-sent EDR becomes a new attempt on the chosen trunk, marked with the repush request, and the old one stops being the final attempt.",
           },
-          {
-            kind: "tip",
-            text: "In the trial, re-sent messages are simulated: about 8 in 10 come back delivered.",
-          },
         ],
       },
       {
@@ -1254,10 +1246,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Delivery receipts go back on the same session the message came in on (session affinity). The **Receipts waiting** count in the sessions table shows receipts still to be returned. A vendor trunk going Offline can raise a **Bind down** alert if you have an [[alert-rules|alert rule]] for it.",
           },
-          {
-            kind: "tip",
-            text: "In the trial, binds and sessions are simulated and nothing is actually connected or disconnected.",
-          },
         ],
       },
     ],
@@ -1426,10 +1414,6 @@ export const topics: HelpTopic[] = [
             text: "At most three captures can run at the same time. Stop one before starting another.",
           },
           { kind: "tip", text: "Use a filter for one partner's IP; capturing all SMPP traffic fills the file fast." },
-          {
-            kind: "tip",
-            text: "In the trial, capture files are built from simulated SMPP traffic; they open in Wireshark but contain no real messages.",
-          },
         ],
       },
     ],
@@ -1583,7 +1567,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Each run shows the command, a green dot (exit 0, success) or red dot (failure), the exit code, how long it took, the time in UTC, and the output.",
           },
-          { kind: "tip", text: "In the trial, the output is simulated; nothing leaves the switch." },
         ],
       },
     ],
@@ -1643,7 +1626,6 @@ export const topics: HelpTopic[] = [
               "Find the new attempts in EDR search with the **Repush Request ID** column, or use the button in the detail panel.",
             ],
           },
-          { kind: "tip", text: "In the trial, re-sent messages are simulated: about 8 in 10 come back delivered." },
         ],
       },
     ],

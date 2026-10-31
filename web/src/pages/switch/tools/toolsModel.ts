@@ -1,5 +1,14 @@
 // Pure helpers for the Switch utilities pages (§8): labels, blank forms, e-mail lists typed as text.
-import type { EmailLogRow, SmsVoiceRuleInput, TrafficAlertInput, TrafficAlertRow } from "@sms/contract";
+import type {
+  EmailLogRow,
+  SmsVoiceRuleInput,
+  SmsVoiceRuleRow,
+  TrafficAlertInput,
+  TrafficAlertRow,
+  VoiceGatewayCodec,
+  VoiceGatewayInput,
+  VoiceGatewayRow,
+} from "@sms/contract";
 
 type Tone = "good" | "warning" | "error" | "neutral" | "accent";
 
@@ -103,8 +112,100 @@ export const blankVoiceRule = (): SmsVoiceRuleInput => ({
   prefix: null,
   repeat: 2,
   mccmnc: null,
+  gatewayId: null,
   status: "active",
 });
+
+/** The rule form's values from a saved rule (the recording is chosen beside the form). */
+export const voiceRuleInput = (r: SmsVoiceRuleRow): SmsVoiceRuleInput => ({
+  senderId: r.senderId,
+  receiverId: r.receiverId,
+  prefix: r.prefix,
+  repeat: r.repeat,
+  mccmnc: r.mccmnc,
+  gatewayId: r.gatewayId,
+  status: r.status,
+});
+
+// ---------------------------------------------------------------- voice gateways (§8)
+
+export const blankVoiceGateway = (): VoiceGatewayInput => ({
+  name: "",
+  host: "",
+  port: 5060,
+  transport: "udp",
+  username: null,
+  fromDomain: null,
+  callerIdMode: "sender",
+  fixedCallerId: null,
+  dialPrefix: "",
+  codecs: ["alaw", "ulaw"],
+  maxCalls: 10,
+  ringTimeoutS: 30,
+  retryDelayS: 60,
+  priority: 1,
+  status: "active",
+  password: null,
+});
+
+/** The form's values from a saved gateway; the password stays as it is unless one is typed. */
+export const voiceGatewayInput = (r: VoiceGatewayRow): VoiceGatewayInput => ({
+  name: r.name,
+  host: r.host,
+  port: r.port,
+  transport: r.transport,
+  username: r.username,
+  fromDomain: r.fromDomain,
+  callerIdMode: r.callerIdMode,
+  fixedCallerId: r.fixedCallerId,
+  dialPrefix: r.dialPrefix,
+  codecs: r.codecs,
+  maxCalls: r.maxCalls,
+  ringTimeoutS: r.ringTimeoutS,
+  retryDelayS: r.retryDelayS,
+  priority: r.priority,
+  status: r.status,
+  password: null,
+});
+
+export const TRANSPORTS: { value: VoiceGatewayRow["transport"]; label: string }[] = [
+  { value: "udp", label: "UDP" },
+  { value: "tcp", label: "TCP" },
+  { value: "tls", label: "TLS" },
+];
+
+export const CODECS: { value: VoiceGatewayCodec; label: string }[] = [
+  { value: "alaw", label: "G.711 A-law" },
+  { value: "ulaw", label: "G.711 µ-law" },
+  { value: "g722", label: "G.722" },
+  { value: "gsm", label: "GSM" },
+];
+export const codecLabel = (c: string) => CODECS.find((x) => x.value === c)?.label ?? c;
+
+export const CALLER_ID_MODES: { value: VoiceGatewayRow["callerIdMode"]; label: string }[] = [
+  { value: "sender", label: "The sender when it is a number" },
+  { value: "fixed", label: "Always the fixed caller ID" },
+];
+
+/** "sip:voice-gw1.example.net:5060 (UDP)". */
+export const gatewayAddress = (g: Pick<VoiceGatewayRow, "host" | "port" | "transport">) =>
+  `${g.transport === "tls" ? "sips" : "sip"}:${g.host}:${g.port} (${g.transport.toUpperCase()})`;
+
+/** "12.3 s", or "1 min 5 s" from a minute. */
+export function fmtDurationMs(ms: number): string {
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 60)} min ${s % 60} s`;
+}
+
+/** "said twice, one second apart". */
+export function repeatText(n: number): string {
+  if (n === 1) return "said once";
+  return `said ${n === 2 ? "twice" : `${n} times`}, one second apart`;
+}
+
+/** The largest WAV the server takes as uploaded (it is converted to mono 8 kHz, at most 1 MB). */
+export const MAX_RECORDING_UPLOAD = 10 * 1024 * 1024;
 
 /** A file as base64 without the data: prefix (Broadcast attachment). */
 export function toBase64(bytes: Uint8Array): string {

@@ -77,12 +77,17 @@ export function queryRateTables(request: FastifyRequest, reply: FastifyReply) {
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
     const page = await runList(pool, rateTableList, query);
-    const figures = await trafficFigures(pool, page.rows);
-    page.rows = page.rows.map((r): RateTableRow => {
-      const f = figures.get(r.id);
-      return f ? { ...r, avgMarginPct: f.margin, moneyToday: f.money } : r;
-    });
+    page.rows = await addTrafficFigures(pool, page.rows);
     return page;
+  });
+}
+
+/** Today's money and margin on rate table rows (the Rate manager list and its export, §13.12, §13.22). */
+export async function addTrafficFigures(db: Db, rows: RateTableRow[]): Promise<RateTableRow[]> {
+  const figures = await trafficFigures(db, rows);
+  return rows.map((r): RateTableRow => {
+    const f = figures.get(r.id);
+    return f ? { ...r, avgMarginPct: f.margin, moneyToday: f.money } : r;
   });
 }
 
@@ -411,7 +416,7 @@ export function updateRateTable(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
-async function tableDependencies(db: Db, id: number) {
+export async function tableDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     `SELECT count(*)::int AS n FROM customer_trunk_rate_tables x
        JOIN customer_trunks t ON t.id = x.customer_trunk_id AND t.deleted_at IS NULL WHERE x.rate_table_id = $1`,
@@ -979,7 +984,8 @@ export function changeRateLines(request: FastifyRequest, reply: FastifyReply) {
       const change = await recordChange(c, {
         entityType: "rate_table",
         entityIds: [id],
-        changeType: body.items.length > 1 ? "bulk" : "edit",
+        // One save of this table's rates is an edit, however many lines (QA 2026-10-31): "bulk" is Bulk rating's.
+        changeType: "edit",
         diff,
         note: body.note?.trim() || (breaches.length ? `Short notice accepted for ${breaches.length} increases` : null),
         userId: me.id,

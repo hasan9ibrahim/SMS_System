@@ -480,6 +480,8 @@ export function PoliciesView() {
   return (
     <ListScreen<HlrPolicyRow>
       list="hlr_policies"
+      listExport
+      bulkDelete={{ noun: "HLR policy", plural: "HLR policies", restore: true }}
       page={page}
       title="HLR · Policies"
       selectId={selectId}

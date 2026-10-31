@@ -149,7 +149,12 @@ loaded from PostgreSQL every 5 s (`Sms.Switch.Vendor.TrunkStore`).
   `edr_receipt` row per receipt from a vendor and per receipt to the customer (ClickHouse migration
   `003_edr_receipt.sql`), appended, never updated. Rows go through the bus (`sms.edr.*`) to a writer that inserts
   them in batches of up to 1,000 and retries until ClickHouse takes them; only a row ClickHouse cannot read is
-  dropped (logged), never a batch.
+  dropped (logged), never a batch. Each row is stored once even when the bus hands its batch out again (S-7.3,
+  ClickHouse `010_edr_row_key.sql`): it keeps its bus key as `row_key`, one query per batch leaves out the keys the
+  same days already hold, each insert carries an `insert_deduplication_token` from its rows' stream sequence numbers
+  (with `deduplicate_blocks_in_dependent_materialized_views`, so the totals' views drop it too), and the ack wait
+  (90 s) outlasts the lookup and insert timeouts. Copies left from before are removed nightly by the mock service's
+  repair job (`mock/src/jobs/edrRepair.ts`), which also puts the totals right.
 - **Billing** (`Pipeline.Billing`, §7): revenue, cost and the billable flags at the rates in force when the message
   was submitted, per trunk Billing Type. Attempt and submit are decided when the attempt ends (on the `edr` row);
   reported and delivery when its final status is known, on an `edr_receipt` **outcome** row (ClickHouse
@@ -173,6 +178,14 @@ HLR / MNP (step 7b, `Pipeline.Hlr`): lookups before the resp for traffic with HL
 trunk's HLR rules); rated and routed by the network found; a provider timeout uses the master table at once.
 Overflow buffers (step 7b, `Pipeline.Buffers`): one durable bus queue per customer and per vendor trunk, drained at the
 trunk's TPS. Not yet built (planned): e-mails for credit alerts (the API sends them from the events).
+
+SMS to voice (§8, `Sms.Switch.Voice`, docs/SMS_TO_VOICE.md, S-6.9): a message matching an active SMS-to-voice rule with
+a 4–8 digit code is a call instead of an SMS. The intake skips routing for it, holds one message's credit and puts it
+on its voice gateway's durable queue (`vg.<id>`); each server calls through its own Asterisk over AMI
+(`Voice.AmiClient`), at most `max_calls` at once per gateway on both servers, one retry when not answered, DELIVRD and
+billed when answered, else UNDELIV 001 and not billed (`Voice.Calls`). Each server writes its Asterisk's gateway file
+and the rules' recordings (`Voice.Files`). Voice is on where `SMS_ASTERISK_AMI_HOST` is set (with `_PORT`, `_USER`,
+`_SECRET`, `SMS_ASTERISK_PJSIP_FILE`, `SMS_ASTERISK_SOUNDS_DIR`); elsewhere a matching message goes as an SMS.
 
 ## Run it
 

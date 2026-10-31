@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { EmailTemplateRow, EnterpriseDetail } from "@sms/contract";
 import { usePickRows } from "../../api/admin";
 import { ApiError } from "../../api/client";
+import { fieldLine, problemFields } from "../../api/problems";
 import { useAmHistory, useHandover, useReference } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { toast } from "../../ui/feedback";
@@ -47,8 +48,8 @@ function HandoverDialog({ enterprise, onClose }: { enterprise: EnterpriseDetail;
           onClose();
         },
         onError: (e) => {
-          const p = e instanceof ApiError ? ((e.problem.errors ?? []) as { message: string; path: string }[]) : [];
-          setError(p.length ? p.map((x) => `${x.path.slice(1)}: ${x.message}`).join("; ") : (e as Error).message);
+          const p = e instanceof ApiError ? problemFields(e.problem) : [];
+          setError(p.length ? p.map(fieldLine).join(" ") : (e as Error).message);
         },
       },
     );

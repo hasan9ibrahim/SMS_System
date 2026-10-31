@@ -5,7 +5,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
   @moduletag capture_log: true
 
   alias Sms.Core.Bus.{Event, Local}
-  alias Sms.Switch.Pipeline
+  alias Sms.Switch.{Customer, Pipeline}
   alias Sms.Switch.Pipeline.Held.OnBind
   alias Sms.Switch.Pipeline.Ledger.Sync
   alias Sms.Switch.Test.{Client, CustomerCase, FakeHlr, LedgerSource, PipelineConfig}
@@ -120,7 +120,7 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
   describe "a message delivered" do
     test "is routed, rated, sent with receipts asked, and its receipt comes back to the customer" do
-      %{client: client, conns: [conn]} = start_all()
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
 
       {client, resp} =
         submit(client, %{short_message: "Your code is 1234", registered_delivery: 1})
@@ -149,6 +149,9 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert attempt["v_message_id"] == "1"
       assert attempt["route_rule_id"] == 1
       assert attempt["c_msg_status"] == "ACCEPTD"
+      # The vendor connection's address; route rule groups are gone (R4); not a DLR re-route.
+      assert {attempt["v_ip"], attempt["v_port"]} == {"127.0.0.1", FakeSmsc.port(smsc)}
+      assert {attempt["route_rule_group_id"], attempt["dlr_reroute"]} == {0, 0}
       # §7: both sides bill on submit here, so the money is on the attempt row.
       assert attempt["is_customer_billable"] == 1
       assert attempt["is_vendor_billable"] == 1
@@ -815,6 +818,55 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                edr("edr.attempt")
     end
 
+    test "a refused part waits for its retry in the vendor's queue, never in a sender worker (D2)" do
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
+      # Part 2 refused for now (0x14), then taken: the same reference, one attempt.
+      FakeSmsc.set(smsc, :submit, [:ok, {:status, 0x14}, :ok])
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("q", 200)})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p1}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p2}, 2_000
+      refused_at = System.monotonic_time(:millisecond)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = again}, 3_000
+      assert System.monotonic_time(:millisecond) - refused_at >= 400
+      assert again.fields.short_message == p2.fields.short_message
+      assert <<5, 0, 3, ref, 2, 1, _::binary>> = p1.fields.short_message
+      assert <<5, 0, 3, ^ref, 2, 2, _::binary>> = again.fields.short_message
+
+      # The worker handed it to the vendor's queue for the pause.
+      assert Enum.any?(Local.published(), &(&1.type == "msg.vendor_buffered"))
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"is_submit_success" => 1, "msg_count" => 2} = row] = edr("edr.attempt")
+      assert [_, _] = String.split(row["v_message_id"], ",")
+    end
+
+    test "a later part refused for good: all parts via the next vendor; the accepted one stays the first attempt's (D2)" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors())
+
+      FakeSmsc.set(s1, :submit, [:ok, {:status, 0x45}])
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("r", 200)})
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = a1}, 2_000
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = b1}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      assert <<5, 0, 3, ref_a, 2, 1, _::binary>> = a1.fields.short_message
+      assert <<5, 0, 3, ref_b, 2, 1, _::binary>> = b1.fields.short_message
+      assert ref_a != ref_b
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, second] = attempts()
+
+      # Vendor 1 bills on submit: its accepted part is its cost (0.02 × 1), with its id.
+      assert %{"attempt_no" => 1, "is_submit_success" => 0, "command_status" => 0x45} = first
+      assert %{"v_message_id" => "1", "msg_count" => 1, "is_vendor_billable" => 1} = first
+      assert first["cost"] == "0.02"
+      assert %{"attempt_no" => 2, "is_submit_success" => 1, "msg_count" => 2} = second
+      assert second["is_customer_billable"] == 1
+    end
+
     test "a vendor at its TPS limit without an overflow buffer is skipped at once for the next (S-5.1)" do
       %{client: client, conns: [c1, c2]} =
         start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [tps: 1]})
@@ -914,6 +966,52 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert %{"attempt_no" => 1, "v_trunk_id" => 1, "is_submit_success" => 0} = first
       assert first["command_status"] == -1
       assert %{"attempt_no" => 2, "v_trunk_id" => 2, "is_submit_success" => 1} = second
+    end
+
+    test "a validity period that ends before the next vendor is tried: not sent, an EXPIRED receipt (S-2.13)" do
+      %{client: client, smscs: [s1, _], conns: [c1, c2]} =
+        start_all(smscs: 2, config: two_vendors(), vendor_fields: %{1 => [submit_timeout_s: 1]})
+
+      FakeSmsc.set(s1, :submit, :silent)
+
+      # Valid for 1 s: vendor 1 does not answer within its 1 s Submit Timeout.
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        short_message: "short-lived",
+        registered_delivery: 1,
+        validity_period: "000000000001000R"
+      }
+
+      Client.send_pdu(client, Pdu.new(:submit_sm, fields, sequence: 2))
+      {_, resp, dlr} = resp_and_receipt(client)
+      assert resp.status == 0
+      assert dlr.fields.short_message =~ "stat:EXPIRED"
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = sent}, 2_000
+      # The vendor gets the validity as an absolute time in UTC, so it does not start again there.
+      assert sent.fields.validity_period =~ ~r/\A\d{12}000\+\z/
+      refute_received {:smsc, ^c2, %Pdu{command: :submit_sm}}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      [first, last] = attempts()
+
+      assert %{"attempt_no" => 0, "c_msg_status" => "EXPIRED", "is_customer_billable" => 0} =
+               first
+
+      assert %{"attempt_no" => 1, "command_status" => -1, "is_final_attempt" => 0} = last
+    end
+
+    test "a relative validity goes to the vendor as the same moment, absolute in UTC (S-2.13)" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:second)
+
+      {_, %{status: 0}} =
+        submit(client, %{short_message: "valid 5 min", validity_period: "000000000500000R"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      {:ok, at} = Sms.Switch.Smpp.Time.parse(sent.fields.validity_period, 0)
+      assert_in_delta div(at, 1_000), before + 300, 3
     end
 
     test "no answer within Submit Timeout: possibly sent, re-routed, the attempt recorded with status -1 (D4)" do
@@ -1092,6 +1190,38 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
     end
 
+    test "an ingress translation leaving the sender unfit to send: refused 0x0A, nothing sent (S-4.7)" do
+      config = [
+        translation_rules: [
+          %{id: 22, sender_conversion: "append", sender_conversion_value: "Promotions"}
+        ],
+        translation_targets: [PipelineConfig.target(22, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "too long a sender"})
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "command_status" => 0x0A}] = edr("edr.attempt")
+    end
+
+    test "a vendor whose egress translation leaves the sender unfit to send is passed over (S-4.7)" do
+      config =
+        two_vendors(
+          translation_rules: [
+            %{id: 23, sender_conversion: "append", sender_conversion_value: "Promotions"}
+          ],
+          translation_targets: [PipelineConfig.target(23, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.source_addr == "FakeBank"
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+
     test "egress blocked on the only vendor, or a blocking rule: refused 0x45 (Q15)" do
       %{client: client} =
         start_all(
@@ -1144,8 +1274,33 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
         {"no sender (S-2.10)", %{short_message: "a", source_addr: ""}, [], 0x0A},
         {"alphanumeric sender over 11 (S-2.10)",
          %{short_message: "a", source_addr: "ABCDEFGHIJKL", source_addr_ton: 5}, [], 0x0A},
+        {"alphanumeric sender over 11 whatever its TON (S-2.10)",
+         %{short_message: "a", source_addr: "FakeBank Info", source_addr_ton: 0}, [], 0x0A},
         {"no customer rate for the destination (S-6.2)",
-         %{short_message: "a", destination_addr: "4917012345678"}, [], 0x0B}
+         %{short_message: "a", destination_addr: "4917012345678"}, [], 0x0B},
+        # SMPP 3.4 §5.2.5–§5.2.17: values no vendor would take.
+        {"source TON outside SMPP", %{short_message: "a", source_addr_ton: 7}, [], 0x48},
+        {"source NPI outside SMPP", %{short_message: "a", source_addr_npi: 2}, [], 0x49},
+        {"destination TON outside SMPP", %{short_message: "a", dest_addr_ton: 9}, [], 0x50},
+        {"destination NPI outside SMPP", %{short_message: "a", dest_addr_npi: 5}, [], 0x51},
+        {"priority_flag over 3", %{short_message: "a", priority_flag: 4}, [], 0x06},
+        {"registered_delivery reserved bits", %{short_message: "a", registered_delivery: 0x21},
+         [], 0x07},
+        {"registered_delivery reserved receipt value 3",
+         %{short_message: "a", registered_delivery: 3}, [], 0x07},
+        {"esm_class message type a submit cannot have (SMSC receipt)",
+         %{short_message: "a", esm_class: 0x04}, [], 0x43},
+        # S-2.12, S-2.13.
+        {"schedule_delivery_time that is no date (month 13)",
+         %{short_message: "a", schedule_delivery_time: "261331120000000+"}, [], 0x61},
+        {"validity_period that does not read",
+         %{short_message: "a", validity_period: "261399120000000+"}, [], 0x62},
+        {"validity ending before the scheduled time",
+         %{
+           short_message: "a",
+           schedule_delivery_time: "000000010000000R",
+           validity_period: "000000003000000R"
+         }, [], 0x62}
       ]
 
       cases
@@ -1162,6 +1317,22 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
                edr("edr.attempt"),
                &(&1["attempt_no"] == 0 and &1["c_msg_status"] == "REJECTD")
              )
+    end
+
+    test "a data_sm numeric sender over 20 digits is refused 0x0A, not sent to fail at every vendor (S-2.10)" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {_, resp} =
+        submit_pdu(
+          client,
+          :data_sm,
+          %{source_addr: String.duplicate("4", 25), source_addr_ton: 1},
+          [message_payload: "hi"],
+          2
+        )
+
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
     end
 
     test "data_sm is accepted and goes to the vendor as submit_sm" do
@@ -1351,17 +1522,36 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert byte_size(body) == 152
     end
 
-    test "SAR: the parts in TLVs, 160 characters a part" do
+    test "SAR: the parts in TLVs, 153 characters a part (the vendor's SMSC adds the header on air)" do
       first = long_to_vendor("sar")
       assert first.fields.esm_class == 0
-      assert byte_size(first.fields.short_message) == 160
+      assert byte_size(first.fields.short_message) == 153
       assert {:sar_total_segments, 2} in first.tlvs and {:sar_segment_seqnum, 1} in first.tlvs
     end
 
-    test "message_payload: the whole message in one PDU" do
+    test "message_payload: the whole message in one PDU, billed per part (S-3.1)" do
       first = long_to_vendor("payload")
       assert first.fields.short_message == ""
       assert {:message_payload, @long} in first.tlvs
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"msg_count" => 2, "cost" => "0.04", "revenue" => "0.1"}] = edr("edr.attempt")
+    end
+
+    test "references count up per handset: two messages open together never share one (S-3.10)" do
+      %{client: client, conns: [conn]} = start_all()
+      {client, %{status: 0}} = submit(client, %{short_message: String.duplicate("s", 200)}, 2)
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("t", 200)}, 3)
+
+      refs =
+        for _ <- 1..4 do
+          assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = p}, 2_000
+          <<5, 0, 3, ref, 2, _n, _::binary>> = p.fields.short_message
+          ref
+        end
+
+      [a, b] = Enum.uniq(refs)
+      assert b == rem(a + 1, 256)
     end
 
     test "a vendor without multipart, or with a shorter maximum, is skipped for the next one" do
@@ -1398,6 +1588,377 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "vendor capability filter (§5.5, S-2.11, S-4.4) and Deny Multipart (§6.3, S-3.9)" do
+    test "a coding the vendor does not allow: converted when the text fits one it allows, else the next vendor" do
+      config = vendors_v1(allowed_data_codings: [0])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+
+      # Latin-1 (3) whose characters are all in GSM: to vendor 1 as GSM.
+      {client, %{status: 0}} =
+        submit(client, %{data_coding: 3, short_message: <<"caf", 0xE9>>}, 2)
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.data_coding, sent.fields.short_message} == {0, <<"caf", 0x05>>}
+
+      # UCS-2 Cyrillic: vendor 1 cannot take it; vendor 2 gets it as sent.
+      text = :unicode.characters_to_binary("Привет", :utf8, {:utf16, :big})
+      {_, %{status: 0}} = submit(client, %{data_coding: 8, short_message: text}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.data_coding, sent.fields.short_message} == {8, text}
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+    end
+
+    test "a sender or destination TON / NPI the vendor does not allow passes it over" do
+      config = vendors_v1(allowed_src_ton: [1, 2], allowed_dst_npi: [1])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+
+      # An alphanumeric sender (TON 5): vendor 2.
+      {client, %{status: 0}} = submit(client, %{short_message: "alpha"}, 2)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+
+      # An international one (TON 1): vendor 1.
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "4930123456", source_addr_ton: 1, short_message: "num"}, 3)
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c2, %Pdu{command: :submit_sm}}
+    end
+
+    test "no vendor can take it: refused at once with 0x45, nothing sent (Q15)" do
+      # National numbers only: an international destination has no equivalent the vendor takes (S-4.7).
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(allowed_dst_ton: [2])]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "unknown TON", dest_addr_ton: 0})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a TON / NPI the vendor does not take goes as the one equivalent it takes: destination 0 / 0 as 1 / 1" do
+      config = [
+        vendor_trunks: [PipelineConfig.vendor_trunk(allowed_dst_ton: [1], allowed_dst_npi: [1])]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{short_message: "equivalent", dest_addr_ton: 0, dest_addr_npi: 0})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.dest_addr_ton, sent.fields.dest_addr_npi} == {1, 1}
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"c_dst_ton" => 0, "c_dst_npi" => 0, "v_dst_ton" => 1, "v_dst_npi" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "a sender the vendor's TON / NPI lists do not take goes as its equivalent: alphanumeric 5 / 0, a number 1 / 1" do
+      config = [
+        vendor_trunks: [
+          PipelineConfig.vendor_trunk(allowed_src_ton: [1, 5], allowed_src_npi: [0, 1])
+        ]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {client, %{status: 0}} =
+        submit(
+          client,
+          %{source_addr: "FakeBank", source_addr_ton: 2, source_addr_npi: 8, short_message: "a"},
+          2
+        )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 5, 0}
+
+      {client, %{status: 0}} =
+        submit(client, %{source_addr: "+4930123456", source_addr_ton: 0, short_message: "b"}, 3)
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"4930123456", 1, 1}
+
+      # A short code has no single equivalent: TON 0 is not taken, and no vendor is left.
+      {_, resp} =
+        submit(client, %{source_addr: "12345", source_addr_ton: 0, short_message: "c"}, 4)
+
+      assert resp.status == 0x45
+    end
+
+    test "a rule with Deny Multipart never matches a multipart message; the next rule routes it" do
+      config =
+        two_vendors(
+          route_rules: [%{id: 1, priority: 200, deny_multipart: true}, %{id: 2, priority: 100}],
+          route_vendors: [PipelineConfig.route_vendor(1, 1), PipelineConfig.route_vendor(2, 2)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, %{status: 0}} = submit(client, %{short_message: "one part"}, 2)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("m", 200)}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.sort(Enum.map(edr("edr.attempt"), & &1["route_rule_id"])) == [1, 2]
+    end
+  end
+
+  describe "automatic TON / NPI after translation (S-4.7)" do
+    test "a customer trunk on auto: an alphanumeric sender sent with TON 1 goes as TON 5 / NPI 0" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          short_message: "alpha"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 5, 0}
+      # The EDR keeps what the customer sent and what the vendor was sent.
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"c_src_ton" => 1, "c_src_npi" => 1, "v_src_ton" => 5, "v_src_npi" => 0}] =
+               edr("edr.attempt")
+    end
+
+    test "a customer trunk on auto: +44… sent with TON 5 goes without the + as TON 1 / NPI 1" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "+447700900123",
+          source_addr_ton: 5,
+          source_addr_npi: 0,
+          short_message: "intl"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"447700900123", 1, 1}
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"src_addr" => "+447700900123", "v_src_addr" => "447700900123", "v_src_ton" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "as sent (the default): TON / NPI go as they came; +44… with TON 5 is still refused 0x0A" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {client, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          dest_addr_ton: 0,
+          short_message: "as sent"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 1, 1}
+      assert sent.fields.dest_addr_ton == 0
+
+      {_, resp} =
+        submit(
+          client,
+          %{source_addr: "+447700900123", source_addr_ton: 5, short_message: "plus"},
+          3
+        )
+
+      assert resp.status == 0x0A
+    end
+
+    test "a customer trunk on auto cannot fix a length: a 14-character sender is still refused 0x0A" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, resp} =
+        submit(client, %{source_addr: "ABCDEFGHIJKLMN", source_addr_ton: 1, short_message: "long"})
+
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a customer trunk on auto: an ingress translation leaving 14 characters is refused 0x0A" do
+      config = [
+        customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")],
+        translation_rules: [
+          %{id: 32, sender_conversion: "append", sender_conversion_value: "Promos"}
+        ],
+        translation_targets: [PipelineConfig.target(32, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{source_addr: "FakeBank", short_message: "longer"})
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "command_status" => 0x0A}] = edr("edr.attempt")
+    end
+
+    test "a TON / NPI a translation rule sets wins over auto" do
+      config = [
+        customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")],
+        translation_rules: [%{id: 30, sender_ton: 2}],
+        translation_targets: [PipelineConfig.target(30, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          short_message: "rule"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 2, 0}
+    end
+
+    test "a vendor on auto gets a destination sent with TON 0 as 1 / 1, though it takes any" do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(ton_npi_mode: "auto")]]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{short_message: "unknown TON", dest_addr_ton: 0, dest_addr_npi: 0})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+
+      assert {sent.fields.destination_addr, sent.fields.dest_addr_ton, sent.fields.dest_addr_npi} ==
+               {@dest, 1, 1}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"c_dst_ton" => 0, "c_dst_npi" => 0, "v_dst_ton" => 1, "v_dst_npi" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "a vendor on auto gets +… without the + as TON 1 / NPI 1, after its egress translation" do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      # 11 characters: fit to send as the customer's alphanumeric sender (TON 5).
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "+4477009001", source_addr_ton: 5, short_message: "plus"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"4477009001", 1, 1}
+    end
+
+    test "a vendor on auto keeps a TON an ingress rule set" do
+      config = [
+        vendor_trunks: [PipelineConfig.vendor_trunk(ton_npi_mode: "auto")],
+        translation_rules: [%{id: 33, sender_ton: 2}],
+        translation_targets: [PipelineConfig.target(33, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "FakeBank", source_addr_npi: 1, short_message: "kept"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 2, 0}
+    end
+
+    test "a vendor on auto cannot fix a length: an egress translation leaving 14 characters passes it over" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1, ton_npi_mode: "auto"),
+            PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+          ],
+          translation_rules: [
+            %{id: 31, sender_conversion: "append", sender_conversion_value: "Promos"}
+          ],
+          translation_targets: [PipelineConfig.target(31, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 5, 0}
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+  end
+
+  describe "Refuse invalid senders per vendor trunk (S-2.10, S-4.7)" do
+    @long_sender "ABCDEFGHIJKLMN"
+
+    test "a 14-character sender is refused 0x0A when every vendor refuses it (the default)" do
+      %{client: client} = start_all(smscs: 2, config: two_vendors())
+      {_, resp} = submit(client, %{source_addr: @long_sender, short_message: "long"})
+      assert resp.status == 0x0A
+      refute_receive {:smsc, _conn, %Pdu{command: :submit_sm}}, 300
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "command_status" => 0x0A}] = edr("edr.attempt")
+    end
+
+    test "a vendor with the option off takes it as it is; TON / NPI outside SMPP are still refused at intake" do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(refuse_invalid_senders: false)]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {client, %{status: 0}} = submit(client, %{source_addr: @long_sender, short_message: "long"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {@long_sender, 5, 0}
+
+      {client, resp} =
+        submit(client, %{source_addr: "FakeBank", source_addr_ton: 7, short_message: "a"}, 3)
+
+      assert resp.status == 0x48
+      {_, resp} = submit(client, %{source_addr: "", short_message: "b"}, 4)
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "with two vendors it skips the one refusing the sender and uses the other" do
+      config = vendors_v1([])
+
+      config =
+        Keyword.put(config, :vendor_trunks, [
+          PipelineConfig.vendor_trunk(id: 1),
+          PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201], refuse_invalid_senders: false)
+        ])
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, %{status: 0}} = submit(client, %{source_addr: @long_sender, short_message: "long"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.source_addr == @long_sender
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+
+      # A sender both take still goes to the first.
+      {_, %{status: 0}} = submit(client, %{short_message: "short"}, 3)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+    end
+
+    test "one vendor refusing the sender and another passed over for something else: 0x45, not 0x0A" do
+      config = vendors_v1([])
+
+      config =
+        Keyword.put(config, :vendor_trunks, [
+          PipelineConfig.vendor_trunk(id: 1),
+          PipelineConfig.vendor_trunk(
+            id: 2,
+            rate_table_ids: [201],
+            refuse_invalid_senders: false,
+            allowed_dst_ton: [2]
+          )
+        ])
+
+      %{client: client} = start_all(smscs: 2, config: config)
+      {_, resp} = submit(client, %{source_addr: @long_sender, short_message: "long"})
+      assert resp.status == 0x45
+    end
+  end
+
+  defp source(%Pdu{fields: f}), do: {f.source_addr, f.source_addr_ton, f.source_addr_npi}
+
   # Two vendors at levels 1 and 2; vendor 1's trunk fields as given.
   defp vendors_v1(v1_fields) do
     [
@@ -1433,8 +1994,11 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
 
       assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
 
-      assert Enum.map(Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"]), & &1["v_trunk_id"]) ==
-               [1, 2]
+      # The attempt the failed receipt caused is marked a DLR re-route.
+      assert Enum.map(
+               Enum.sort_by(edr("edr.attempt"), & &1["attempt_no"]),
+               &{&1["v_trunk_id"], &1["dlr_reroute"]}
+             ) == [{1, 0}, {2, 1}]
     end
 
     test "no re-route from a vendor that bills on submit: the customer gets the failure" do
@@ -2100,6 +2664,423 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       {_client, resp} = submit(client, %{short_message: "second"}, 3)
       assert resp.status == 0x45
       refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+  end
+
+  describe "credit holds (§7, S-6.3, S-6.4, decision 2026-10-31)" do
+    defp ledger(accounts) do
+      LedgerSource.put(accounts)
+      start_supervised!({Sync, source: LedgerSource, interval_ms: 3_600_000})
+      start_supervised!(Pipeline.Ledger.Charges)
+      :ok = Sync.sync()
+    end
+
+    defp exposure(key) do
+      {:ok, used} = Pipeline.Ledger.used(key)
+      {used, Pipeline.Ledger.held(key)}
+    end
+
+    test "a message waiting for its receipt holds its cost; the receipt that bills nothing releases it" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      {client, resp} = submit(client, %{short_message: "first", registered_delivery: 1})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert exposure("c11") == {0, 50_000}
+
+      # Not billed yet, but held: no overshoot.
+      {client, resp} = submit(client, %{short_message: "second"}, 3)
+      assert resp.status == 0x45
+
+      receipt(conn, "1", "UNDELIV", "005")
+      {client, _} = customer_receipt(client)
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+
+      {_client, resp} = submit(client, %{short_message: "third"}, 4)
+      assert resp.status == 0
+    end
+
+    test "billed on submit: the charge replaces the hold" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "1"]])
+      %{client: client, conns: [conn]} = start_all()
+      {_client, %{status: 0}} = submit(client, %{short_message: "billed at once"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+    end
+
+    test "delivery billing per part: the delivered parts are charged, the whole hold released (S-6.4)" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "1"]])
+
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        registered_delivery: 1,
+        short_message: ""
+      }
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, fields,
+          tlvs: [message_payload: String.duplicate("t", 200)],
+          sequence: 2
+        )
+      )
+
+      assert {client, %Pdu{command: :submit_sm_resp, status: 0}} = Client.recv(client, 5_000)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      # Both parts held.
+      assert exposure("c11") == {0, 100_000}
+
+      receipt(conn, "1", "DELIVRD")
+      receipt(conn, "2", "UNDELIV", "005")
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:UNDELIV"
+
+      assert_eventually(fn -> match?([_], outcome_rows()) end)
+
+      assert [
+               %{
+                 "is_customer_billable" => 1,
+                 "revenue" => "0.05",
+                 "is_vendor_billable" => 1,
+                 "cost" => "0.02"
+               }
+             ] = outcome_rows()
+
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+    end
+
+    test "a message no vendor takes releases its hold" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
+      FakeSmsc.set(smsc, :submit, {:status, 0x45})
+      {client, %{status: 0}} = submit(client, %{short_message: "refused by the vendor"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+      {_client, %{status: 0}} = submit(client, %{short_message: "room again"}, 3)
+    end
+
+    test "a message whose validity ends before the sender takes it releases its hold (S-2.13)" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, conns: [conn]} = start_all(sender: false)
+
+      {_client, %{status: 0}} =
+        submit(client, %{
+          short_message: "short-lived",
+          registered_delivery: 1,
+          validity_period: "000000000001000R"
+        })
+
+      assert exposure("c11") == {0, 50_000}
+      Process.sleep(1_100)
+      [event] = for e <- Local.published(), e.type == "msg.accepted", do: e
+      assert :ok = Pipeline.Sender.handle_event(event)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+      assert Enum.any?(edr("edr.attempt"), &(&1["c_msg_status"] == "EXPIRED"))
+    end
+  end
+
+  describe "scheduled messages held in the switch (S-2.12, decided 2026-10-31)" do
+    # The resp (or another answer) and the receipt, in either order: the in-memory bus forwards a receipt the switch
+    # makes inside the request that made it.
+    defp answer_and_receipt(client, command) do
+      {client, pdus} =
+        Enum.reduce(1..2, {client, []}, fn _, {client, pdus} ->
+          assert {client, pdu} = Client.recv(client, 5_000)
+
+          if pdu.command == :deliver_sm,
+            do: Client.send_pdu(client, Pdu.response(pdu, :esme_rok, %{message_id: ""}))
+
+          {client, [pdu | pdus]}
+        end)
+
+      [resp] = Enum.filter(pdus, &(&1.command == command))
+      [dlr] = Enum.filter(pdus, &(&1.command == :deliver_sm))
+      {client, resp, dlr}
+    end
+
+    defp five_minutes, do: "000000000500000R"
+
+    test "+5 min: accepted at once, not sent before its time, sent after it without a schedule" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {_client, resp} =
+        submit(client, %{
+          short_message: "in five minutes",
+          schedule_delivery_time: five_minutes(),
+          validity_period: "000000001000000R"
+        })
+
+      assert resp.status == 0
+      id = resp.fields.message_id
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      # Four minutes on: still held.
+      :ok = Pipeline.Scheduled.release_due(before + 4 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert edr("edr.attempt") == []
+
+      :ok = Pipeline.Scheduled.release_due(before + 5 * 60_000 + 1_000)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      # Held by us, so it goes at once; the validity as an absolute time in UTC (S-2.13).
+      assert sent.fields.schedule_delivery_time == ""
+      {:ok, until} = Sms.Switch.Smpp.Time.parse(sent.fields.validity_period, 0)
+      assert_in_delta div(until, 1_000), div(before, 1_000) + 600, 3
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+      [row] = edr("edr.attempt")
+      assert %{"c_message_id" => ^id, "is_submit_success" => 1, "c_rate" => "0.05"} = row
+      # Released once.
+      :ok = Pipeline.Scheduled.release_due(before + 6 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "before its time: query_sm answers ENROUTE; cancel_sm takes it out with a DELETED receipt, nothing sent" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "cancel me later",
+          registered_delivery: 1,
+          schedule_delivery_time: five_minutes()
+        })
+
+      id = resp.fields.message_id
+      {client, q} = query(client, id)
+      assert {q.status, q.fields.message_state} == {0, 1}
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:cancel_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: 4)
+      )
+
+      {client, c, dlr} = answer_and_receipt(client, :cancel_sm_resp)
+      assert c.status == 0
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:DELETED"
+
+      {client, q} = query(client, id, 5)
+      assert q.fields.message_state == 4
+
+      :ok = Pipeline.Scheduled.release_due(before + 6 * 60_000)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      assert_eventually(fn -> match?([_], edr("edr.attempt")) end)
+
+      assert [%{"c_msg_status" => "DELETED", "c_message_id" => ^id, "revenue" => "0"}] =
+               edr("edr.attempt")
+
+      # Cancelled already: OK again, as for a queued message (S-2.15), and no second receipt.
+      {client, c} = cancel(client, id, 6)
+      assert c.status == 0
+      assert {:error, :timeout} = Client.recv(client, 300)
+    end
+
+    test "a validity period that ends before its time: EXPIRED at its release, never sent (S-2.13)" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "too late",
+          registered_delivery: 1,
+          schedule_delivery_time: "000000000001000R",
+          validity_period: "000000000002000R"
+        })
+
+      assert resp.status == 0
+      Process.sleep(2_100)
+      :ok = Pipeline.Scheduled.release_due()
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:EXPIRED"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert [%{"c_msg_status" => "EXPIRED", "is_customer_billable" => 0}] = edr("edr.attempt")
+    end
+
+    test "checked at intake without a hold, rated and held at its release; refused then: REJECTD, not billed" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{
+          short_message: "scheduled",
+          registered_delivery: 1,
+          schedule_delivery_time: five_minutes()
+        })
+
+      assert resp.status == 0
+      id = resp.fields.message_id
+      # Checked, nothing held until it goes.
+      assert exposure("c11") == {0, 0}
+
+      {client, %{status: 0}} = submit(client, %{short_message: "sent now"}, 3)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+
+      # At its time the balance no longer covers it.
+      :ok = Pipeline.Scheduled.release_due(before + 5 * 60_000 + 1_000)
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:REJECTD"
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+
+      row = Enum.find(edr("edr.attempt"), &(&1["c_message_id"] == id))
+      assert %{"is_customer_billable" => 0, "command_status" => 0x45, "attempt_no" => 0} = row
+      assert exposure("c11") == {50_000, 0}
+    end
+
+    test "refused at intake when it could not go now; a schedule over 7 days ahead is refused 0x61" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.01"]])
+      %{client: client} = start_all()
+      now = System.os_time(:millisecond)
+
+      {client, resp} =
+        submit(client, %{short_message: "no credit", schedule_delivery_time: five_minutes()})
+
+      assert resp.status == 0x45
+
+      far = Sms.Switch.Smpp.Time.absolute(now + 8 * 86_400_000)
+
+      {_client, resp} =
+        submit(client, %{short_message: "too far", schedule_delivery_time: far}, 3)
+
+      assert resp.status == 0x61
+    end
+
+    # Just after a second starts, so a sweep counts in one TPS second.
+    defp second_start, do: Process.sleep(1_000 - rem(System.os_time(:millisecond), 1_000) + 5)
+
+    # The customer trunk's TPS lowered after the messages were accepted (one connection).
+    defp customer_tps(fields) do
+      CustomerCase.put_trunks([CustomerCase.trunk([max_connections: 1] ++ fields)])
+      {:ok, _} = Customer.reload_trunks()
+    end
+
+    # A sweep at the start of each second until `n` messages reached the vendor: their texts and arrival times (ms).
+    defp sweep_until_sent(conn, due_at, n, sent \\ [], seconds \\ 8)
+
+    defp sweep_until_sent(_conn, _due_at, n, sent, _seconds) when length(sent) >= n,
+      do: Enum.reverse(sent)
+
+    defp sweep_until_sent(_conn, _due_at, _n, sent, 0), do: Enum.reverse(sent)
+
+    defp sweep_until_sent(conn, due_at, n, sent, seconds) do
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      sweep_until_sent(conn, due_at, n, receive_sent(conn, sent, 900), seconds - 1)
+    end
+
+    defp receive_sent(conn, sent, wait_ms) do
+      receive do
+        {:smsc, ^conn, %Pdu{command: :submit_sm} = pdu} ->
+          at = System.monotonic_time(:millisecond)
+          receive_sent(conn, [{pdu.fields.short_message, at} | sent], wait_ms)
+      after
+        wait_ms -> sent
+      end
+    end
+
+    test "a burst over the customer trunk's TPS reaches the vendor at that TPS, through its buffer and later sweeps, each once (S-2.4)" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      Enum.reduce(1..4, client, fn i, client ->
+        {client, %{status: 0}} =
+          submit(
+            client,
+            %{short_message: "campaign #{i}", schedule_delivery_time: five_minutes()},
+            i + 1
+          )
+
+        client
+      end)
+
+      customer_tps(tps: 1, overflow_buffer: 1)
+      due_at = before + 5 * 60_000 + 1_000
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = first}, 2_000
+      first_at = System.monotonic_time(:millisecond)
+      # One a second: the next waits in the trunk's buffer, the other two are still held.
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 600
+
+      rest = sweep_until_sent(conn, due_at, 3)
+      texts = [first.fields.short_message | Enum.map(rest, &elem(&1, 0))]
+      assert Enum.sort(texts) == Enum.map(1..4, &"campaign #{&1}")
+      # Four at one a second take three more TPS seconds.
+      {_, last_at} = List.last(rest)
+      assert last_at - first_at >= 2_500
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 4 end)
+      rows = edr("edr.attempt")
+      assert rows |> Enum.map(& &1["c_message_id"]) |> Enum.uniq() |> length() == 4
+      assert Enum.all?(rows, &(&1["is_submit_success"] == 1 and &1["c_rate"] == "0.05"))
+      # At least the one that waited in the buffer says so.
+      assert Enum.any?(rows, &(&1["is_buffered"] == 1))
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "held for the customer trunk's TPS: query_sm answers ENROUTE and cancel_sm takes it out, never sent" do
+      %{client: client, conns: [conn]} = start_all()
+      before = System.os_time(:millisecond)
+
+      {client, %{status: 0}} =
+        submit(client, %{short_message: "goes first", schedule_delivery_time: five_minutes()})
+
+      {client, resp} =
+        submit(
+          client,
+          %{
+            short_message: "cancelled while held",
+            registered_delivery: 1,
+            schedule_delivery_time: five_minutes()
+          },
+          3
+        )
+
+      id = resp.fields.message_id
+      customer_tps(tps: 1)
+      due_at = before + 5 * 60_000 + 1_000
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.short_message == "goes first"
+
+      {client, q} = query(client, id, 4)
+      assert {q.status, q.fields.message_state} == {0, 1}
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:cancel_sm, %{message_id: id, source_addr: "FakeBank"}, sequence: 5)
+      )
+
+      {_client, c, dlr} = answer_and_receipt(client, :cancel_sm_resp)
+      assert c.status == 0
+      assert dlr.fields.short_message =~ "id:#{id}"
+      assert dlr.fields.short_message =~ "stat:DELETED"
+
+      second_start()
+      :ok = Pipeline.Scheduled.release_due(due_at)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 500
+
+      assert_eventually(fn ->
+        Enum.any?(edr("edr.attempt"), &(&1["c_message_id"] == id))
+      end)
+
+      assert [%{"c_msg_status" => "DELETED", "revenue" => "0"}] =
+               Enum.filter(edr("edr.attempt"), &(&1["c_message_id"] == id))
     end
   end
 

@@ -17,6 +17,171 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         }
       end
 
+      test "credit holds: check and hold in one step, released once, swept when expired (§7, S-6.3)",
+           %{
+             id: id
+           } do
+        account = "c#{id}"
+        now = System.os_time(:millisecond)
+
+        # 0.1 available, nothing charged: 0.06 then 0.06 does not fit.
+        assert {:ok, :held, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}a", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, :refused, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}b", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, :already, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}a", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, %{^account => 60_000}} = Store.credit_held([account])
+
+        # The charge replaces the hold in one transaction.
+        assert {:ok, _} =
+                 Store.transaction([
+                   ["INCRBY", "cht:#{account}", 60_000],
+                   Store.release_credit_command(account, "#{id}a")
+                 ])
+
+        assert {:ok, %{^account => 0}} = Store.credit_held([account])
+        assert {:ok, 0} = Store.release_credit(account, "#{id}a")
+
+        assert {:ok, :held, 60_000, 40_000} =
+                 Store.reserve_credit(account, "#{id}b", 40_000, 100_000, now - 1)
+
+        assert {:ok, :held, 60_000, 40_000} =
+                 Store.reserve_credit(account, "#{id}c", 0, 100_000, now + 60_000)
+
+        assert {:ok, due} = Store.due_credit_holds(now, 1_000)
+        assert {account, "#{id}b"} in due
+        refute {account, "#{id}c"} in due
+
+        # A hold moved on since it was listed stays; one still expired goes.
+        :ok = Store.extend_credit_hold(account, "#{id}b", now + 60_000)
+        assert {:ok, 0} = Store.release_credit(account, "#{id}b", now)
+        :ok = Store.extend_credit_hold(account, "#{id}b", now - 1)
+        assert {:ok, 40_000} = Store.release_credit(account, "#{id}b", now)
+        assert {:ok, %{^account => 0}} = Store.credit_held([account])
+        assert {:ok, due} = Store.due_credit_holds(now, 1_000)
+        refute {account, "#{id}b"} in due
+
+        # A shared Redis keeps nothing of this test.
+        assert {:ok, 0} = Store.release_credit(account, "#{id}c")
+        for key <- ["cht", "chh", "chht"], do: Store.command(["DEL", "#{key}:#{account}"])
+      end
+
+      test "scheduled messages: held by time, taken by one server, leased until released, or cancelled (S-2.12)",
+           %{
+             id: id,
+             vt: ent
+           } do
+        now = System.os_time(:millisecond)
+        [a, b, part] = ["#{id}a", "#{id}b", "#{id}p"]
+        assert :ok = Store.schedule(a, ent, [a, part], "blob-a", now + 1_000, 60)
+        assert :ok = Store.schedule(b, ent, [b], "blob-b", now + 5_000, 60)
+
+        assert {:ok, ^a} = Store.scheduled_id(ent, part)
+        assert {:ok, nil} = Store.scheduled_id(ent + 1, part)
+        assert {:ok, due} = Store.due_scheduled(:waiting, now + 1_000, 1_000)
+        assert a in due
+        refute b in due
+
+        # One server takes it; not before its time.
+        refute Store.claim_scheduled(:waiting, b, now + 1_000, now + 61_000)
+        assert Store.claim_scheduled(:waiting, a, now + 1_000, now + 61_000)
+        refute Store.claim_scheduled(:waiting, a, now + 1_000, now + 61_000)
+        # Being released: cancel_sm cannot take it any more.
+        assert :none = Store.take_scheduled(a)
+
+        assert {:ok, %{blob: "blob-a", enterprise_id: ^ent, ids: [^a, ^part]}} =
+                 Store.scheduled(a)
+
+        # The releasing server stopped: once its lease runs out another takes it.
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 61_000, 1_000)
+        assert a in leased
+        refute Store.claim_scheduled(:leased, a, now + 30_000, now + 90_000)
+        assert Store.claim_scheduled(:leased, a, now + 61_000, now + 121_000)
+
+        assert :ok = Store.finish_scheduled(a, ent, [a, part])
+        assert :none = Store.scheduled(a)
+        assert {:ok, nil} = Store.scheduled_id(ent, part)
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 200_000, 1_000)
+        refute a in leased
+
+        # Cancelled before its time: out of the list, its keys gone, DELETED for query_sm.
+        assert {:ok, %{blob: "blob-b", ids: [^b]}} = Store.take_scheduled(b)
+        assert :none = Store.take_scheduled(b)
+        assert {:ok, nil} = Store.scheduled_id(ent, b)
+        assert {:ok, due} = Store.due_scheduled(:waiting, now + 10_000, 1_000)
+        refute b in due
+        assert :ok = Store.mark_cancelled(ent, [b], 60)
+        assert {:ok, :cancelled} = Store.queued(ent, b)
+        Store.command(["DEL", "q:#{ent}:#{b}"])
+      end
+
+      test "scheduled messages waiting for their trunk's TPS: moved under the lease, taken by one, cancellable (S-2.12, S-2.4)",
+           %{id: id, vt: ent} do
+        now = System.os_time(:millisecond)
+        # Unique to this test, as the enterprise.
+        trunk = ent
+        [a, b, c] = ["#{id}a", "#{id}b", "#{id}c"]
+
+        for {m, at} <- [{a, now - 3_000}, {b, now - 2_000}, {c, now - 1_000}] do
+          assert :ok = Store.schedule(m, ent, [m], "blob-#{m}", at, 60)
+          assert Store.claim_scheduled(:waiting, m, now, now + 60_000)
+        end
+
+        # Only by the server whose lease is on it; by its time, not by when it was moved.
+        refute Store.defer_scheduled(a, trunk, now - 3_000, now + 1, ent, [a], 600)
+        # A query key gone already is skipped.
+        assert Store.defer_scheduled(
+                 c,
+                 trunk,
+                 now - 1_000,
+                 now + 60_000,
+                 ent,
+                 [c, "#{id}gone"],
+                 600
+               )
+
+        assert Store.defer_scheduled(a, trunk, now - 3_000, now + 60_000, ent, [a], 600)
+        assert Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
+        refute Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
+
+        assert {:ok, trunks} = Store.waiting_trunks()
+        assert trunk in trunks
+        assert {:ok, [^a, ^b, ^c]} = Store.waiting_scheduled(trunk, 10)
+        assert {:ok, [^a]} = Store.waiting_scheduled(trunk, 1)
+        # No longer leased (no other server takes it over), still held: query_sm finds it.
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 120_000, 1_000)
+        refute Enum.any?([a, b, c], &(&1 in leased))
+        assert {:ok, ^a} = Store.scheduled_id(ent, a)
+
+        # One server takes it (leased again); then cancel_sm cannot.
+        assert Store.claim_waiting(trunk, a, now + 60_000)
+        refute Store.claim_waiting(trunk, a, now + 60_000)
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 60_000, 1_000)
+        assert a in leased
+        assert :none = Store.take_scheduled(a)
+        assert :ok = Store.finish_scheduled(a, ent, [a])
+
+        # cancel_sm takes a waiting one out.
+        assert {:ok, %{blob: blob, ids: [^b]}} = Store.take_scheduled(b)
+        assert blob == "blob-#{b}"
+        assert {:ok, nil} = Store.scheduled_id(ent, b)
+        refute Store.claim_waiting(trunk, b, now + 60_000)
+
+        # The trunk stays listed while it has any waiting.
+        assert :ok = Store.forget_waiting(trunk)
+        assert {:ok, trunks} = Store.waiting_trunks()
+        assert trunk in trunks
+        assert Store.claim_waiting(trunk, c, now + 60_000)
+        assert :ok = Store.finish_scheduled(c, ent, [c])
+        assert :ok = Store.forget_waiting(trunk)
+        assert {:ok, trunks} = Store.waiting_trunks()
+        refute trunk in trunks
+      end
+
       test "queued marks: cancel while queued, the sender's take, query (S-2.15, D8)", %{
         id: id,
         vt: ent

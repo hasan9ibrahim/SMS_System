@@ -16,3 +16,7 @@ pcap_offsite_days: 1
 # certificate made by roles/web. Platform e-mail goes to a mail catcher on the lab host (deploy/lab/smtp-sink.py).
 web_domain: sms.lab.test
 smtp_from: platform@sms.lab.test
+# SMS to voice on both servers (roles/asterisk). No real voice switch: any SIP test tool on the lab network (e.g. on
+# the lab host, 10.88.0.1) stands in for it, as a voice gateway set on the Voice gateways page.
+sms_voice_enabled: true
+voice_switch_cidrs: [10.88.0.0/24]

@@ -232,6 +232,7 @@ export const EDR_SECTIONS: { key: string; label: string; fields: string[] }[] = 
       "vendorExRate",
       "vendorTranslationRuleIds",
       "routeRuleId",
+      "routeType",
       "routeDecidedBy",
       "dlrReroute",
       "repushRequestId",
@@ -282,6 +283,23 @@ export const EDR_SECTIONS: { key: string; label: string; fields: string[] }[] = 
   },
 ];
 
+/** SMS to voice (§8): the call an attempt of route type voice was; shown only for those. */
+export const EDR_VOICE_SECTION = {
+  key: "voice",
+  label: "Voice call",
+  fields: ["voiceGateway", "voiceAnswered", "voiceHangupCause", "voiceDurationMs"],
+};
+
+/** Route types as the screens name them; "voice" is an SMS-to-voice call (§8). */
+export const ROUTE_TYPE_LABEL: Record<string, string> = {
+  static: "Static",
+  dynamic: "Least cost",
+  qbr: "Quality",
+  block: "Block",
+  voice: "Voice",
+};
+export const routeTypeLabel = (v: string) => (v ? (ROUTE_TYPE_LABEL[v] ?? v) : "—");
+
 /** A field value as text for the detail panel. */
 export function fieldText(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
@@ -302,6 +320,21 @@ export function parseReceivers(text: string): string[] {
         .filter(Boolean),
     ),
   ];
+}
+
+/**
+ * What is wrong with the typed numbers, or null (functional QA round 13: "12x" was counted and sent as "12"). Each
+ * entry is a phone number written with digits, spaces, +, dashes, dots or brackets, of 5 to 15 digits (the contract's
+ * receiver).
+ */
+export function receiverProblem(text: string): string | null {
+  const bad = text
+    .split(/[,;\n]+/)
+    .map((x) => x.trim())
+    .filter((x) => x && (!/^\+?[\d\s().-]+$/.test(x) || !/^\d{5,15}$/.test(x.replace(/\D/g, ""))));
+  if (!bad.length) return null;
+  const shown = bad.slice(0, 3).join(", ") + (bad.length > 3 ? ", …" : "");
+  return `Not a phone number: ${shown}. Use 5 to 15 digits, e.g. 447700900123.`;
 }
 
 /** Data coding from the text: UCS-2 (8) when a character is outside GSM 7-bit, else the default (0). */

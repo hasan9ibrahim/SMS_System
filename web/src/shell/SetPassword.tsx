@@ -6,9 +6,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { PasswordSetupInfo } from "@sms/contract";
 import { checkPasswordSetup, completePasswordSetup } from "../api/admin";
 import { ApiError } from "../api/client";
+import { friendlyMessage } from "../api/problems";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Button } from "../ui/primitives";
+import { UsernameHint } from "../ui/UsernameHint";
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : "Something went wrong. Try again.");
 
@@ -52,7 +54,7 @@ export function SetPasswordScreen() {
       .then(() => setDone(true))
       .catch((err: unknown) => {
         const errors = err instanceof ApiError ? (err.problem.errors as { message: string }[] | undefined) : undefined;
-        setError(errors?.length ? errors.map((x) => x.message).join("; ") : message(err));
+        setError(errors?.length ? errors.map((x) => friendlyMessage(x.message)).join(" ") : message(err));
       })
       .finally(() => setBusy(false));
   };
@@ -84,11 +86,15 @@ export function SetPasswordScreen() {
               Hello {info.firstName}. Choose the password for <strong>{info.username}</strong>. This link works until{" "}
               {info.expiresAt.slice(0, 16).replace("T", " ")} UTC.
             </p>
+            {/* The browser saves the new password for this username (§13.28). */}
+            <UsernameHint username={info.username} />
             <label className="signin-field">
               <span>New password</span>
               <input
                 type="password"
                 autoFocus
+                id="new-password"
+                name="new-password"
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -105,6 +111,8 @@ export function SetPasswordScreen() {
               <span>Repeat it</span>
               <input
                 type="password"
+                id="confirm-password"
+                name="confirm-password"
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}

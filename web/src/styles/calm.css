@@ -14,10 +14,10 @@
   font-weight: 700;
 }
 .la-grid td.la-good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .la-grid td.la-pos {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 /* The total row tinted like the reference screenshot (team trial round 6), a shade darker while its detail is open
    (double-click). */
@@ -54,7 +54,8 @@
   color: #3b2500;
 }
 .la-bad .la-pill {
-  background: #e5484d;
+  /* A shade deeper than the reference red so the white figure reaches 4.5:1 (design QA round 13). */
+  background: #d93a40;
   color: #fff;
 }
 /* Header rows tinted like the date-range chip (team trial round 5, second pass); titles on one line. */
@@ -95,13 +96,19 @@
   --band: var(--color-accent);
 }
 .la-cols .la-band-quality {
-  --band: var(--color-good);
+  --band: var(--color-good-text);
 }
 .la-cols .la-band-money {
   --band: var(--color-warning);
 }
 .la-cols .la-band-network {
   --band: #7c3aed;
+}
+/* Band labels at WCAG AA (design QA round 13): the green text shade, and a lighter violet on the dark theme where the
+   Network label was 3.2:1. */
+:root[data-theme="dark"] .la-cols .la-band-network,
+:root[data-theme="dark"] .la-grid th.la-band-network {
+  --band: #a78bfa;
 }
 @keyframes la-flash-up {
   from {
@@ -194,10 +201,10 @@
 }
 @media (max-width: 1500px) {
   .la-grid td {
-    font-size: 11.5px;
+    font-size: var(--text-sm);
   }
   .la-grid th {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .la-grid td,
   .la-grid th {
@@ -216,17 +223,17 @@
 .la-grid td.num:not(.la-strong),
 .la-grid td.la-name {
   font-family: "Roboto", var(--font-family);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   letter-spacing: 0.01em;
 }
 .la-grid td.num.la-strong {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 /* Every figure the same size and font (team trial round 5); ASR, DLRs and margin are bold. */
 .la-grid td.num.la-strong,
 .la-grid td.num.la-strong .la-pill {
   font-family: "Roboto", var(--font-family);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 /* Names in the first column (customer, trunk, vendor, destination…) are plain, not bold. */
@@ -240,7 +247,7 @@
 }
 /* Column titles a touch smaller so they fit on one line next to the smaller figures. */
 .la-grid thead tr:not(.la-bands) th {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   padding-left: 2px;
   padding-right: 2px;
 }
@@ -318,7 +325,7 @@ table th.num,
 .la-grid td.num:not(.la-strong),
 .la-grid td.num.la-strong,
 .la-grid td.num.la-strong .la-pill {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 /* Live analytics columns (team trial round 6): the name column takes about the first third, so the figures start

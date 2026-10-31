@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { create } from "zustand";
 import { useMe, useUpdatePreferences } from "../api/hooks";
 import type { Theme } from "@sms/contract";
-import { SECTIONS, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
+import { SECTIONS, accessOf, pagesOf, pageForPath, type SectionKey } from "../nav/registry";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Menu, Popover } from "../ui/primitives";
@@ -26,7 +26,7 @@ const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits:
 /**
  * The open main-menu dropdown. The mouse opens a section by hovering it, no click needed (team trial round 8); moving
  * to another section swaps the dropdown at once, leaving both the button and its dropdown closes it after a moment.
- * Clicks and touch still open and close it.
+ * A mouse click only opens it; touch and the keyboard open and close it.
  */
 const useOpenSection = create<{ open: SectionKey | null; set: (s: SectionKey | null) => void }>((set) => ({
   open: null,
@@ -57,7 +57,7 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
   };
   const ref = useRef<HTMLButtonElement>(null);
   const canView = useCanView();
-  const pages = pagesOf(section).filter((pg) => canView(pg.key)); // §11: pages the access group allows
+  const pages = pagesOf(section).filter((pg) => canView(accessOf(pg))); // §11: pages the access group allows
   const label = SECTIONS.find((s) => s.key === section)!.label;
   if (pages.length === 0) return null;
   if (pages.length === 1) {
@@ -90,7 +90,9 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         className={`menu-top${current ? " current" : ""}${shown ? " open" : ""}`}
         aria-haspopup="menu"
         aria-expanded={shown}
-        onClick={() => setShown((v) => !v)}
+        // A mouse has opened it by hovering, so its click only opens: toggling shut what the hover just opened made
+        // the dropdown flash and vanish (design QA round 13). Touch and the keyboard still open and close it.
+        onClick={(e) => setShown((v) => ((e.nativeEvent as PointerEvent).pointerType === "mouse" ? true : !v))}
         onPointerEnter={(e) => isMouse(e) && setShown(true)}
         onPointerLeave={(e) => isMouse(e) && closeSoon(section)}
       >
@@ -114,19 +116,18 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
                 setShown(false);
                 open(pg.path, e);
               }}
-              // Middle button on press (team trial round 12): closes the dropdown and opens the page in a new tab
-              // behind; on press, so Windows' autoscroll cannot swallow it and leave the dropdown open.
+              // Middle button on press: opens the page in a new tab behind and keeps the dropdown open, so more pages
+              // can be opened from it (team trial round 13); on press, so Windows' autoscroll cannot swallow it.
               onMouseDown={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
-                  setShown(false);
+                  cancelClose();
                   open(pg.path, e);
                 }
               }}
             >
               <Icon name={pg.icon} size={14} />
               <span>{pg.label}</span>
-              {pg.step !== "3" && <span className="menu-step">{pg.step === "5" ? "later" : `step ${pg.step}`}</span>}
             </button>
           ))}
         </div>
@@ -315,7 +316,7 @@ function MobileNav({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         {SECTIONS.map((sec) => {
-          const pages = pagesOf(sec.key).filter((pg) => canView(pg.key));
+          const pages = pagesOf(sec.key).filter((pg) => canView(accessOf(pg)));
           if (!pages.length) return null;
           const expanded = section === sec.key || pages.length === 1;
           return (

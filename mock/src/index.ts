@@ -27,7 +27,9 @@ import { startMailer } from "./jobs/mailer.js";
 import { startAutoInvoicing } from "./jobs/autoInvoices.js";
 import { startImapIntake } from "./jobs/imap.js";
 import { startRnReminders } from "./jobs/rnReminders.js";
+import { startRouteRuleDraftSweep } from "./jobs/routeRuleDrafts.js";
 import { startSwitchJobs } from "./jobs/switchJobs.js";
+import { startEdrRepair } from "./jobs/edrRepair.js";
 import { encryptStoredTotp } from "./admin/passwords.js";
 import { resetStuckImports } from "./api/migration.js";
 
@@ -81,8 +83,12 @@ whenLeader(() => {
   startCleanupJobs();
   startSecurityJobs();
   startFxRefresh();
+  // New rule drafts never saved, older than 24 hours, hourly (§6.3, §13.10).
+  startRouteRuleDraftSweep();
   // E-mail out of the outbox (jobs/mailer.ts); nothing is queued outside production.
   startMailer();
+  // EDRs the switch stored twice, and the totals that counted them, put right every night (S-7.3, ClickHouse 010).
+  startEdrRepair();
   if (production) {
     // Auto Invoicing at each billing cycle's end (§12.3); the fake data's history already has its auto invoices.
     startAutoInvoicing();

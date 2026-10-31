@@ -44,6 +44,7 @@ import {
   type FieldSpec,
 } from "./records.js";
 import { contactsHidden, maskTrunkDetail, refuseMasked } from "../visibility/records.js";
+import { compilePattern } from "../routing/pattern.js";
 
 type Db = pg.Pool | pg.PoolClient;
 export type TrunkKind = "customer" | "vendor";
@@ -64,6 +65,8 @@ const COMMON: FieldSpec[] = [
   { api: "tps", col: "tps" },
   { api: "overflowBuffer", col: "overflow_buffer" },
   { api: "billingTimezone", col: "billing_timezone" },
+  // TON / NPI as sent, or fixed from the address after the trunk's translation (S-4.7, migration 101).
+  { api: "tonNpiMode", col: "ton_npi_mode" },
 ];
 
 const CUSTOMER_SPECS: FieldSpec[] = [
@@ -72,7 +75,6 @@ const CUSTOMER_SPECS: FieldSpec[] = [
   { api: "port", col: "port", readOnly: true },
   { api: "considerHlrRate", col: "consider_hlr_rate" },
   { api: "serviceTypeRouting", col: "service_type_routing" },
-  { api: "partWiseRouting", col: "part_wise_routing" },
   { api: "hostIps", col: "host_ips", read: `ARRAY(SELECT ${inetText("x")} FROM unnest(t.host_ips) x)`, cast: "::inet[]" },
   { api: "dlrPushUrl", col: "dlr_push_url" },
   { api: "moPushUrl", col: "mo_push_url" },
@@ -133,6 +135,8 @@ const VENDOR_SPECS: FieldSpec[] = [
   { api: "allowedDstTon", col: "allowed_dst_ton" },
   { api: "allowedSrcNpi", col: "allowed_src_npi" },
   { api: "allowedDstNpi", col: "allowed_dst_npi" },
+  // A sender a handset cannot show goes elsewhere, unless switched off (S-2.10, S-4.7, migration 101).
+  { api: "refuseInvalidSenders", col: "refuse_invalid_senders" },
   { api: "maxMsgLen", col: "max_msg_len" },
   { api: "supportMultipart", col: "support_multipart" },
   { api: "multipartFormat", col: "multipart_format" },
@@ -325,12 +329,8 @@ async function checkInput(db: Db, k: KindDef, input: TrunkInput, before: TrunkRe
     }
     for (const key of ["successRegex", "messageIdRegex", "dlrStatusRegex", "dlrMidRegex"] as const) {
       const re = v.http?.[key];
-      if (!re) continue;
-      try {
-        new RegExp(re);
-      } catch {
-        errors.push({ path: `/http/${key}`, message: "invalid regular expression" });
-      }
+      // The switch runs them with PCRE (routing/pattern.ts).
+      if (re && !compilePattern(re)) errors.push({ path: `/http/${key}`, message: "invalid regular expression" });
     }
   }
   return errors;
@@ -607,6 +607,9 @@ async function trunkDependencies(db: Db, k: KindDef, id: number) {
   });
   return dependencies(items);
 }
+
+/** A trunk's delete dependencies by kind (§13.29), for the list's bulk delete (api/bulkRecords.ts). */
+export const trunkDependenciesOf = (db: Db, kind: TrunkKind, id: number) => trunkDependencies(db, KINDS[kind], id);
 
 export function getTrunkDependencies(kind: TrunkKind) {
   const k = KINDS[kind];

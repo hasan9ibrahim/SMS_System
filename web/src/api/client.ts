@@ -2,6 +2,7 @@
 // generated from contract/openapi.yaml, so a contract change shows up as a type error.
 import createClient from "openapi-fetch";
 import type { paths, Problem } from "@sms/contract";
+import { problemSummary } from "./problems";
 
 export const api = createClient<paths>({ baseUrl: "/api/v1" });
 
@@ -48,13 +49,16 @@ api.use({
   },
 });
 
-/** A problem+json answer (RFC 9457), or a network failure (status 0). */
+/**
+ * A problem+json answer (RFC 9457), or a network failure (status 0). Its message is in plain words: contract
+ * validation errors are mapped per field (api/problems.ts, functional QA round 13).
+ */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly problem: Partial<Problem> & Pick<Problem, "title" | "status"> & Record<string, unknown>,
   ) {
-    super(problem.detail ? `${problem.title}: ${problem.detail}` : problem.title);
+    super(problemSummary(problem));
   }
 }
 
@@ -64,7 +68,7 @@ export async function unwrap<T>(call: Promise<{ data?: T; error?: unknown; respo
   try {
     result = await call;
   } catch {
-    throw new ApiError(0, { title: "Mock server not reachable (npm run dev:mock)", status: 0 });
+    throw new ApiError(0, { title: "The server is not reachable. Check the connection and try again.", status: 0 });
   }
   if (result.error !== undefined || !result.response.ok) {
     const problem = (result.error ?? {}) as Partial<Problem> & Record<string, unknown>;

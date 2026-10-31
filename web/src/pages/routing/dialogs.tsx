@@ -10,6 +10,7 @@ import type {
   TrunkListRow,
 } from "@sms/contract";
 import { ApiError } from "../../api/client";
+import { fieldLine, problemFields } from "../../api/problems";
 import { useBulkRouteRules, useRouteRule, useSaveRouteRule } from "../../api/routing";
 import { useNotifySaved } from "../../history/undo";
 import { useMe } from "../../api/hooks";
@@ -22,10 +23,11 @@ import { shareProblems, soleOnLevel, toInput, withSoleShares } from "./ruleModel
 export const DEFAULT_PRIORITY = 97;
 const useMaxPriority = () => (isAdminUser(useMe().data?.permissions) ? 100 : DEFAULT_PRIORITY);
 
+/** What went wrong, in plain words: each field's problem, else the problem's title (functional QA round 13). */
 export const problemText = (e: unknown) => {
   if (!(e instanceof ApiError)) return String(e);
-  const errors = (e.problem.errors ?? []) as { path: string; message: string }[];
-  return errors.length ? errors.map((x) => `${x.path.replace(/^\//, "")}: ${x.message}`).join("; ") : e.message;
+  const fields = problemFields(e.problem);
+  return fields.length ? fields.map(fieldLine).join(" ") : e.message;
 };
 
 type General = Pick<
@@ -50,6 +52,7 @@ export function RuleGeneralForm({
   draftName,
   bindSubmit,
   windowed = false,
+  onEdit,
 }: {
   rule: RouteRuleDetail | null;
   onSaved: (id: number) => void;
@@ -68,6 +71,8 @@ export function RuleGeneralForm({
   bindSubmit?: (submit: (patch?: Partial<RouteRuleInput>) => Promise<string | null>) => void;
   /** In the Edit window (team trial round 8): no button of its own, the window's Save calls `bindSubmit`. */
   windowed?: boolean;
+  /** A field changed: the window clears the error it shows from the last Save. */
+  onEdit?: () => void;
 }) {
   const save = useSaveRouteRule();
   const notifySaved = useNotifySaved();
@@ -95,7 +100,12 @@ export function RuleGeneralForm({
         },
   );
   const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<General>) => setG((x) => ({ ...x, ...patch }));
+  // An edit clears the last Save's error ("Enter the rule name." stayed after a name was typed, functional QA round 13).
+  const set = (patch: Partial<General>) => {
+    setG((x) => ({ ...x, ...patch }));
+    setError(null);
+    onEdit?.();
+  };
   // Saves the fields (plus `patch`, e.g. Rule on from New rule's footer); resolves with an error text or null.
   const submitAsync = async (patch: Partial<RouteRuleInput> = {}): Promise<string | null> => {
     const fail = (m: string) => (setError(m), m);
@@ -300,7 +310,7 @@ export function BulkDialog({ kind, ids, done }: { kind: BulkKind; ids: number[];
       )}
       {kind === "set_lcr_profile" && (
         <div className="field">
-          <span>LCR profile (§13.23)</span>
+          <span>LCR profile</span>
           <ListLookup<{ id: number; name: string; vendorCount: number }>
             list="lcr_profiles"
             value={profile}

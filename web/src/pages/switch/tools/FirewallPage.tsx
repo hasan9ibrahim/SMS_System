@@ -177,6 +177,8 @@ function RulesView({ list }: { list: "banned" | "trusted" }) {
     <ListScreen<FirewallRuleRow>
       key={list}
       list="firewall_rules"
+      listExport={{ query: withList }}
+      bulkDelete={{ noun: "IP", verb: "Remove", restore: true }}
       page={page}
       title={list === "banned" ? "Firewall · Banned IP" : "Firewall · Trusted IP"}
       queryScope={list}
@@ -311,6 +313,7 @@ function FilterDialog({ row, done }: { row: FirewallFilterRow | null; done: () =
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit filter ${row.name}` : "Add filter"}
       saveLabel={row ? "Save" : "Add filter"}
       saving={save.isPending}
@@ -372,6 +375,7 @@ function FiltersView() {
   return (
     <ListScreen<FirewallFilterRow>
       list="firewall_filters"
+      listExport
       page={page}
       title="Firewall · Filter"
       noSelection

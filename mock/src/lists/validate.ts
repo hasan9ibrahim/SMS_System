@@ -36,20 +36,29 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
           !(typeof v === "number" || (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))))
         ) {
           errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a number` });
-        } else if (isNumber && f.type === "integer" && !Number.isInteger(Number(v))) {
+        } else if (
+          isNumber &&
+          f.type === "integer" &&
+          (typeof v === "string" ? !/^\s*-?\d+\s*$/.test(v) : !Number.isInteger(v)) // "1.0" is no bigint
+        ) {
           errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a whole number` });
-        } else if (isTime && (typeof v !== "string" || Number.isNaN(Date.parse(v)))) {
+        } else if (isNumber && f.type === "integer" && !Number.isSafeInteger(Number(v))) {
+          errors.push({ path: `${at}/value`, message: `"${String(v)}" is too large` });
+        } else if (isTime && !isIsoTime(v)) {
           errors.push({ path: `${at}/value`, message: `"${String(v)}" is not a date (ISO 8601)` });
         } else if (f.type === "boolean" && typeof v !== "boolean") {
           errors.push({ path: `${at}/value`, message: "expected true or false" });
         }
       }
+      // PostgreSQL and ClickHouse refuse a LIKE pattern that ends in its escape character (QA 2026-10-31).
+      if ((c.op === "like" || c.op === "not_like") && typeof c.value === "string" && endsInEscape(c.value))
+        errors.push({
+          path: `${at}/value`,
+          message: "a pattern cannot end with a single \\; write \\\\ for a backslash",
+        });
       if (c.op === "regex" && typeof c.value === "string") {
-        try {
-          new RegExp(c.value, "i");
-        } catch {
-          errors.push({ path: `${at}/value`, message: "invalid regular expression" });
-        }
+        const problem = regexProblem(c.value);
+        if (problem) errors.push({ path: `${at}/value`, message: problem });
       }
     });
   };
@@ -61,4 +70,55 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
     else if (!f.sortable) errors.push({ path: `/sort/${i}/field`, message: `"${s.field}" is not sortable` });
   });
   return errors;
+}
+
+/** Ends in an odd number of backslashes: the last one escapes nothing. */
+export const endsInEscape = (s: string) => /(^|[^\\])(\\\\)*\\$/.test(s);
+
+/**
+ * A date or date-time in ISO 8601 that exists (QA 2026-10-31): JavaScript's Date.parse takes "1" and rolls
+ * "2026-02-30" over to March, PostgreSQL refuses both. Date, optional time (seconds and fraction optional), optional
+ * Z or offset.
+ */
+export function isIsoTime(v: unknown): boolean {
+  if (typeof v !== "string") return false;
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}(?::?\d{2})?)?)?$/.exec(
+    v,
+  );
+  if (!m) return false;
+  const [y, mo, d, h, mi, sec] = m.slice(1).map((x) => Number(x ?? 0)) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const day = new Date(Date.UTC(y, mo - 1, d));
+  return (
+    day.getUTCFullYear() === y &&
+    day.getUTCMonth() === mo - 1 &&
+    day.getUTCDate() === d &&
+    h < 24 &&
+    mi < 60 &&
+    sec < 60
+  );
+}
+
+/**
+ * Why a regex filter is refused, or null. PostgreSQL's engine backtracks on back references and on a repeated group
+ * that repeats inside, like (a+)+, so one such filter could hold a database connection for the whole statement
+ * timeout (round 13 security review); a long pattern is refused too.
+ */
+export function regexProblem(value: string): string | null {
+  if (value.length > 200) return "a regular expression may have at most 200 characters";
+  if (/\\[1-9]/.test(value)) return "back references (\\1 to \\9) are not allowed";
+  if (/\((?:[^()\\]|\\.)*[+*}]\)[+*{]/.test(value))
+    return "a repeated group inside a repetition, like (a+)+, is not allowed";
+  try {
+    new RegExp(value, "i");
+  } catch {
+    return "invalid regular expression";
+  }
+  return null;
 }

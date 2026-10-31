@@ -60,6 +60,7 @@ function CycleDialog({ row, done }: { row: BillingCycleRow | null; done: () => v
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add billing cycle"}
       saveLabel={row ? "Save" : "Add cycle"}
       saving={save.isPending}
@@ -137,6 +138,8 @@ export function BillingCyclesPage() {
   return (
     <ListScreen<BillingCycleRow>
       list="billing_cycles"
+      listExport
+      bulkDelete={{ noun: "billing cycle", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["billing_cycle"] }}
       rowActions={(r) => [

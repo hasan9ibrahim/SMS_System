@@ -55,6 +55,7 @@ export function NumberListDialog({
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add number list"}
       saveLabel={row ? "Save" : "Add list"}
       saving={save.isPending}
@@ -166,6 +167,8 @@ function Lists({ open }: { open: (id: number) => void }) {
   return (
     <ListScreen<NumberList>
       list="number_lists"
+      listExport
+      bulkDelete={{ noun: "number list", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["number_list", "number_list_entry"] }}
       rowActions={(r) => [
@@ -333,7 +336,11 @@ function Entries({ id, back }: { id: number; back: () => void }) {
       list="number_list_entries"
       page={page}
       title={`Number list · ${l.name}`}
-      historyScope={{ entityTypes: ["number_list_entry"] }}
+      historyScope={{
+        entityTypes: ["number_list_entry"],
+        // This list's entries only (QA 2026-10-31, §6.4).
+        conditions: [{ field: "numberListId", op: "eq", value: id }],
+      }}
       queryScope={id}
       fetchPage={(body) => fetchListPage<NumberListEntry>("number_list_entries", withList(body))}
       rowActions={(r) => [

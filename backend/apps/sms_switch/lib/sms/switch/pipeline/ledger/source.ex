@@ -13,9 +13,14 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
               {Ledger.account(), bucket :: integer(), micro :: integer(), messages :: integer()}
             ]) ::
               :ok | {:error, term()}
+  @callback persist_reservations([{Ledger.account(), held_micro :: integer()}]) ::
+              :ok | {:error, term()}
 
   defmodule Postgres do
-    @moduledoc "The ledger on the configuration database: `balance_ledger` and `traffic_charges` (migration 072)."
+    @moduledoc """
+    The ledger on the configuration database: `balance_ledger` and `traffic_charges` (migration 072), and
+    `credit_reservations` (migration 103).
+    """
     @behaviour Sms.Switch.Pipeline.Ledger.Source
     alias Sms.Core.Repo
     alias Sms.Switch.Pipeline.Ledger
@@ -124,6 +129,26 @@ defmodule Sms.Switch.Pipeline.Ledger.Source do
       """
 
       case query(sql, [ents, sides, buckets, amounts, counts], log: false) do
+        {:ok, _} -> :ok
+        {:error, _} = error -> error
+      end
+    end
+
+    @impl true
+    def persist_reservations([]), do: :ok
+
+    # What each customer account holds for messages in flight (§7, decision 2026-10-31, migration 103).
+    def persist_reservations(rows) do
+      ents = Enum.map(rows, fn {a, _micro} -> a.enterprise_id end)
+      amounts = Enum.map(rows, fn {_a, micro} -> Ledger.units(micro) end)
+
+      sql = """
+      INSERT INTO credit_reservations (enterprise_id, reserved, updated_at)
+      SELECT e, a, now() FROM unnest($1::bigint[], $2::numeric[]) AS t(e, a)
+      ON CONFLICT (enterprise_id) DO UPDATE SET reserved = EXCLUDED.reserved, updated_at = now()
+      """
+
+      case query(sql, [ents, amounts], log: false) do
         {:ok, _} -> :ok
         {:error, _} = error -> error
       end

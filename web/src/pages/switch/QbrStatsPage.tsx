@@ -146,6 +146,7 @@ export function QbrStatsPage() {
     <ListScreen<QbrStat>
       key={side}
       list="qbr_stats"
+      listExport={{ query: withSide }}
       page={page}
       noSelection
       queryScope={side}

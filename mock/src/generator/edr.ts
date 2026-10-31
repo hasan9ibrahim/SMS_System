@@ -12,6 +12,9 @@
 import { WeightedPicker, type Rng } from "./rng.js";
 import { buildCoverage } from "./rules.js";
 import { messageText } from "./names.js";
+import { compilePattern } from "../routing/pattern.js";
+import { findCode, likeMatch, UNANSWERED_CAUSES } from "../routing/smsVoice.js";
+import { gatewayFor, VOICE_RULES, type GenVoiceRule } from "./voice.js";
 import {
   allNetworksCodeOf,
   amAt,
@@ -118,7 +121,17 @@ export const EDR_COLUMNS = [
   "hlr_error_code",
   "hlr_cost_sys",
   "v_src_addr",
+  // SMS to voice (§8, ClickHouse 011): the call of an attempt with route type voice.
+  "voice_gateway_id",
+  "voice_answered",
+  "voice_hangup_cause",
+  "voice_duration_ms",
 ] as const;
+
+/** Share of the messages a voice rule covers that the generator turns into calls (SMS to voice, §8). */
+const VOICE_SHARE = 0.06;
+/** The voice columns of an attempt that was not a call. */
+const NO_CALL = ["0", "0", "", "0"];
 
 export interface EdrWriter {
   write(chunk: string, rows: number): Promise<void>;
@@ -335,7 +348,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       if (r.senderPattern) {
         let re = patterns.get(r.id);
         if (!re) {
-          re = new RegExp(r.senderPattern);
+          re = compilePattern(r.senderPattern) ?? /$^/;
           patterns.set(r.id, re);
         }
         const hit = re.test(sender);
@@ -409,6 +422,19 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
   }
   const totalW = buckets.reduce((s, b) => s + b.w, 0);
 
+  // SMS to voice (§8, decided 2026-10-31): the active rules by the country of their landline range. A few OTP messages
+  // of those countries go to such a number and become calls (route type voice), on their own random stream.
+  const vrng = rng.fork("voice");
+  const voiceByCountry = new Map<number, GenVoiceRule[]>();
+  for (const r of VOICE_RULES) {
+    if (!r.active) continue;
+    let best: { id: number; len: number } | null = null;
+    for (const c of world.countryById.values())
+      if (c.dialCode && r.prefix.startsWith(c.dialCode) && (!best || c.dialCode.length > best.len))
+        best = { id: c.id, len: c.dialCode.length };
+    if (best) voiceByCountry.set(best.id, [...(voiceByCountry.get(best.id) ?? []), r]);
+  }
+
   let seq = 0;
   let written = 0;
   let lines: string[] = [];
@@ -447,12 +473,20 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       const baseFx = fxPerUsd(world, base, t0);
       const sender = rng.pick(trunk.senders);
       const prefix = rng.pick(m.prefixes);
-      const dst = prefix + rng.digits(Math.max(4, (country.dialCode === "1" ? 11 : 12) - prefix.length));
+      const mobile = prefix + rng.digits(Math.max(4, (country.dialCode === "1" ? 11 : 12) - prefix.length));
       const ucs2 = rng.chance(country.ucs2Share);
       const coding = ucs2 ? 8 : 0;
       const msgCount = ucs2 ? rng.weighted([1, 2, 3], [60, 30, 10]) : rng.weighted([1, 2, 3], [86, 10, 4]);
       const alpha = /[A-Za-z]/.test(sender);
       const text = messageText(rng, alpha ? sender : "Service", trunk.otp);
+      // SMS to voice (§8): a one-part message with a code, to a landline range an active rule covers, is a call.
+      const voiceRule =
+        msgCount === 1 && voiceByCountry.has(country.id) && findCode(text) !== null && vrng.chance(VOICE_SHARE)
+          ? (voiceByCountry.get(country.id)!.find((r) => !r.sender || likeMatch(r.sender, sender)) ?? null)
+          : null;
+      const dst = voiceRule
+        ? voiceRule.prefix + vrng.digits(Math.max(4, (country.dialCode === "1" ? 11 : 12) - voiceRule.prefix.length))
+        : mobile;
       const tps = Number((trunk.tps * rng.float(0.03, 0.9)).toFixed(1));
       const ipIdx = rng.int(0, trunk.hostIps.length - 1);
       const dayIdx = Math.floor(t0 / DAY);
@@ -584,8 +618,105 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
           "0",
           dec(hlrCost),
           "", // not sent to a vendor
+          ...NO_CALL,
         ];
         lines.push(row.join("\t"));
+        if (lines.length >= chunkRows) await flush();
+        continue;
+      }
+
+      // SMS to voice (§8, docs/SMS_TO_VOICE.md): a call through the rule's gateway instead of a vendor attempt
+      // (route type voice, no vendor, cost 0). Answered: DELIVRD, billed as one SMS at the customer's rate. Not
+      // answered: one retry after the gateway's retry delay, then UNDELIV (error 001), not charged.
+      if (voiceRule) {
+        const g = gatewayFor(voiceRule);
+        const callerId = g.callerIdMode === "sender" && /^\+?\d+$/.test(sender) ? sender : (g.fixedCallerId ?? "");
+        const receiptSession = bind === "TX" ? `c${trunk.id}-${ipIdx}-rx` : session;
+        let callAt = t0 + vrng.int(5, 60);
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const answered = vrng.chance(0.8);
+          const ring = vrng.int(3000, 15000);
+          const cause = answered
+            ? "NORMAL_CLEARING"
+            : vrng.weighted(
+                UNANSWERED_CAUSES.map(([c]) => c),
+                UNANSWERED_CAUSES.map(([, w]) => w),
+              );
+          const talk = answered ? vrng.int(9000, 23000) : 0;
+          const ended = answered
+            ? callAt + ring + talk
+            : callAt + (cause === "NO_ANSWER" ? g.ringTimeoutS * 1000 : vrng.int(1500, 6000));
+          const isFinal = answered || attempt === 2;
+          const status = answered ? "DELIVRD" : "UNDELIV";
+          const bill = isFinal && answered ? 1 : 0;
+          const revenue = bill ? cRate : 0;
+          const row = [
+            ...common(callAt),
+            dt(answered ? callAt + ring : ended),
+            dt(ended),
+            ...cust,
+            isFinal ? status : "",
+            isFinal ? receiptSession : "",
+            "0",
+            "0",
+            "0",
+            "0",
+            "0.0.0.0",
+            "0",
+            "",
+            m.code,
+            "",
+            "0",
+            "0",
+            dec(0),
+            "",
+            dec8(0),
+            dec(0),
+            "[]",
+            "0",
+            "0",
+            "voice",
+            "0",
+            "",
+            String(tps),
+            dec(cSys),
+            "0",
+            "0",
+            String(attempt),
+            isFinal ? "1" : "0",
+            "1",
+            "0",
+            status,
+            answered ? "000" : "001",
+            "0",
+            "1",
+            "1",
+            "",
+            String(ended - callAt),
+            "0",
+            String(bill),
+            "0",
+            dec(revenue),
+            dec(0),
+            dec(revenue / cEx),
+            dec(0),
+            String(hlrProvider),
+            attempt === 1 ? hlrType : "none",
+            String(hlrPorted),
+            hlrProvider ? "1" : "0",
+            "0",
+            dec(attempt === 1 ? hlrCost : 0),
+            esc(callerId),
+            String(g.id),
+            answered ? "1" : "0",
+            cause,
+            String(talk),
+          ];
+          lines.push(row.join("\t"));
+          if (isFinal) break;
+          callAt = ended + g.retryDelayS * 1000;
+          if (callAt >= end) break;
+        }
         if (lines.length >= chunkRows) await flush();
         continue;
       }
@@ -593,6 +724,9 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       const tried = new Set<number>();
       let attempt = 1;
       let submitAt = t0 + rng.int(1, 40);
+      // The attempt that re-sends after the previous vendor's failed receipt is the DLR re-route, as the switch writes
+      // it (S-5.11, D2); the attempt that got the failed receipt is not.
+      let resendAfterReceipt = false;
       for (;;) {
         const r = route(submitAt, trunk, m, sender, dst, tps, tried);
         if (!r || "blocked" in r) {
@@ -654,6 +788,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
             "0",
             dec(attempt === 1 ? hlrCost : 0),
             "", // not sent to a vendor
+            ...NO_CALL,
           ];
           lines.push(row.join("\t"));
           break;
@@ -697,7 +832,8 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
         let err = "";
         let cmd = 0;
         let retry = false;
-        let dlrReroute = 0;
+        const dlrReroute = resendAfterReceipt ? 1 : 0;
+        resendAfterReceipt = false;
         if (!success) {
           cmd = rng.weighted(SUBMIT_ERRORS, SUBMIT_ERROR_WEIGHTS);
           status = "REJECTD";
@@ -716,7 +852,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
               err = FAIL_ERR[status] ?? "000";
               if (attempt < 3 && v.rerouteOn.includes(status) && rng.chance(0.3)) {
                 retry = true;
-                dlrReroute = 1;
+                resendAfterReceipt = true;
               }
             }
           }
@@ -789,6 +925,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
           "0",
           dec(attempt === 1 ? hlrCost : 0),
           esc(vendorSender(sender, v)),
+          ...NO_CALL,
         ];
         lines.push(row.join("\t"));
         if (!retry) break;

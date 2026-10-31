@@ -55,7 +55,9 @@ defmodule Sms.Switch.Test.PipelineConfig do
       hlr_settings: maps([]),
       hlr_policies: maps(d.hlr_policies),
       quality: {[], []},
-      fx: {[], [["EUR", Decimal.new(1)], ["USD", Decimal.new("1.1")]]}
+      fx: {[], [["EUR", Decimal.new(1)], ["USD", Decimal.new("1.1")]]},
+      voice_rules: maps(Enum.map(d.voice_rules, &voice_rule/1)),
+      voice_gateways: maps(Enum.map(d.voice_gateways, &voice_gateway/1))
     }
 
     {:ok, Loader.build_snapshot(rows, platform_currency)}
@@ -94,8 +96,64 @@ defmodule Sms.Switch.Test.PipelineConfig do
       hlr_rates: [],
       hlr_rules: [],
       hlr_targets: [],
-      hlr_policies: []
+      hlr_policies: [],
+      # SMS to voice (§8): rule and gateway fields as `voice_rule/1` and `voice_gateway/1` complete them; recordings by
+      # their SHA-256 (`prompt_wav/1`).
+      voice_rules: [],
+      voice_gateways: [],
+      prompt_wavs: %{}
     }
+  end
+
+  @doc "A rule's own recording (§8), as `Sms.Switch.Pipeline.Config.Loader.prompt_wav/1` reads it."
+  def prompt_wav(sha256) do
+    case Map.fetch(data().prompt_wavs, sha256) do
+      {:ok, {:error, _} = error} -> error
+      {:ok, wav} -> {:ok, wav}
+      :error -> :none
+    end
+  end
+
+  @doc "An `sms_voice_rules` row (§8): an active rule with no condition, repeated twice, unless the fields say otherwise."
+  def voice_rule(fields \\ []) do
+    Map.merge(
+      %{
+        id: 1,
+        sender_id: nil,
+        receiver_id: nil,
+        prefix: nil,
+        repeat_count: 2,
+        mccmnc: nil,
+        gateway_id: nil,
+        prompt_wav_sha256: nil
+      },
+      Map.new(fields)
+    )
+  end
+
+  @doc "A `voice_gateways` row (§8, fake data): an active gateway at voice-gw1.example.net unless the fields say otherwise."
+  def voice_gateway(fields \\ []) do
+    Map.merge(
+      %{
+        id: 1,
+        name: "Fake voice switch",
+        host: "voice-gw1.example.net",
+        port: 5060,
+        transport: "udp",
+        username: nil,
+        password_enc: nil,
+        from_domain: nil,
+        caller_id_mode: "sender",
+        fixed_caller_id: "4930000000",
+        dial_prefix: "",
+        codecs: ["alaw", "ulaw"],
+        max_calls: 10,
+        ring_timeout_s: 30,
+        retry_delay_s: 60,
+        priority: 1
+      },
+      Map.new(fields)
+    )
   end
 
   @doc "A customer trunk's fields (see the loader's query)."
@@ -119,6 +177,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         reassembly_timeout_s: 120,
         duplicate_window_s: 0,
         allow_empty_messages: false,
+        ton_npi_mode: "as_sent",
         rate_table_ids: [100]
       },
       Map.new(fields)
@@ -181,6 +240,13 @@ defmodule Sms.Switch.Test.PipelineConfig do
         max_msg_len: nil,
         multipart_format: "udh8",
         overflow_buffer: 0,
+        allowed_data_codings: nil,
+        allowed_src_ton: nil,
+        allowed_src_npi: nil,
+        allowed_dst_ton: nil,
+        allowed_dst_npi: nil,
+        ton_npi_mode: "as_sent",
+        refuse_invalid_senders: true,
         rate_table_ids: [200]
       },
       Map.new(fields)
@@ -256,7 +322,8 @@ defmodule Sms.Switch.Test.PipelineConfig do
         vendor_category_mode: "all",
         vendor_category_ids: [],
         lcr_profile_id: nil,
-        skip_vendor_at_tps_pct: nil
+        skip_vendor_at_tps_pct: nil,
+        deny_multipart: false
       },
       fields
     )

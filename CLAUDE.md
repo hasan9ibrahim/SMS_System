@@ -63,22 +63,25 @@ docker-compose.yml postgres, clickhouse, redis
 ## Design (spec §15)
 
 - One window layout on every page:
-  - top menu bar
+  - top bar with the main menu (a drawer up to 1180 px)
   - page tab strip (tabs can be dragged out into their own window, §13.5)
-  - page header with sibling links and actions
-  - active-filter chips
+  - page header with the title and actions (no sibling links)
+  - filter card: quick search with field pills, switches, Views, Columns
   - data grid with a filter under every column header
-  - detail panel
+  - detail panel on the right
   - status bar
-- Light and dark themes. Use the exact colour tokens in §15.2 as CSS variables.
-- Inter 13 px, page titles 17 px, tabular numbers in grids, 7–10 px corners, 1 px borders.
-- One filled accent button per page. Colour only carries meaning: green good, amber warning, red problem.
+- Light, dark and blue-grey themes: only the tokens in `web/src/styles/tokens.css` (§15.2).
+- Inter (bundled), the type-scale tokens 11 / 12 / 13 / 14 / 17 / 22 px (§15.3), 22 px page titles,
+  tabular numbers in grids, 14 px card corners, 1 px borders.
+- One filled accent button per page. Colour only carries meaning: green good, amber warning, red
+  problem; categories are neutral (Live analytics bands are the one exception, §15.3).
+- No spec sections, build steps or trial rounds in anything users see; § references stay in code comments.
 - Reference screenshots: `docs/design/gui_light.png`, `gui_dark.png` and
-  `rate_manager.png`. For most pages, copy the look, not the field names or data.
-- **Exception: Route Rules.** That page copies the screenshot's layout and form exactly, as
-  listed in spec §15.4: header links and actions, grid columns with per-column filters,
-  the detail panel (Conditions / Vendors / Traffic / History / Test) with condition chips,
-  and the status bar.
+  `rate_manager.png` show the original look; §15 describes what is built where they differ.
+- **Exception: Route Rules.** That page follows the screenshot's layout and form, as listed in
+  spec §15.4: header actions, grid columns with per-column filters, the detail panel
+  (Edit / Configuration / Conditions / Traffic / History / Test) with condition chips, and the
+  status bar.
 
 ## Build order
 

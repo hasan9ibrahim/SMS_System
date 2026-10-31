@@ -5,16 +5,19 @@ defmodule Sms.Switch.Pipeline.Buffers do
   pace by a `Drain` process, so a buffer of any size never takes the sender's workers or holds other trunks back.
 
     * **Customer trunk:** a message accepted over the trunk's TPS (while its buffer has room, else 0x58 at the
-      session) waits in `ct.<id>`; the drain takes it once the trunk's TPS has room, gives its buffer place back and
-      hands it to the sender (`sms.msg.accepted`), oldest first.
+      session) waits in `ct.<id>`, as does a scheduled message released over it (while there is room, else it stays
+      held, `Sms.Switch.Pipeline.Scheduled`, S-2.12); the drain takes it once the trunk's TPS has room, gives its
+      buffer place back and hands it to the sender (`sms.msg.accepted`), oldest first.
     * **Vendor trunk:** a message whose vendor is at its TPS or has its window full waits in `vt.<id>` (while that
       trunk's buffer has room, else it goes to the next vendor; a buffer of 0 skips the vendor at once). The drain
       runs it on that vendor (`Sms.Switch.Pipeline.Sender.resume/1`), several at a time, waiting for room up to 30 s
       from when it was buffered; then it goes to the next vendor.
 
   A drain runs on each server that has something to drain (both servers drain the same queue; the TPS and buffer
-  counts are shared in Redis) and stops after a few idle seconds. `kick/1` starts it when a message is buffered;
-  every `@discover_ms` the queues with something waiting are listed, so buffers left by a restart are drained too.
+  counts are shared in Redis) and stops after a few idle seconds, setting its buffer's count back to zero then (a
+  place lost with a server that stopped mid-message is not kept for ever). `kick/1` starts it when a message is
+  buffered; every `@discover_ms` the queues with something waiting are listed, so buffers left by a restart are
+  drained too.
   """
   use Supervisor
   require Logger
@@ -115,7 +118,7 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
   require Logger
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Trunk
-  alias Sms.Switch.Pipeline.{Buffers, Intake, Sender}
+  alias Sms.Switch.Pipeline.{Buffers, Intake, Scheduled, Sender}
   alias Sms.Switch.Throttle
 
   @idle_ms 5_000
@@ -179,8 +182,9 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
     end
   end
 
+  # A scheduled message takes one place per submit the customer sent for it (S-2.12); a live one is one submit.
   defp work(%{kind: :customer, held: {msg, handle}} = state) do
-    case Throttle.acquire(msg.tps_counters) do
+    case Throttle.acquire_many(msg.tps_counters, Scheduled.submits(msg)) do
       :ok -> release(msg, handle, state)
       {:error, _counter} -> later(state, @tps_retry_ms)
     end
@@ -229,9 +233,13 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
   defp idle(%{idle_since: nil} = state), do: later(%{state | idle_since: now()}, @poll_ms)
 
   defp idle(state) do
-    if now() - state.idle_since >= @idle_ms,
-      do: exit(:normal),
-      else: later(state, @poll_ms)
+    if now() - state.idle_since >= @idle_ms do
+      # Empty all this time: no place of the buffer can still be in use (S-2.4).
+      state.queue |> String.replace(".", ":", global: false) |> Throttle.buffer_reset()
+      exit(:normal)
+    else
+      later(state, @poll_ms)
+    end
   end
 
   defp retry(state, reason) do

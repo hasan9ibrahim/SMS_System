@@ -326,7 +326,12 @@ export function portalSignInCode(request: FastifyRequest, reply: FastifyReply) {
         ? sendProblem(reply, 401, "The code does not match", { detail: `${left} tries left.`, code: "wrong_code" })
         : sendProblem(reply, 401, "Too many wrong codes. Sign in again.", { code: "challenge_expired" });
     }
-    await pool.query("UPDATE sign_in_challenges SET used_at = now() WHERE id = $1", [c.id]);
+    // The e-mailed code works once (§13.28): of two parallel requests with it only one gets the challenge.
+    const { rows: used } = await pool.query(
+      "UPDATE sign_in_challenges SET used_at = now() WHERE id = $1 AND used_at IS NULL RETURNING id",
+      [c.id],
+    );
+    if (!used[0]) return challengeExpired(reply);
     return openSession(pool, request, reply, Number(c.portal_user_id));
   });
 }
@@ -463,7 +468,9 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
     const today = new Date().toLocaleDateString("en-CA", { timeZone: b.tz });
     const monthStart = `${today.slice(0, 8)}01`;
     const [bal, trunks, inv, figures] = await Promise.all([
-      pool.query(`SELECT bal.customer FROM ${BALANCE_FROM} WHERE e.id = $1`, [me.enterpriseId]),
+      pool.query(`SELECT bal.customer, COALESCE(cr.reserved, 0) AS reserved FROM ${BALANCE_FROM} WHERE e.id = $1`, [
+        me.enterpriseId,
+      ]),
       pool.query(
         `SELECT t.id, t.name, t.tps, CASE WHEN tb.status = 'online' THEN 'up' ELSE 'down' END AS connection
            FROM customer_trunks t LEFT JOIN trunk_binds tb ON tb.side = 'customer' AND tb.trunk_id = t.id
@@ -488,6 +495,8 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       return acc;
     }, {});
     const balance = bal.rows[0]?.customer == null ? null : Number(bal.rows[0].customer);
+    // What the switch lets the customer send now: less the credit held for messages in flight (§7, v0.131.0).
+    const reserved = Number(bal.rows[0]?.reserved ?? 0);
     const i = inv.rows[0];
     const day = (d: unknown) => (d instanceof Date ? d.toISOString().slice(0, 10) : d ? String(d).slice(0, 10) : null);
     return {
@@ -496,7 +505,7 @@ export function portalOverview(request: FastifyRequest, reply: FastifyReply) {
       billingType: b.billingType,
       balance,
       creditLimit: b.creditLimit,
-      availableCredit: balance === null ? null : money(balance + (b.creditLimit ?? 0)),
+      availableCredit: balance === null ? null : money(balance + (b.creditLimit ?? 0) - reserved),
       today: totals(todayRow),
       thisMonth: totals(month),
       trunks: trunks.rows.map((t) => ({
@@ -723,6 +732,8 @@ export const messageList = (enterpriseId: number): ChListDef<PortalMessageRow> =
   search: ["senderId", "receiver", "messageId"],
   searchNumbers: ["senderId", "receiver"],
   idSql: "edr_id",
+  // A message the switch wrote twice is listed once (ClickHouse 010, S-7.3).
+  rowKey: true,
   mapRow: (r, names) => {
     const v = edrValues(listFields.portal_messages.fields, MESSAGE_COLUMNS, r, names) as Record<string, unknown>;
     return {

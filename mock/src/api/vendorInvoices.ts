@@ -666,7 +666,7 @@ async function resolveInput(
 ): Promise<{ errors: FieldError[]; conflict: string | null; v: Resolved | null; partner: string | null }> {
   const errors: FieldError[] = [];
   const { rows } = await c.query(
-    `SELECT e.name, e.billing_timezone, vb.currency FROM enterprises e
+    `SELECT e.name, COALESCE(vb.timezone, e.billing_timezone) AS billing_tz, vb.currency FROM enterprises e
        LEFT JOIN enterprise_billing vb ON vb.enterprise_id = e.id AND vb.side = 'vendor'
       WHERE e.id = $1 AND e.deleted_at IS NULL`,
     [b.enterpriseId],
@@ -679,7 +679,8 @@ async function resolveInput(
     const { rows: cur } = await c.query("SELECT 1 FROM currencies WHERE iso = $1 AND deleted_at IS NULL", [b.currency]);
     if (!cur[0]) errors.push({ path: "/currency", message: "unknown currency" });
   }
-  const timezone = b.timezone ?? (e?.billing_timezone as string | undefined) ?? "UTC";
+  // The vendor billing's zone when none is given, like the customer side (§7, §13.31).
+  const timezone = b.timezone ?? (e?.billing_tz as string | undefined) ?? "UTC";
   if (!isTimezone(timezone)) errors.push({ path: "/timezone", message: "unknown time zone" });
   if (b.periodTo < b.periodFrom) errors.push({ path: "/periodTo", message: "must not be before the From date" });
   if ((Date.parse(b.periodTo) - Date.parse(b.periodFrom)) / 86400_000 > 366)
@@ -1065,7 +1066,7 @@ export function addVendorInvoiceNote(request: FastifyRequest, reply: FastifyRepl
 
 // ---------------------------------------------------------------- safe delete
 
-async function vendorInvoiceDependencies(c: Db, id: number) {
+export async function vendorInvoiceDependencies(c: Db, id: number) {
   const { rows } = await c.query("SELECT recon_status FROM vendor_invoices WHERE id = $1", [id]);
   const accepted = rows[0]?.recon_status === "accepted" ? 1 : 0;
   return dependencies([
@@ -1213,7 +1214,7 @@ export async function receiveSimulatedInvoices(): Promise<number> {
   const cov = await edrCoverage();
   if (!cov?.from || !cov.to) return 0;
   const { rows: vendors } = await pool.query(
-    `SELECT e.id, e.alias, e.billing_timezone, vb.currency FROM enterprises e
+    `SELECT e.id, e.alias, vb.timezone AS billing_timezone, vb.currency FROM enterprises e
        JOIN enterprise_billing vb ON vb.enterprise_id = e.id AND vb.side = 'vendor'
       WHERE e.deleted_at IS NULL AND e.id % 10 < 3 ORDER BY e.id`,
   );

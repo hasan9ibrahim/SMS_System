@@ -54,7 +54,7 @@ export const topics: HelpTopic[] = [
             items: [
               "**Undo**: undoes your own last change on enterprises (also **Ctrl+Z**). See [[undo-and-history]].",
               "**History**: opens the change history of all enterprises: who changed what and when, with undo per change.",
-              "**Export**: exports the rows that match the current filters. In the trial this button is not active yet.",
+              "**Export**: downloads the rows that match the current filters and search as a CSV file, with the columns you show. See [[grids-and-filters#export]].",
               "**New enterprise** (the filled button): opens an empty enterprise record in a new tab.",
             ],
           },
@@ -827,7 +827,7 @@ export const topics: HelpTopic[] = [
             title: "Header buttons",
             items: [
               "**Undo** and **History**: your last change on customer trunks, and the full change history.",
-              "**Export**: not active yet in the trial.",
+              "**Export**: downloads the rows that match the current filters and search as a CSV file.",
               "**New customer trunk** (filled): opens an empty trunk form in a new tab.",
             ],
           },
@@ -988,7 +988,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** (not active yet) and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and the header actions with **Clone…** (one trunk) and **Delete N trunks…**.",
+            text: "The page works like [[customer-trunks|Customer trunks]]: **Undo**, **History**, **Export** and **New vendor trunk** in the header; per-column filters; quick search matching the start of a value (type `%text` to find it anywhere); detail panel on the right; row menu with **Open**, **Clone…** and **Delete…**; and the header actions with **Clone…** (one trunk) and **Delete N trunks…**.",
           },
           {
             kind: "fields",
@@ -1091,6 +1091,7 @@ export const topics: HelpTopic[] = [
       "cost limit",
       "TON",
       "NPI",
+      "auto TON / NPI",
       "data coding",
       "window size",
       "enquire link",
@@ -1323,11 +1324,6 @@ export const topics: HelpTopic[] = [
                 values: "Tick box. Off by default.",
               },
               {
-                name: "Part-wise routing",
-                what: "Route each part of a long (multipart) message on its own instead of keeping all parts together.",
-                values: "Tick box. Off by default.",
-              },
-              {
                 name: "Loop detection",
                 what: "Block messages that come back into the switch, so a message cannot circle between partners.",
                 values: "Tick box. On by default.",
@@ -1336,6 +1332,11 @@ export const topics: HelpTopic[] = [
                 name: "Default data coding",
                 what: "How text is read when the customer sends data coding 0.",
                 values: "**0 – SMSC default (GSM 7-bit)** (default) or **3 – Latin-1**.",
+              },
+              {
+                name: "TON / NPI",
+                what: "Whether the sender's and receiver's type of number (TON) and numbering plan (NPI) go on as the customer sent them, or are set from the addresses after this trunk's translation rules. Auto: an alphanumeric sender gets 5 / 0; a sender with + or of 9 or more digits 1 / 1 (the + taken off); a short code of 3–8 digits 3 / 0; a full international receiver (8–15 digits) 1 / 1. A TON or NPI a translation rule sets is kept. Auto cannot shorten a sender: one over 11 characters is still refused (0x0A).",
+                values: "**As sent** (default) or **Auto (fix after translation)**.",
               },
               {
                 name: "Express vendor trunk",
@@ -1616,7 +1617,7 @@ export const topics: HelpTopic[] = [
               {
                 name: "Allowed destination TON",
                 what: "Receiver number types the vendor accepts.",
-                values: "**Any**, or tick 0–6. Default 1.",
+                values: "**Any**, or tick 0–6. Default Any.",
               },
               {
                 name: "Allowed source NPI",
@@ -1625,8 +1626,18 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Allowed destination NPI",
-                what: "Receiver numbering plans the vendor accepts.",
-                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default 1.",
+                what: "Receiver numbering plans the vendor accepts. When the message's TON / NPI is not in these lists, the vendor gets the single equivalent they take instead of being skipped: an alphanumeric sender 5 / 0, an international number (a sender of 9 or more digits or starting with +, a receiver of 8–15 digits) 1 / 1.",
+                values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default Any.",
+              },
+              {
+                name: "TON / NPI",
+                what: "As sent, or set from the addresses after this vendor trunk's translation rules, the same way as on a customer trunk (see Customer trunk: Routing). The allowed TON / NPI above, the sender check and what the vendor is sent all use the values set: with Auto, a vendor that takes destination TON 1 only also gets a full international number sent with TON 0. A sender Auto cannot fix (over 11 characters) still passes the vendor over.",
+                values: "**As sent** (default) or **Auto (fix after translation)**.",
+              },
+              {
+                name: "Refuse invalid senders",
+                what: "Whether senders a handset cannot show are kept from this vendor: text senders over 11 characters or with non-Latin characters, numbers over 20 digits. When on, such a message goes to the next vendor; a message every vendor refuses for its sender is refused with 0x0A. When off, this vendor takes such senders as they are. A sender with a TON or NPI outside SMPP, or no sender, is refused whatever this says.",
+                values: "Tick box. On by default.",
               },
               {
                 name: "Max message length",
@@ -1840,10 +1851,6 @@ export const topics: HelpTopic[] = [
               "Revenue and cost limits stop traffic when reached in their period.",
               "Each save is one change in History, with undo. The password is recorded without its value, so undo cannot bring back an old password.",
             ],
-          },
-          {
-            kind: "tip",
-            text: "In the trial no real SMPP or HTTP traffic flows: binds, receipts and limits are simulated.",
           },
         ],
       },

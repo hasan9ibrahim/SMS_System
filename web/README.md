@@ -304,7 +304,11 @@ Pages in `src/pages/switch/tools/` (§8), hooks in `src/api/switchTools.ts`, pur
   check which rule an IP meets; filters with their listeners.
 - **Traffic alerts** (`/switch/traffic-alerts`): alert rules with sample size and thresholds, conditions, recipients;
   clone, Check now, last state.
-- **SMS to voice** (`/switch/sms-to-voice`): rules with the test box above the grid.
+- **SMS to voice** (`/switch/sms-to-voice`, §8, `docs/SMS_TO_VOICE.md`): rules with their voice gateway and optional
+  own recording (WAV converted by the server, played in the form), and the test box above the grid (call details or
+  why it stays an SMS).
+- **Voice gateways** (`/switch/voice-gateways`): the voice switches the calls go to (write-only password, safe delete
+  while a rule names one); opened with the SMS to voice access (`PageDef.access`).
 - **Broadcast** (`/switch/broadcast`): past broadcasts; New broadcast composes (mailbox, contact and enterprise types,
   rich text, one attachment), shows the audience count, and sends after a confirm.
 

@@ -285,7 +285,7 @@ function ProviderCard() {
         <dd>{p.nextDailyAt ? fmtWhen(p.nextDailyAt) : "—"}</dd>
       </dl>
       {p.simulated && (
-        <p className="muted small">Trial phase: checks are simulated; nothing is sent to the rate API.</p>
+        <p className="muted small">Checks are simulated: nothing is sent to the rate API.</p>
       )}
       {error && <p className="error-text">{error}</p>}
       <div className="bulk-row">

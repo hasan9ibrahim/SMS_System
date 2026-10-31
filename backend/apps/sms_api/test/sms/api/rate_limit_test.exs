@@ -19,6 +19,13 @@ defmodule Sms.Api.RateLimitTest do
     assert RateLimit.hit(ip <> "-other") == :ok
   end
 
+  test "other calls count under their own key and limit (§14)" do
+    key = {:csp, "203.0.113.#{System.unique_integer([:positive])}"}
+    assert RateLimit.hit(key, 2, 60) == :ok
+    assert RateLimit.hit(key, 2, 60) == :ok
+    assert {:error, _} = RateLimit.hit(key, 2, 60)
+  end
+
   test "ended windows are swept" do
     send(Process.whereis(RateLimit), :sweep)
     # The sweep runs in the server; a call after it answers normally.

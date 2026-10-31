@@ -177,8 +177,34 @@ const normContact = (c: Contact | undefined): Contact => ({
   emails: (c?.emails ?? []).map((e) => e.trim().toLowerCase()),
 });
 
+/**
+ * A website is an http(s) address (QA 2026-10-31, §5.1): a bare domain gets https:// in front, empty is none, anything
+ * else (another scheme, spaces, credentials, no domain) is an Error.
+ */
+export function normWebsite(raw: string | null | undefined): string | null | undefined | Error {
+  if (raw === undefined) return undefined;
+  const text = raw?.trim() ?? "";
+  if (!text) return null;
+  const bad = new Error("a web address, e.g. https://partner.example");
+  if (/\s/.test(text)) return bad;
+  const address = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+  let url: URL;
+  try {
+    url = new URL(address);
+  } catch {
+    return bad;
+  }
+  const host = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/i;
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || !host.test(url.hostname))
+    return bad;
+  return address;
+}
+
 async function checkInput(db: Db, input: EnterpriseInput, id: number | null): Promise<FieldError[]> {
   const errors: FieldError[] = [];
+  const website = normWebsite(input.website);
+  if (website instanceof Error) errors.push({ path: "/website", message: website.message });
+  else if (website !== undefined) input.website = website;
   // Archived names stay reserved (§13.29), so the check includes archived enterprises.
   const { rows: clash } = await db.query(
     `SELECT id, name, deleted_at FROM enterprises WHERE lower(name) = lower($1) AND id IS DISTINCT FROM $2 LIMIT 1`,
@@ -898,7 +924,7 @@ export function downloadEnterpriseDoc(request: FastifyRequest, reply: FastifyRep
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
-async function enterpriseDependencies(db: Db, id: number) {
+export async function enterpriseDependencies(db: Db, id: number) {
   const { rows } = await db.query(
     `SELECT
        (SELECT count(*)::int FROM customer_trunks WHERE enterprise_id = $1 AND deleted_at IS NULL) AS customer_trunks,
@@ -1048,6 +1074,46 @@ export async function archiveGate(
   return { ok: true, note };
 }
 
+/**
+ * Archives an enterprise with its live trunks, never a hard delete (§13.29); the change's diff entries. The single
+ * delete and the list's bulk delete (api/bulkRecords.ts) share it.
+ */
+export async function archiveEnterpriseRows(c: pg.PoolClient, id: number, userId: number): Promise<DiffEntry[]> {
+  const { rows: ct } = await c.query(
+    "UPDATE customer_trunks SET deleted_at = now(), deleted_by_id = $2 WHERE enterprise_id = $1 AND deleted_at IS NULL RETURNING id",
+    [id, userId],
+  );
+  const { rows: vt } = await c.query(
+    "UPDATE vendor_trunks SET deleted_at = now(), deleted_by_id = $2 WHERE enterprise_id = $1 AND deleted_at IS NULL RETURNING id",
+    [id, userId],
+  );
+  await c.query("UPDATE enterprises SET deleted_at = now(), deleted_by_id = $2 WHERE id = $1", [id, userId]);
+  const ids = (rows: { id: number }[]) => rows.map((r) => r.id).sort((a, b) => a - b);
+  const diff: DiffEntry[] = [{ entity_id: id, field: "archived", before: false, after: true }];
+  if (ct.length) diff.push({ entity_id: id, field: "archivedCustomerTrunkIds", before: [], after: ids(ct) });
+  if (vt.length) diff.push({ entity_id: id, field: "archivedVendorTrunkIds", before: [], after: ids(vt) });
+  return diff;
+}
+
+/** Restores an archived enterprise and the trunks archived together with it; the change's diff entries. */
+export async function restoreEnterpriseRows(c: pg.PoolClient, id: number): Promise<DiffEntry[]> {
+  const { rows } = await c.query("SELECT deleted_at FROM enterprises WHERE id = $1", [id]);
+  const { rows: ct } = await c.query(
+    "UPDATE customer_trunks SET deleted_at = NULL, deleted_by_id = NULL WHERE enterprise_id = $1 AND deleted_at = $2 RETURNING id",
+    [id, rows[0]?.deleted_at ?? null],
+  );
+  const { rows: vt } = await c.query(
+    "UPDATE vendor_trunks SET deleted_at = NULL, deleted_by_id = NULL WHERE enterprise_id = $1 AND deleted_at = $2 RETURNING id",
+    [id, rows[0]?.deleted_at ?? null],
+  );
+  await c.query("UPDATE enterprises SET deleted_at = NULL, deleted_by_id = NULL WHERE id = $1", [id]);
+  const ids = (r: { id: number }[]) => r.map((x) => x.id).sort((a, b) => a - b);
+  const diff: DiffEntry[] = [{ entity_id: id, field: "archived", before: true, after: false }];
+  if (ct.length) diff.push({ entity_id: id, field: "archivedCustomerTrunkIds", before: ids(ct), after: [] });
+  if (vt.length) diff.push({ entity_id: id, field: "archivedVendorTrunkIds", before: ids(vt), after: [] });
+  return diff;
+}
+
 export function archiveEnterprise(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
   const body = (request.body ?? {}) as ArchiveRequest;
@@ -1059,20 +1125,7 @@ export function archiveEnterprise(request: FastifyRequest, reply: FastifyReply) 
     const gate = await archiveGate(reply, body, await enterpriseDependencies(pool, id));
     if (!gate.ok) return gate.reply;
     const change = await inTransaction(pool, async (c) => {
-      // Archiving a parent archives its trunks with it, never a hard delete (§13.29).
-      const { rows: ct } = await c.query(
-        "UPDATE customer_trunks SET deleted_at = now(), deleted_by_id = $2 WHERE enterprise_id = $1 AND deleted_at IS NULL RETURNING id",
-        [id, me.id],
-      );
-      const { rows: vt } = await c.query(
-        "UPDATE vendor_trunks SET deleted_at = now(), deleted_by_id = $2 WHERE enterprise_id = $1 AND deleted_at IS NULL RETURNING id",
-        [id, me.id],
-      );
-      await c.query("UPDATE enterprises SET deleted_at = now(), deleted_by_id = $2 WHERE id = $1", [id, me.id]);
-      const ids = (rows: { id: number }[]) => rows.map((r) => r.id).sort((a, b) => a - b);
-      const diff: DiffEntry[] = [{ entity_id: id, field: "archived", before: false, after: true }];
-      if (ct.length) diff.push({ entity_id: id, field: "archivedCustomerTrunkIds", before: [], after: ids(ct) });
-      if (vt.length) diff.push({ entity_id: id, field: "archivedVendorTrunkIds", before: [], after: ids(vt) });
+      const diff = await archiveEnterpriseRows(c, id, me.id);
       return recordChange(c, {
         entityType: "enterprise",
         entityIds: [id],
@@ -1096,20 +1149,7 @@ export function restoreEnterprise(request: FastifyRequest, reply: FastifyReply) 
     if (!rows[0]) return sendProblem(reply, 404, `Enterprise ${id} not found`);
     if (!rows[0].deleted_at) return sendProblem(reply, 400, "This enterprise is not archived");
     const change = await inTransaction(pool, async (c) => {
-      // Trunks archived together with the enterprise come back with it.
-      const { rows: ct } = await c.query(
-        "UPDATE customer_trunks SET deleted_at = NULL, deleted_by_id = NULL WHERE enterprise_id = $1 AND deleted_at = $2 RETURNING id",
-        [id, rows[0].deleted_at],
-      );
-      const { rows: vt } = await c.query(
-        "UPDATE vendor_trunks SET deleted_at = NULL, deleted_by_id = NULL WHERE enterprise_id = $1 AND deleted_at = $2 RETURNING id",
-        [id, rows[0].deleted_at],
-      );
-      await c.query("UPDATE enterprises SET deleted_at = NULL, deleted_by_id = NULL WHERE id = $1", [id]);
-      const ids = (r: { id: number }[]) => r.map((x) => x.id).sort((a, b) => a - b);
-      const diff: DiffEntry[] = [{ entity_id: id, field: "archived", before: true, after: false }];
-      if (ct.length) diff.push({ entity_id: id, field: "archivedCustomerTrunkIds", before: ids(ct), after: [] });
-      if (vt.length) diff.push({ entity_id: id, field: "archivedVendorTrunkIds", before: ids(vt), after: [] });
+      const diff = await restoreEnterpriseRows(c, id);
       return recordChange(c, {
         entityType: "enterprise",
         entityIds: [id],

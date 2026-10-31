@@ -142,21 +142,42 @@ type ByUser<T> = Map<number, T>;
 const byUser = <T>(rows: Record<string, unknown>[], f: (r: Record<string, unknown>) => T): ByUser<T> =>
   new Map(rows.map((r) => [Number(r.user_id), f(r)]));
 
+// The member queries below aggregate each table once, grouped by user, then join to the members (QA 2026-10-31): per-
+// member subqueries made the Team report take 5 to 11 s and once hit the statement timeout.
+
 async function ratesWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByUser<TeamRates>> {
   const { rows } = await pool.query(
-    `WITH c AS (SELECT * FROM changes WHERE user_id = ANY($1) AND inserted_at >= $2 AND inserted_at < $3)
-     SELECT u.id AS user_id,
-       (SELECT count(DISTINCT t) FROM c, unnest(c.entity_ids) t WHERE c.user_id = u.id AND c.entity_type = 'rate_table' AND c.change_type <> 'undo') AS tables,
-       (SELECT coalesce(sum(jsonb_array_length(c.diff)), 0) FROM c WHERE c.user_id = u.id AND c.entity_type = 'rate_table' AND c.change_type <> 'undo' AND jsonb_typeof(c.diff) = 'array') AS lines,
-       (SELECT count(DISTINCT t) FROM c, unnest(c.entity_ids) t WHERE c.user_id = u.id AND c.entity_type = 'route_rule' AND c.change_type <> 'undo') AS rules,
-       (SELECT count(*) FROM c WHERE c.user_id = u.id AND c.change_type = 'bulk') AS bulk,
-       (SELECT count(*) FROM changes o JOIN changes x ON x.undo_of_id = o.id AND x.user_id <> o.user_id
-         WHERE o.user_id = u.id AND x.inserted_at >= $2 AND x.inserted_at < $3) AS undone,
-       (SELECT count(*) FROM rate_notifications r WHERE r.decided_by_id = u.id AND r.decided_at >= $2 AND r.decided_at < $3 AND r.status IN ('accepted','partly_accepted')) AS rn_ok,
-       (SELECT count(*) FROM rate_notifications r WHERE r.decided_by_id = u.id AND r.decided_at >= $2 AND r.decided_at < $3 AND r.status = 'rejected') AS rn_no,
-       (SELECT count(*) FROM market_moves m WHERE m.handled_by_id = u.id AND m.handled_at >= $2 AND m.handled_at < $3) AS moves,
-       (SELECT avg(extract(epoch FROM m.handled_at - m.detected_at) / 3600) FROM market_moves m WHERE m.handled_by_id = u.id AND m.handled_at >= $2 AND m.handled_at < $3) AS move_h
-     FROM unnest($1::bigint[]) AS u(id)`,
+    `WITH c AS MATERIALIZED (
+       SELECT user_id, entity_type, change_type, entity_ids, diff FROM changes
+        WHERE user_id = ANY($1) AND inserted_at >= $2 AND inserted_at < $3
+     ), ch AS (
+       SELECT user_id, count(*) FILTER (WHERE change_type = 'bulk') AS bulk,
+              coalesce(sum(jsonb_array_length(diff)) FILTER (WHERE entity_type = 'rate_table' AND change_type <> 'undo'
+                AND jsonb_typeof(diff) = 'array'), 0) AS lines
+         FROM c GROUP BY user_id
+     ), touched AS (
+       SELECT c.user_id, count(DISTINCT t) FILTER (WHERE c.entity_type = 'rate_table') AS tables,
+              count(DISTINCT t) FILTER (WHERE c.entity_type = 'route_rule') AS rules
+         FROM c, unnest(c.entity_ids) t
+        WHERE c.change_type <> 'undo' AND c.entity_type IN ('rate_table', 'route_rule') GROUP BY c.user_id
+     ), undone AS (
+       SELECT o.user_id, count(*) AS undone FROM changes x JOIN changes o ON o.id = x.undo_of_id
+        WHERE x.undo_of_id IS NOT NULL AND x.user_id <> o.user_id AND o.user_id = ANY($1)
+          AND x.inserted_at >= $2 AND x.inserted_at < $3
+        GROUP BY o.user_id
+     ), rn AS (
+       SELECT decided_by_id AS user_id, count(*) FILTER (WHERE status IN ('accepted','partly_accepted')) AS rn_ok,
+              count(*) FILTER (WHERE status = 'rejected') AS rn_no
+         FROM rate_notifications WHERE decided_by_id = ANY($1) AND decided_at >= $2 AND decided_at < $3 GROUP BY 1
+     ), mv AS (
+       SELECT handled_by_id AS user_id, count(*) AS moves, avg(extract(epoch FROM handled_at - detected_at) / 3600) AS move_h
+         FROM market_moves WHERE handled_by_id = ANY($1) AND handled_at >= $2 AND handled_at < $3 GROUP BY 1
+     )
+     SELECT u.id AS user_id, touched.tables, ch.lines, touched.rules, ch.bulk, undone.undone, rn.rn_ok, rn.rn_no,
+            mv.moves, mv.move_h
+       FROM unnest($1::bigint[]) AS u(id)
+       LEFT JOIN ch ON ch.user_id = u.id LEFT JOIN touched ON touched.user_id = u.id
+       LEFT JOIN undone ON undone.user_id = u.id LEFT JOIN rn ON rn.user_id = u.id LEFT JOIN mv ON mv.user_id = u.id`,
     [ids, w.from, w.to],
   );
   return byUser(rows, (r) => ({
@@ -174,16 +195,31 @@ async function ratesWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByUse
 
 async function billingWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByUser<TeamBilling>> {
   const { rows } = await pool.query(
-    `SELECT u.id AS user_id,
-       (SELECT count(*) FROM invoice_requests r WHERE r.created_by_id = u.id AND r.inserted_at >= $2 AND r.inserted_at < $3 AND r.status <> 'failed') AS inv,
-       (SELECT count(*) FROM invoice_requests r JOIN invoices i ON i.id = r.invoice_id
-         WHERE r.created_by_id = u.id AND i.email_sent_at >= $2 AND i.email_sent_at < $3) AS inv_sent,
-       (SELECT count(*) FROM soa_reports s WHERE s.created_by_id = u.id AND s.inserted_at >= $2 AND s.inserted_at < $3) AS soa,
-       (SELECT count(*) FROM soa_reports s WHERE s.created_by_id = u.id AND s.emailed_at >= $2 AND s.emailed_at < $3) AS soa_sent,
-       (SELECT count(*) FROM transactions t WHERE t.created_by_id = u.id AND t.inserted_at >= $2 AND t.inserted_at < $3 AND t.deleted_at IS NULL) AS pay,
-       (SELECT count(*) FROM vendor_invoices v WHERE coalesce(v.updated_by_id, v.created_by_id) = u.id AND v.updated_at >= $2 AND v.updated_at < $3 AND v.recon_status = 'disputed') AS d_open,
-       (SELECT count(*) FROM vendor_invoices v WHERE coalesce(v.updated_by_id, v.created_by_id) = u.id AND v.updated_at >= $2 AND v.updated_at < $3 AND v.recon_status IN ('accepted','rejected') AND v.comparison IS NOT NULL AND v.comparison <> 'match') AS d_closed
-     FROM unnest($1::bigint[]) AS u(id)`,
+    `WITH inv AS (
+       SELECT created_by_id AS user_id, count(*) AS inv FROM invoice_requests
+        WHERE created_by_id = ANY($1) AND inserted_at >= $2 AND inserted_at < $3 AND status <> 'failed' GROUP BY 1
+     ), sent AS (
+       SELECT r.created_by_id AS user_id, count(*) AS inv_sent FROM invoice_requests r JOIN invoices i ON i.id = r.invoice_id
+        WHERE r.created_by_id = ANY($1) AND i.email_sent_at >= $2 AND i.email_sent_at < $3 GROUP BY 1
+     ), soa AS (
+       SELECT created_by_id AS user_id, count(*) FILTER (WHERE inserted_at >= $2 AND inserted_at < $3) AS soa,
+              count(*) FILTER (WHERE emailed_at >= $2 AND emailed_at < $3) AS soa_sent
+         FROM soa_reports WHERE created_by_id = ANY($1)
+          AND ((inserted_at >= $2 AND inserted_at < $3) OR (emailed_at >= $2 AND emailed_at < $3)) GROUP BY 1
+     ), pay AS (
+       SELECT created_by_id AS user_id, count(*) AS pay FROM transactions
+        WHERE created_by_id = ANY($1) AND inserted_at >= $2 AND inserted_at < $3 AND deleted_at IS NULL GROUP BY 1
+     ), disputes AS (
+       SELECT coalesce(updated_by_id, created_by_id) AS user_id, count(*) FILTER (WHERE recon_status = 'disputed') AS d_open,
+              count(*) FILTER (WHERE recon_status IN ('accepted','rejected') AND comparison IS NOT NULL
+                AND comparison <> 'match') AS d_closed
+         FROM vendor_invoices WHERE coalesce(updated_by_id, created_by_id) = ANY($1) AND updated_at >= $2 AND updated_at < $3
+        GROUP BY 1
+     )
+     SELECT u.id AS user_id, inv.inv, sent.inv_sent, soa.soa, soa.soa_sent, pay.pay, disputes.d_open, disputes.d_closed
+       FROM unnest($1::bigint[]) AS u(id)
+       LEFT JOIN inv ON inv.user_id = u.id LEFT JOIN sent ON sent.user_id = u.id LEFT JOIN soa ON soa.user_id = u.id
+       LEFT JOIN pay ON pay.user_id = u.id LEFT JOIN disputes ON disputes.user_id = u.id`,
     [ids, w.from, w.to],
   );
   return byUser(rows, (r) => ({
@@ -200,16 +236,23 @@ async function billingWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByU
 
 async function nocWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByUser<TeamNoc>> {
   const { rows } = await pool.query(
-    `SELECT u.id AS user_id, i.acked, i.ack_min, i.resolve_min, i.handled,
-       (SELECT count(*) FROM email_logs e WHERE e.user_id = u.id AND e.email_type = 'trouble_ticket' AND e.inserted_at >= $2 AND e.inserted_at < $3) AS tickets,
-       (SELECT count(*) FROM audit_log a WHERE a.user_id = u.id AND a.at >= $2 AND a.at < $3
-          AND a.action IN ('startBind','stopBind','startTrunkBind','stopTrunkBind')) AS binds
-     FROM unnest($1::bigint[]) AS u(id)
-     LEFT JOIN LATERAL (SELECT count(*) AS acked,
-          avg(extract(epoch FROM acknowledged_at - started_at) / 60) AS ack_min,
-          avg(extract(epoch FROM ended_at - started_at) / 60) FILTER (WHERE ended_at IS NOT NULL) AS resolve_min,
-          count(*) FILTER (WHERE ended_at IS NOT NULL) AS handled
-        FROM incidents WHERE acknowledged_by_id = u.id AND acknowledged_at >= $2 AND acknowledged_at < $3) i ON true`,
+    `WITH i AS (
+       SELECT acknowledged_by_id AS user_id, count(*) AS acked,
+              avg(extract(epoch FROM acknowledged_at - started_at) / 60) AS ack_min,
+              avg(extract(epoch FROM ended_at - started_at) / 60) FILTER (WHERE ended_at IS NOT NULL) AS resolve_min,
+              count(*) FILTER (WHERE ended_at IS NOT NULL) AS handled
+         FROM incidents WHERE acknowledged_by_id = ANY($1) AND acknowledged_at >= $2 AND acknowledged_at < $3 GROUP BY 1
+     ), t AS (
+       SELECT user_id, count(*) AS tickets FROM email_logs
+        WHERE user_id = ANY($1) AND email_type = 'trouble_ticket' AND inserted_at >= $2 AND inserted_at < $3 GROUP BY 1
+     ), b AS (
+       SELECT user_id, count(*) AS binds FROM audit_log
+        WHERE user_id = ANY($1) AND at >= $2 AND at < $3
+          AND action IN ('startBind','stopBind','startTrunkBind','stopTrunkBind') GROUP BY 1
+     )
+     SELECT u.id AS user_id, i.acked, i.ack_min, i.resolve_min, i.handled, t.tickets, b.binds
+       FROM unnest($1::bigint[]) AS u(id)
+       LEFT JOIN i ON i.user_id = u.id LEFT JOIN t ON t.user_id = u.id LEFT JOIN b ON b.user_id = u.id`,
     [ids, w.from, w.to],
   );
   return byUser(rows, (r) => ({
@@ -226,22 +269,35 @@ async function nocWork(pool: pg.Pool, ids: number[], w: Window): Promise<ByUser<
 // A session left open for days (an idle tab) counts 12 hours at most.
 const SESSION_SPAN = `least(43200, greatest(0, extract(epoch FROM least(coalesce(s.ended_at, s.last_seen_at), $3) - greatest(s.logged_in_at, $2))))`;
 
+/**
+ * Sessions, saves and top pages of the members (QA 2026-10-31: per-member subqueries took 5 to 11 s and once hit the
+ * statement timeout): one pass per table, grouped by user. A new device is a session in the window from an IP, device
+ * and browser the user never used before, unless it is the user's first session ever (rank 1 counts ties as first).
+ */
 async function systemActivity(pool: pg.Pool, ids: number[], w: Window): Promise<ByUser<TeamActivity>> {
   const { rows } = await pool.query(
-    `SELECT u.id AS user_id, se.days, se.secs, se.last_login, se.new_devices,
-       (SELECT count(*) FROM audit_log a WHERE a.user_id = u.id AND a.at >= $2 AND a.at < $3) AS saves,
-       (SELECT json_agg(json_build_object('path', p.path, 'views', p.views) ORDER BY p.views DESC)
-          FROM (SELECT path, count(*)::int AS views FROM page_views v WHERE v.user_id = u.id AND v.at >= $2 AND v.at < $3
-                 GROUP BY path ORDER BY 2 DESC LIMIT 3) p) AS pages
-     FROM unnest($1::bigint[]) AS u(id)
-     LEFT JOIN LATERAL (SELECT count(DISTINCT s.logged_in_at::date) AS days, sum(${SESSION_SPAN}) AS secs,
-          max(s.logged_in_at) AS last_login,
-          count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM user_sessions o WHERE o.user_id = s.user_id
-                 AND o.logged_in_at < s.logged_in_at AND o.ip = s.ip AND o.device IS NOT DISTINCT FROM s.device
-                 AND o.browser IS NOT DISTINCT FROM s.browser)
-             AND EXISTS (SELECT 1 FROM user_sessions o WHERE o.user_id = s.user_id AND o.logged_in_at < s.logged_in_at)) AS new_devices
-        FROM user_sessions s WHERE s.user_kind = 'staff' AND s.user_id = u.id AND s.logged_in_at < $3
-          AND coalesce(s.ended_at, s.last_seen_at) >= $2) se ON true`,
+    `WITH s AS (
+       SELECT s.user_id, s.logged_in_at, coalesce(s.ended_at, s.last_seen_at) AS last_seen_at, s.ended_at, s.ip,
+              rank() OVER (PARTITION BY s.user_id ORDER BY s.logged_in_at) AS nth,
+              rank() OVER (PARTITION BY s.user_id, s.ip, s.device, s.browser ORDER BY s.logged_in_at) AS nth_here
+         FROM user_sessions s WHERE s.user_kind = 'staff' AND s.user_id = ANY($1) AND s.logged_in_at < $3
+     ), se AS (
+       SELECT s.user_id, count(DISTINCT s.logged_in_at::date) AS days, sum(${SESSION_SPAN}) AS secs,
+              max(s.logged_in_at) AS last_login,
+              count(*) FILTER (WHERE s.nth > 1 AND (s.ip IS NULL OR s.nth_here = 1)) AS new_devices
+         FROM s WHERE s.last_seen_at >= $2 GROUP BY s.user_id
+     ), saves AS (
+       SELECT user_id, count(*) AS saves FROM audit_log WHERE user_id = ANY($1) AND at >= $2 AND at < $3 GROUP BY user_id
+     ), pv AS (
+       SELECT user_id, path, count(*)::int AS views, row_number() OVER (PARTITION BY user_id ORDER BY count(*) DESC, path) AS k
+         FROM page_views WHERE user_id = ANY($1) AND at >= $2 AND at < $3 GROUP BY user_id, path
+     ), pages AS (
+       SELECT user_id, json_agg(json_build_object('path', path, 'views', views) ORDER BY views DESC, path) AS pages
+         FROM pv WHERE k <= 3 GROUP BY user_id
+     )
+     SELECT u.id AS user_id, se.days, se.secs, se.last_login, se.new_devices, sv.saves, pg.pages
+       FROM unnest($1::bigint[]) AS u(id)
+       LEFT JOIN se ON se.user_id = u.id LEFT JOIN saves sv ON sv.user_id = u.id LEFT JOIN pages pg ON pg.user_id = u.id`,
     [ids, w.from, w.to],
   );
   return byUser(rows, (r) => ({
@@ -597,7 +653,7 @@ export function getTeamMember(request: FastifyRequest, reply: FastifyReply) {
       const { rows } = await pool.query("SELECT 1 FROM users WHERE id = $1", [id]);
       return rows[0]
         ? sendProblem(reply, 403, "This user is outside your team", {
-            detail: "The Team report shows your scope only (§13.18).",
+            detail: "The Team report shows your scope only.",
           })
         : sendProblem(reply, 404, `User ${id} not found`);
     }

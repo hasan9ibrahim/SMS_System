@@ -15,7 +15,7 @@ import type {
   TroubleTicketPreviewInput,
 } from "@sms/contract";
 import { withDb } from "../db.js";
-import { chQuery, ChError, ChUnavailable } from "../edr.js";
+import { chQuery, ChError, ChTimeout, ChUnavailable, onePerRowKey } from "../edr.js";
 import { chSelect, lit, nameMaps, runChList, withOutcomes, type ChListDef } from "../lists/chEngine.js";
 import {
   EDR_TEMPLATE_FROM,
@@ -43,8 +43,10 @@ import { PastDetailError } from "../reports/source.js";
 type Db = pg.Pool | pg.PoolClient;
 type Params = { id: number };
 
-/** EDR store errors: unreachable = 503; a query ClickHouse rejects (e.g. a bad regex) = 400. */
+/** EDR store errors: unreachable or too slow = 503; a query ClickHouse rejects (e.g. a bad regex) = 400. */
 export function chProblem(reply: FastifyReply, err: unknown) {
+  if (err instanceof ChTimeout)
+    return sendProblem(reply, 503, "The EDR store did not finish in time; choose a shorter period or narrower filters");
   if (err instanceof ChUnavailable) return sendProblem(reply, 503, "The EDR store is not answering; try again shortly");
   // Detail asked for a period older than the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
   if (err instanceof PastDetailError)
@@ -56,11 +58,26 @@ export function chProblem(reply: FastifyReply, err: unknown) {
   throw err;
 }
 
+/**
+ * A Start Time period at the filter's top level (QA 2026-10-31, §9.1, §9.2): `between`, or a lower and an upper bound.
+ * Without one a list read every EDR kept (a year) and sorted them.
+ */
+export function hasPeriod(query: ListQuery): boolean {
+  const f = query.filter;
+  if (!f || (f.logic === "or" && f.conditions.length > 1)) return false;
+  const ops = f.conditions.flatMap((c) => ("field" in c && c.field === "startTime" ? [c.op] : []));
+  return ops.includes("between") || (ops.some((o) => o === "gt" || o === "gte") && ops.some((o) => o === "lt" || o === "lte"));
+}
+
 function queryCh<Row>(fields: ListFields, def: ChListDef<Row>) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const query = request.body as ListQuery;
     const errors = checkListQuery(query, fields);
     if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
+    if (!hasPeriod(query)) {
+      const message = "Choose a period: a Start Time from and to";
+      return sendProblem(reply, 400, message, { errors: [{ path: "/filter", message }] });
+    }
     try {
       return await withDb(reply, (pool) => runChList(pool, def, query));
     } catch (err) {
@@ -71,7 +88,7 @@ function queryCh<Row>(fields: ListFields, def: ChListDef<Row>) {
 export const queryEdrs = queryCh(listFields.edrs, edrList);
 export const queryFailedEdrs = queryCh(listFields.failed_edrs, failedEdrList);
 
-/** Selected EDRs by UUID with the given columns (plus the IDs a ticket or repush needs). */
+/** Selected EDRs by UUID with the given columns (plus the IDs a ticket or repush needs); a row written twice once. */
 export async function edrsByIds(pool: pg.Pool, ids: string[], columns: string[]): Promise<EdrRow[]> {
   const def = edrList as ChListDef<unknown>;
   const want = [
@@ -80,7 +97,7 @@ export async function edrsByIds(pool: pg.Pool, ids: string[], columns: string[])
   const [rows, names] = await Promise.all([
     chQuery<Record<string, unknown>>(
       `SELECT ${chSelect(def, want)} FROM edr WHERE edr_id IN (${ids.map((id) => lit(id)).join(",")})
-        ORDER BY start_time`,
+        ORDER BY start_time ${onePerRowKey()}`,
     ),
     nameMaps(pool, def),
   ]);
@@ -382,7 +399,7 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
       const inList = ids.map((id) => lit(id)).join(",");
       const eligible = await chQuery<{ id: string }>(
         // Delivered per the attempt row or the switch's outcome row (backend step 11b).
-        `SELECT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'
+        `SELECT DISTINCT toString(edr_id) AS id FROM edr WHERE edr_id IN (${inList}) AND is_final_attempt = 1 AND msg_status != 'DELIVRD'
            AND edr_id NOT IN (SELECT edr_id FROM edr_receipt WHERE kind = 'outcome' AND edr_id IN (${inList}) AND msg_status = 'DELIVRD')`,
       );
       const me = await getCurrentUser();
@@ -407,6 +424,8 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
         const cols = await edrColumnList();
         const override: Record<string, string> = {
           edr_id: "generateUUIDv4()",
+          // The new attempt's own key, as the switch gives it (ClickHouse 010): its new id and attempt number.
+          row_key: "concat(toString(edr_id), ':', toString(attempt_no))",
           // Two minutes after the old attempt, so the generated EDR period (which the reports and
           // traffic alerts read up to its last EDR) stays as it is; the switch uses the send time.
           start_time: "src.start_time + toIntervalSecond(120)",
@@ -433,7 +452,7 @@ export function repushEdrs(request: FastifyRequest, reply: FastifyReply) {
         const select = cols.map((c) => (override[c] ? `${override[c]} AS ${c}` : `src.${c} AS ${c}`)).join(", ");
         await chQuery(
           `INSERT INTO edr (${cols.join(", ")}) SELECT ${select} FROM edr AS src
-            WHERE src.edr_id IN (${eligible.map((r) => lit(r.id)).join(",")})`,
+            WHERE src.edr_id IN (${eligible.map((r) => lit(r.id)).join(",")}) ${onePerRowKey("src")}`,
         );
         await chQuery(
           `ALTER TABLE edr UPDATE is_final_attempt = 0 WHERE edr_id IN (${eligible.map((r) => lit(r.id)).join(",")})`,

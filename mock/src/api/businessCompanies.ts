@@ -419,7 +419,7 @@ export function updateBusinessCompany(request: FastifyRequest, reply: FastifyRep
   });
 }
 
-async function companyDeps(c: Db, id: number) {
+export async function companyDeps(c: Db, id: number) {
   const { rows } = await c.query(
     `SELECT (SELECT count(*)::int FROM enterprises WHERE business_company_id = $1 AND deleted_at IS NULL) AS enterprises,
             (SELECT count(*)::int FROM users WHERE business_company_id = $1 AND deleted_at IS NULL) AS users,
@@ -795,7 +795,7 @@ export function checkSmtp(request: FastifyRequest, reply: FastifyReply) {
       message: ok
         ? production
           ? `Connected to ${host}:${m.smtpPort} and logged in`
-          : `Connected to ${host}:${m.smtpPort} (simulated - no e-mail is sent in this phase)`
+          : `Settings look right for ${host}:${m.smtpPort} (test system: the server is not contacted)`
         : `Failed at “${steps[firstFail]!.step}”`,
       steps: out,
     };

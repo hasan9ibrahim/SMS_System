@@ -63,6 +63,11 @@ const PERIOD = [
   { value: "billing_cycle", label: "Per billing cycle" },
 ];
 const TON = [0, 1, 2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) }));
+// S-4.7: TON / NPI as the message has them, or set from the addresses after the trunk's translation.
+const TON_NPI_MODES = [
+  { value: "as_sent", label: "As sent" },
+  { value: "auto", label: "Auto (fix after translation)" },
+];
 const NPI = [0, 1, 3, 4, 6, 8, 9, 10, 14, 18].map((v) => ({ value: v, label: String(v) }));
 const CODINGS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14].map((v) => ({ value: v, label: String(v) }));
 const DLR_STATS = ["DELIVRD", "EXPIRED", "UNDELIV", "REJECTD", "UNKNOWN"].map((v) => ({ value: v, label: v }));
@@ -111,6 +116,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     tps: 50,
     overflowBuffer: 10_000,
     billingTimezone: null,
+    tonNpiMode: "as_sent" as const,
   };
   if (kind === "customer")
     return {
@@ -121,7 +127,6 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
       hostIps: [],
       considerHlrRate: false,
       serviceTypeRouting: false,
-      partWiseRouting: false,
       dlrPushUrl: null,
       moPushUrl: null,
       delayedSubmit: false,
@@ -180,6 +185,8 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     allowedDstTon: null,
     allowedSrcNpi: null,
     allowedDstNpi: null,
+    // A sender a handset cannot show is not sent to the vendor unless switched off (S-2.10, S-4.7).
+    refuseInvalidSenders: true,
     maxMsgLen: null,
     supportMultipart: true,
     multipartFormat: "udh8",
@@ -212,20 +219,20 @@ export function fillService(kind: TrunkKind, v: TrunkForm, isNew: boolean): Trun
 
 export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!v.name.trim()) e.name = "Required";
-  if (!v.username.trim()) e.username = "Required";
-  if (isNew && !v.password) e.password = "Required for a new trunk";
-  if (!v.enterpriseId) e.enterpriseId = "Required";
+  if (!v.name.trim()) e.name = "Required.";
+  if (!v.username.trim()) e.username = "Required.";
+  if (isNew && !v.password) e.password = "Required for a new trunk.";
+  if (!v.enterpriseId) e.enterpriseId = "Required.";
   if (kind === "customer") {
     const c = v as CustomerTrunkInput;
-    if (!c.hostIps.length) e.hostIps = "At least one IP address";
-    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null)) e.revenueLimitPeriod = "Set both or neither";
+    if (!c.hostIps.length) e.hostIps = "Add at least one IP address.";
+    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null)) e.revenueLimitPeriod = "Set both or neither.";
   } else {
     const x = v as VendorTrunkInput;
-    if (!x.host.trim()) e.host = "Required";
-    if (!x.categoryId) e.categoryId = "Required";
-    if (x.protocol === "http" && !x.http?.url) e["http.url"] = "Required for an HTTP trunk";
-    if ((x.costLimit == null) !== (x.costLimitPeriod == null)) e.costLimitPeriod = "Set both or neither";
+    if (!x.host.trim()) e.host = "Required.";
+    if (!x.categoryId) e.categoryId = "Required.";
+    if (x.protocol === "http" && !x.http?.url) e["http.url"] = "Required for an HTTP trunk.";
+    if ((x.costLimit == null) !== (x.costLimitPeriod == null)) e.costLimitPeriod = "Set both or neither.";
   }
   return e;
 }
@@ -376,7 +383,7 @@ function CommonTrunkFields({ form, kind }: { form: FormApi<TrunkForm>; kind: Tru
         label="Billing time zone"
         placeholder="The enterprise's"
         options={tzOptions(ref.data?.timezones ?? ["UTC"])}
-        hint="Day and month totals are cut at midnight here (§13.31)"
+        hint="Day and month totals are cut at midnight here"
       />
       <ChoiceField
         form={form}
@@ -562,6 +569,7 @@ export function CustomerTrunkFields({
             label="Allowed host IPs"
             required
             wide
+            item="ip"
             placeholder="192.0.2.10, 192.0.2.0/24, 192.0.2.10-192.0.2.50"
             hint="An address, a network (IP/prefix, e.g. 192.0.2.0/24) or a range (a-b). Binds from anywhere else are refused"
           />
@@ -624,7 +632,6 @@ export function CustomerTrunkFields({
               <>
                 <CheckField form={form} path="considerHlrRate" label="Consider HLR rate" />
                 <CheckField form={form} path="serviceTypeRouting" label="Service type routing" />
-                <CheckField form={form} path="partWiseRouting" label="Part-wise routing" />
                 <CheckField form={form} path="loopDetection" label="Loop detection" />
                 <CheckField form={form} path="allowEmptyMessages" label="Allow empty messages" />
               </>
@@ -660,6 +667,14 @@ export function CustomerTrunkFields({
                     { value: 0, label: "0 – SMSC default (GSM 7-bit)" },
                     { value: 3, label: "3 – Latin-1" },
                   ]}
+                />
+                <SelectField
+                  form={form}
+                  path="tonNpiMode"
+                  label="TON / NPI"
+                  required
+                  options={TON_NPI_MODES}
+                  hint="Auto sets them from the sender and receiver after this trunk's translation rules"
                 />
                 <FormField
                   label="Express vendor trunk"
@@ -933,6 +948,20 @@ export function VendorTrunkFields({
           <MultiCheck form={form} path="allowedDstTon" any label="Allowed destination TON" options={TON} />
           <MultiCheck form={form} path="allowedSrcNpi" any label="Allowed source NPI" options={NPI} />
           <MultiCheck form={form} path="allowedDstNpi" any label="Allowed destination NPI" options={NPI} />
+          <SelectField
+            form={form}
+            path="tonNpiMode"
+            label="TON / NPI"
+            required
+            options={TON_NPI_MODES}
+            hint="Auto sets them from the addresses after this trunk's translation rules, before the allowed lists are checked"
+          />
+          <CheckField
+            form={form}
+            path="refuseInvalidSenders"
+            label="Refuse invalid senders"
+            hint="Text senders over 11 characters or with non-Latin characters, numbers over 20 digits"
+          />
           <NumberField
             form={form}
             path="maxMsgLen"

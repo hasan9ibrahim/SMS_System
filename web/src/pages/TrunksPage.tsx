@@ -10,8 +10,9 @@ import { ListScreen } from "../page/ListScreen";
 import { useMe } from "../api/hooks";
 import { useRestore } from "../api/records";
 import { useNotifySaved } from "../history/undo";
-import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
+import { isAdminUser, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { newTabOf, type OpenEvent } from "../shell/useOpener";
 import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 
@@ -20,9 +21,9 @@ const LABEL = { customer: "Customer trunk", vendor: "Vendor trunk" } as const;
 export function TrunksPage({ kind }: { kind: TrunkKind }) {
   const navigate = useTabNavigate();
   const page = pageForPath(`/enterprises/${kind}-trunks`)!;
-  const open = (id: number, name: string, forceNew = false) =>
-    // In this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
-    navigate(`/enterprises/${kind}-trunks/${id}`, { forceNew, title: `${LABEL[kind]} · ${name}` });
+  const open = (id: number, name: string, e?: OpenEvent) =>
+    // In this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click or the middle button: a new tab.
+    navigate(`/enterprises/${kind}-trunks/${id}`, { ...newTabOf(e), title: `${LABEL[kind]} · ${name}` });
   const clone = (id: number, name: string) =>
     navigate(`/enterprises/${kind}-trunks/new?clone=${id}`, {
       newTab: true,
@@ -30,7 +31,6 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
       title: `Clone of ${name}`,
     });
   const deleteOne = useDeleteRecord();
-  const deleteMany = useBulkDelete();
   const { data: me } = useMe();
   const restore = useRestore(kind);
   const notifySaved = useNotifySaved();
@@ -43,6 +43,8 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
     <ListScreen<TrunkListRow>
       key={kind}
       list={kind === "customer" ? "customer_trunks" : "vendor_trunks"}
+      listExport
+      bulkDelete={{ noun: LABEL[kind].toLowerCase(), restore: true }}
       page={page}
       historyScope={{ entityTypes: [`${kind}_trunk`] }}
       primary={{
@@ -71,23 +73,13 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
             },
       ]}
       selection={{
-        bulk: (ids, clear, rows) => [
+        bulk: (_ids, _clear, rows) => [
           {
             label: "Clone…",
             icon: "copy",
             disabled: rows.length !== 1,
             hint: rows.length === 1 ? undefined : "one trunk",
             onSelect: () => clone(rows[0]!.id, rows[0]!.name),
-          },
-          {
-            label: `Delete ${ids.length} trunk${ids.length === 1 ? "" : "s"}…`,
-            icon: "trash",
-            danger: true,
-            disabled: !rows.some((r) => !r.archived),
-            onSelect: async () => {
-              const live = rows.filter((r) => !r.archived);
-              if (await deleteMany(kind, live, LABEL[kind].toLowerCase())) clear();
-            },
           },
         ],
       }}
@@ -109,7 +101,7 @@ export function TrunksPage({ kind }: { kind: TrunkKind }) {
             ),
         },
       }}
-      onOpen={(row, e) => open(row.id, row.name, e.ctrlKey || e.metaKey)}
+      onOpen={(row, e) => open(row.id, row.name, e)}
       detail={(r) => ({
         title: (
           <>

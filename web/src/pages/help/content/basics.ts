@@ -8,8 +8,22 @@ export const topics: HelpTopic[] = [
     id: "getting-started",
     title: "Getting started",
     group: "Getting started",
-    summary: "What the platform is, what each main menu is for, a first tour, and how the trial on fake data works.",
-    keywords: ["introduction", "overview", "first steps", "tour", "trial", "demo", "menu", "view as user", "welcome"],
+    summary:
+      "What the platform is, what each main menu is for, a first tour, signing in and out, and how the test system differs.",
+    keywords: [
+      "introduction",
+      "overview",
+      "first steps",
+      "tour",
+      "sign in",
+      "sign out",
+      "session",
+      "test system",
+      "fake data",
+      "menu",
+      "view as user",
+      "welcome",
+    ],
     sections: [
       {
         id: "what-it-is",
@@ -42,7 +56,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "The header is one top bar: the logo, then the main menu (the current section is underlined), then search and live status on the right. A menu with several pages shows its drop-down as soon as the mouse is over it (no click needed; moving to the next menu swaps the drop-down, and it closes when the mouse leaves; a click or a tap still opens and closes it); a menu with one page opens it straight away. Pages marked **step …** or **later** in a drop-down are not finished yet and show a short placeholder.",
+            text: "The header is one top bar: the logo, then the main menu (the current section is underlined), then search and live status on the right. A menu with several pages shows its drop-down as soon as the mouse is over it (no click needed; moving to the next menu swaps the drop-down, and it closes when the mouse leaves; a click or a tap still opens and closes it); a menu with one page opens it straight away.",
           },
           {
             kind: "list",
@@ -53,7 +67,7 @@ export const topics: HelpTopic[] = [
               "**Finance** — transactions and payments, customer and vendor invoices, SOA, balances, the charges calculator, currencies and billing cycles.",
               "**Rates** — the Rate manager with every rate table, incoming vendor rate notifications (RNs), market moves, bulk rating, re-rating, rate lookup, product categories, countries, MCCMNC codes and the master table of dial codes.",
               "**Routing** — route rules, the route map, LCR and the route simulator.",
-              "**Switch** — translation rules, number lists, HLR (number lookup), QBR stats, notifications, SMS to voice, traffic alerts and other switch tools.",
+              "**Switch** — translation rules, number lists, HLR (number lookup), QBR stats, notifications, SMS to voice and voice gateways, traffic alerts and other switch tools.",
               "**Monitoring** — alert rules and incidents, EDR search and downloads, network status, signaling traces, failed EDRs, network diagnosis and repush requests.",
               "**Reports** — the Master report and the department reports (enterprise, sales, billing, NOC, team), scheduled reports and daily traffic e-mails.",
               "**Admin** — change history, users, access groups, visibility policies, departments, business companies, logged-in users, audit trail, e-mail templates, security, cleanup, migration and the customer portal.",
@@ -86,24 +100,51 @@ export const topics: HelpTopic[] = [
         ],
       },
       {
-        id: "trial",
-        title: "How the trial works",
+        id: "sign-in",
+        title: "Signing in and out",
         blocks: [
           {
             kind: "text",
-            text: "During the trial the platform runs on **fake data only**. The enterprises, trunks, people, rates, invoices and traffic are generated: names are made up, IP addresses and passwords are fake, and no message is really sent. The amounts of data are realistic (thousands of destinations, hundreds of trunks, millions of EDRs), so you can judge whether the screens are fast enough.",
+            text: "Everyone has their own account, made by an administrator on [[users]]. Your theme, open tabs, saved views, alert sounds, dashboard settings and **My changes** belong to your account.",
           },
+          {
+            kind: "steps",
+            items: [
+              "Type your **Username** and **Password** and click **Sign in**.",
+              "Enter the 6-digit code: from your authenticator app if 2FA is set up for you, otherwise the code e-mailed to you. An e-mailed code works for 10 minutes; **Send again** sends a new one.",
+              "Click **Sign in**.",
+            ],
+          },
+          {
+            kind: "list",
+            items: [
+              "A session ends after 8 hours without activity, and always 24 hours after you signed in. The sign-in screen then shows again.",
+              "Unless your account may be signed in on several devices, signing in ends your other sessions.",
+              "Five wrong passwords in a row lock your account for 15 minutes.",
+              "**Sign out** in the avatar menu ends your session.",
+              "Forgot your password? Ask an administrator for a temporary one or an e-mailed set-password link. See [[passwords-and-2fa]].",
+            ],
+          },
+        ],
+      },
+      {
+        id: "test-system",
+        title: "The test system",
+        blocks: [
           {
             kind: "text",
-            text: "Live figures (the dashboard, TPS, alerts) come from a traffic simulator that behaves like a real switch. Nothing you do here touches the platform we use today.",
+            text: "Besides the live platform there is a test system on **fake data only**. Its enterprises, trunks, people, rates, invoices and traffic are generated: names are made up, and IP addresses and passwords are fake. The amounts are realistic (thousands of destinations, hundreds of trunks, millions of EDRs). Use it to learn and to try things out; nothing done there reaches the live platform.",
           },
           {
-            kind: "text",
-            text: "There is no sign-in screen yet. Everyone in the trial works as the **same demo administrator user**, so you can see every page and button. Because the user is shared, the theme, open tabs, saved views, alert sounds, dashboard settings and **My changes** are shared too: if a colleague switches to the dark theme, you may see it as well.",
-          },
-          {
-            kind: "tip",
-            text: "Something missing, wrong or slow? Tell the team. Every requested change is collected and fed into the next build.",
+            kind: "list",
+            title: "What works differently there",
+            items: [
+              "Traffic comes from a traffic generator. The dashboard, Live analytics, TPS, alerts and incidents move like real traffic, but no message is really sent.",
+              '"Now" is the time of the newest generated message, so **Today** in reports and Live analytics counts up to that moment.',
+              "E-mails are recorded in [[email-logs|Email logs]] but never sent.",
+              "Switch actions are simulated: **Stop** and **Start** on Network status, the test SMS, EDR repush, captures and traces, and Network diagnosis. HLR lookups and exchange-rate updates are simulated too.",
+              "SMS to voice calls are simulated: no call is placed, and about 8 in 10 count as answered.",
+            ],
           },
         ],
       },
@@ -165,7 +206,7 @@ export const topics: HelpTopic[] = [
                 name: "Alert sounds",
                 what: "Mute alert sounds or pick a sound per severity. See [[alerts-and-popups]].",
               },
-              { name: "Sign out", what: "Not available yet in the trial." },
+              { name: "Sign out", what: "Ends your session and shows the sign-in screen. See above." },
             ],
           },
           {
@@ -349,7 +390,7 @@ export const topics: HelpTopic[] = [
             items: [
               "A menu item or link opens in a new tab or in the current tab, depending on your setting in the avatar menu (**Open pages in a new tab** / **in the current tab**). The default is a new tab.",
               "If the page is already open in a tab, that tab is brought to the front instead of opening a second copy. A plain menu link keeps the filters you set on that tab.",
-              "**Ctrl-click** (Cmd-click on a Mac) or **middle-click** always opens a new tab. Middle-click on a menu item opens the tab in the background, without switching to it.",
+              "**Ctrl-click** (Cmd-click on a Mac) or **middle-click** always opens a new tab. Middle-click on a menu item opens the tab in the background, without switching to it, and leaves the menu open so you can open more pages from it.",
               "**+** at the end of the tabs opens **Search or jump to…**; what you pick there opens in a new tab.",
               "The Home tab is pinned: a link clicked on Home always opens a new tab.",
             ],
@@ -427,10 +468,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "The set of open tabs, their order, pins and the active tab are saved to your profile and come back the next time you open the platform (up to 50 tabs). Opening a link from outside (for example from an e-mail) adds it as a new tab next to the ones you had.",
           },
-          {
-            kind: "tip",
-            text: "In the trial everyone shares one demo user, so a colleague's tabs can show up in your workspace after a reload.",
-          },
         ],
       },
     ],
@@ -501,7 +538,12 @@ export const topics: HelpTopic[] = [
                 values:
                   "`%mobile` contains mobile anywhere; `%tel%com%` contains tel and later com; `/mobile$/` ends with mobile.",
               },
-              { name: "a_c", what: "`_` stands for exactly one character.", values: "`a_c` matches abc, a1c, aXc." },
+              {
+                name: "a_c",
+                what: "`_` stands for exactly one character. A pattern with `%` or `_` still matches the start of a value: a `%` is added at the end unless it already ends with one.",
+                values:
+                  "`a_c` finds abc, a1c, aXc and anything that goes on, such as abcd; `PK_Tel` finds PK_Telenor_HQ. On a column that searches anywhere (such as Rule on Route rules), `VN_04` finds BLOCK_VN_04_OTP. For an exact length use a regular expression, e.g. `/^a.c$/`.",
+              },
               { name: "=ACME", what: "Equals exactly (still not case-sensitive)." },
               { name: "!test", what: "Does not start with `test`. `!%test` does not contain it anywhere." },
               {
@@ -579,7 +621,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. Inside a pill, and in every column filter, text matches the start of a value (`Colo` finds names starting with Colo); type `%colo` to find it anywhere. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** the plain quick search also matches the start; other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
+            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. Inside a pill, and in every column filter, text matches the start of a value, with `_` or `%` in it too (`Colo` finds names starting with Colo, `PK_Tel` names starting with PK_Tel); type `%colo` to find it anywhere. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** the plain quick search also matches the start; other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
           },
         ],
       },
@@ -644,7 +686,7 @@ export const topics: HelpTopic[] = [
         blocks: [
           {
             kind: "text",
-            text: "**Export** in the page header downloads the rows that match the current filters (CSV), in the order shown. Masked names and hidden values stay masked in the file (see [[am-visibility]]). On pages where export is not ready yet the button is greyed out.",
+            text: "**Export** in the page header downloads every row that matches the current filters and search as a CSV file, in the order shown and with the columns you show (up to 100,000 rows; a message says when the file stops there). Masked names and hidden values stay masked in the file (see [[am-visibility]]). Pages whose rows are not worth a file have no Export button.",
           },
           {
             kind: "warning",
@@ -953,10 +995,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "**Admin › Change history** lists every change in the system, with the same filters as any list, and **Undo** per change. **My changes** (avatar menu) is the same page filtered to you. See [[change-history]].",
           },
-          {
-            kind: "tip",
-            text: "In the trial everyone works as the same demo user, so **My changes** shows everybody's trial changes.",
-          },
         ],
       },
     ],
@@ -1147,10 +1185,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Both themes use soft colours for long shifts (no pure white or black). Green, amber and red mean the same in both.",
           },
-          {
-            kind: "tip",
-            text: "In the trial everyone shares one demo user, so the theme is shared too: if it changes by itself after a reload, a colleague switched it.",
-          },
         ],
       },
     ],
@@ -1219,10 +1253,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Masking is done on the server, so it applies to every page, export and report, not only to what is on screen. Your effective policy is shown on your user profile; administrators manage policies in **Admin › Visibility policies** ([[visibility]]) and can check what you see with **View as user** ([[getting-started#view-as]]).",
           },
-          {
-            kind: "tip",
-            text: "Live feeds (dashboard, TPS, alerts) are not filtered by **View as user** in the trial.",
-          },
         ],
       },
       {
@@ -1262,10 +1292,6 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "Alert rules (**Monitoring › Alert rules**, see [[alert-rules]]) watch traffic figures such as volume, TPS, ASR, DLR or margin. When a rule's condition is met, the server opens an **incident** and tells everyone the rule notifies, even if nobody has the dashboard open. Each incident has a severity: **Info**, **Warning** or **Critical**.",
-          },
-          {
-            kind: "tip",
-            text: "In the trial, incidents come from the traffic simulator, not from real traffic.",
           },
         ],
       },
@@ -1677,10 +1703,6 @@ export const topics: HelpTopic[] = [
             kind: "text",
             text: "Figures are pushed from the server: the counters every second by default, the movers and top lists every few seconds. Every row, chip and chart line can be clicked to open [[live-analytics]] for it in a new tab.",
           },
-          {
-            kind: "tip",
-            text: "In the trial the traffic comes from a simulator, so the figures are fake but move like real traffic.",
-          },
         ],
       },
       {
@@ -1979,10 +2001,6 @@ export const topics: HelpTopic[] = [
           {
             kind: "text",
             text: "Changes apply at once; there is no Search button. If the days are not valid the header shows why in red: **Pick the From and To days**, **To must be on or after From** or **At most 400 days**.",
-          },
-          {
-            kind: "tip",
-            text: "In the trial, **Today** is the latest day that has traffic in the fake data, and the page opens on it.",
           },
         ],
       },

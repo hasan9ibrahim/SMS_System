@@ -350,9 +350,15 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         allowed_data_codings: rng.chance(0.8) ? null : [0, 3, 8],
         reroute_on: v.rerouteOn,
         allowed_src_ton: v.id % 5 === 0 ? [0, 1, 2, 5] : null,
-        allowed_dst_ton: [1],
+        // Any destination TON / NPI, as on a new trunk since migration 081; one vendor in ten still takes
+        // international numbers only (by id, so no random draw moves the rest of the world).
+        allowed_dst_ton: v.id % 10 === 3 ? [1] : null,
         allowed_src_npi: v.id % 5 === 0 ? [0, 1] : null,
-        allowed_dst_npi: [1],
+        allowed_dst_npi: v.id % 10 === 3 ? [1] : null,
+        // A quarter of the vendors fix TON / NPI after their egress translation (S-4.7); by id, as above.
+        ton_npi_mode: v.id % 4 === 1 ? "auto" : "as_sent",
+        // Most refuse senders a handset cannot show (the default); one in twenty takes them as they are.
+        refuse_invalid_senders: v.id % 20 !== 9,
         // Any length: the usual setting; the limit is on the whole message (backend step 7). The draw is kept so the
         // rest of the generated data stays the same.
         max_msg_len: (rng.next(), null),
@@ -417,6 +423,10 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
       const editor = rng.pick(noc).id;
       const express = rng.chance(0.03) ? rng.pick(world.vendorTrunks) : null;
       const revLimit = rng.chance(0.12);
+      const considerHlrRate = rng.chance(0.15);
+      const serviceTypeRouting = rng.chance(0.05);
+      // Part Wise Routing is gone (product owner 2026-10-31, S-3.8); its draw stays so the rest of the seed is unchanged.
+      rng.chance(0.05);
       await sink.insert("customer_trunks", {
         id: t.id,
         enterprise_id: e.id,
@@ -426,9 +436,8 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         billing_type: t.billingType,
         status: t.status,
         bind_type: t.bindType,
-        consider_hlr_rate: rng.chance(0.15),
-        service_type_routing: rng.chance(0.05),
-        part_wise_routing: rng.chance(0.05),
+        consider_hlr_rate: considerHlrRate,
+        service_type_routing: serviceTypeRouting,
         host_ips: t.hostIps,
         username: t.username,
         password: fakeSecret(rng, 8),
@@ -445,6 +454,9 @@ async function generateTrunks(world: World, rng: Rng, sink: TableSink): Promise<
         overflow_buffer: rng.pick([0, 1000, 5000, 10000]),
         loop_detection: rng.chance(0.9),
         default_coding: rng.chance(0.85) ? 0 : 3,
+        // One customer trunk in ten fixes TON / NPI after its ingress translation (S-4.7); by id, so no random draw
+        // moves the rest of the world.
+        ton_npi_mode: t.id % 10 === 7 ? "auto" : "as_sent",
         express_vendor_trunk_id: express?.id ?? null,
         express_margin: express ? Number(rng.float(0.0005, 0.005).toFixed(6)) : null,
         revenue_limit: revLimit ? Math.round(rng.logNormal(3000, 0.8)) : null,

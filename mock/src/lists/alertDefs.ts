@@ -186,6 +186,7 @@ export const incidentList: ListDef<IncidentRow> = {
   },
   search: ["message", "ruleName", "entityName"],
   idSql: "i.id",
+  snapshot: { max: "SELECT max(id) FROM incidents" },
   select: INCIDENT_SELECT,
   mapRow: mapIncident,
 };

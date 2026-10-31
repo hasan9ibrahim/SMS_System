@@ -7,7 +7,7 @@
   padding: 0;
   display: grid;
   gap: 2px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 .pw-rules li {
@@ -16,7 +16,7 @@
   gap: 6px;
 }
 .pw-rules li.met {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .pw-input {
   display: flex;
@@ -67,7 +67,7 @@
   padding: 0 6px;
   border-radius: var(--radius-sm);
   border: var(--border-width) solid var(--color-border);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 
@@ -94,7 +94,7 @@
 .perm-matrix table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .perm-matrix th,
 .perm-matrix td {
@@ -118,7 +118,7 @@
   background: var(--color-page-bg);
   font-weight: 600;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
 }
 .perm-all td {
@@ -156,7 +156,7 @@
 .tpl-body {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   resize: vertical;
 }
 .tpl-chips {
@@ -168,7 +168,7 @@
 .tpl-chips .chip {
   cursor: pointer;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .mail-frame {
   width: 100%;
@@ -186,7 +186,7 @@
   min-height: 360px;
 }
 .part-title {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   margin: 4px 0 6px;
 }
@@ -204,7 +204,7 @@
   padding: 6px 10px;
   border-radius: var(--radius-md);
   border: var(--border-width) solid var(--color-border);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .smtp-check.ok {
   border-color: var(--color-good);
@@ -220,7 +220,7 @@
 .simple-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .simple-table th,
 .simple-table td {
@@ -245,7 +245,7 @@
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 10px;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .format-vars ul {
   list-style: none;
@@ -253,7 +253,7 @@
   padding: 0;
 }
 .format-vars code {
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 
 @media (max-width: 900px) {
@@ -269,7 +269,7 @@
   border: var(--border-width) dashed var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 18px;
 }
 .viewas-banner {
@@ -483,7 +483,7 @@
 }
 .pw-gate-card h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: var(--text-lg);
 }
 .pw-gate-card p {
   margin: 0;
@@ -636,7 +636,7 @@
   height: 26px;
   max-width: 120px;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .mail-color {
   position: relative;
@@ -757,7 +757,7 @@
 }
 .mail-issues-title {
   margin: 6px 0 0;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .mail-issues {
   margin: 0;
@@ -772,10 +772,10 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .mail-issue-level {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   padding: 1px 6px;
   border-radius: var(--radius-sm);
@@ -803,7 +803,7 @@
   gap: 4px;
 }
 .signin-field span {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
 }
 .signin-actions {

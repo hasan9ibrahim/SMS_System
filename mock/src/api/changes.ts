@@ -6,7 +6,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type { Change, CurrentUser, ListQuery, UndoRequest } from "@sms/contract";
 import { withDb } from "../db.js";
-import { changeSelect, listDefs, mapChange } from "../lists/defs.js";
+import { changeSelect, listDefs, mapChange, publicDiffValue } from "../lists/defs.js";
 import { listFields } from "../lists/fields.js";
 import { runList, type ListDef } from "../lists/engine.js";
 import { checkListQuery } from "../lists/validate.js";
@@ -22,8 +22,10 @@ import { applyRateTableEntries } from "./rates.js";
 import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
 import { applyHlrField } from "./hlr.js";
+import { applySmsVoiceRecording } from "./switchTools.js";
+import { applyVoiceGatewayField } from "./voiceGateways.js";
 import { applyCurrencyRate, applyTransactionEntries } from "./finance.js";
-import { MIGRATION_TABLES } from "../migration/importer.js";
+import { MIGRATION_TABLES, sameId, setAmFromNow } from "../migration/importer.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -262,6 +264,7 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
     },
   },
   edr_template: { table: "edr_templates", columns: { name: "name", columns: "columns" } },
+  // SMS to voice (§8): the recording is written through applySmsVoiceRecording (its bytes travel in the diff).
   sms_voice_rule: {
     table: "sms_voice_rules",
     columns: {
@@ -270,9 +273,12 @@ const ENTITY_COLUMNS: Record<string, { table: string; columns: Record<string, st
       prefix: "prefix",
       repeat: "repeat_count",
       mccmnc: "mccmnc",
+      gatewayId: "gateway_id",
       status: "status",
     },
   },
+  // Voice gateways write their fields through applyVoiceGatewayField (the password is never put back).
+  voice_gateway: { table: "voice_gateways", columns: {} },
   recon_rule: {
     table: "recon_rules",
     columns: {
@@ -379,6 +385,20 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
         `UPDATE ${e.table} SET ${cols.map((k, i) => `${k} = $${i + 2}`).join(", ")}, updated_at = now() WHERE id = $1`,
         [e.entity_id, ...cols.map((k) => values[k])],
       );
+      // The AM the import set goes back in the AM history too (QA 2026-10-31, §13.30).
+      const after = (e.after ?? {}) as Record<string, unknown>;
+      if (
+        e.table === "enterprises" &&
+        "account_manager_id" in after &&
+        !sameId(after.account_manager_id, values.account_manager_id)
+      )
+        await setAmFromNow(
+          c,
+          e.entity_id,
+          values.account_manager_id == null ? null : Number(values.account_manager_id),
+          "Import undone",
+          userId,
+        );
     }
     return;
   }
@@ -440,6 +460,14 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
     }
     if (entityType === "translation_rule") {
       await applyTranslationRuleField(c, e.entity_id, e.field, e.before, userId);
+      continue;
+    }
+    if (entityType === "voice_gateway") {
+      await applyVoiceGatewayField(c, e.entity_id, e.field, e.before, userId);
+      continue;
+    }
+    if (entityType === "sms_voice_rule" && e.field === "recording") {
+      await applySmsVoiceRecording(c, e.entity_id, e.before, userId);
       continue;
     }
     if (entityType === "customer_trunk" || entityType === "vendor_trunk") {
@@ -545,8 +573,9 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
           conflicts.push({
             entityId: d.entity_id,
             field: d.field,
-            mine: d.after,
-            current: hit.after,
+            // A recording's bytes stay on the server (SMS to voice, §8): the name is shown.
+            mine: publicDiffValue(target.entity_type, d.field, d.after),
+            current: publicDiffValue(target.entity_type, d.field, hit.after),
             changedBy: l.user_name,
             changedAt: l.inserted_at.toISOString(),
           });
@@ -610,22 +639,29 @@ export function undoChange(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /** Change history list (§13.10) with record names, a summary and readable fields (team trial round 1). */
+/**
+ * The change history as `me` may see it: only changes of records on pages the user may open (backend step 10;
+ * administrators see every change), and only the changes of the people the user covers (team trial round 12,
+ * `changeScope`). The list and its export (§13.22) share it.
+ */
+export async function scopedChangeList(db: pg.Pool | pg.PoolClient, me: CurrentUser) {
+  const types = visibleEntityTypes(me);
+  const people = await changeScope(db, me);
+  const where = [
+    types === null ? null : `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])`,
+    people === null ? null : `c.user_id = ANY(ARRAY[${people.join(",")}]::bigint[])`,
+  ].filter((w): w is string => w !== null);
+  const def = listDefs.changes as ListDef<Change>;
+  return { def: where.length ? { ...def, baseWhere: where.join(" AND ") } : def, people };
+}
+
 export function queryChanges(request: FastifyRequest, reply: FastifyReply) {
   const query = request.body as ListQuery;
   const errors = checkListQuery(query, listFields.changes);
   if (errors.length) return sendProblem(reply, 400, "Invalid list query", { errors });
   return withDb(reply, async (pool) => {
-    // Only changes of records on pages the user may open (backend step 10); administrators see every change. Only
-    // the changes of the people the user covers (team trial round 12, `changeScope`).
     const me = await getCurrentUser();
-    const types = visibleEntityTypes(me);
-    const people = await changeScope(pool, me);
-    const where = [
-      types === null ? null : `c.entity_type = ANY(ARRAY[${types.map((t) => `'${t}'`).join(",") || "''"}]::text[])`,
-      people === null ? null : `c.user_id = ANY(ARRAY[${people.join(",")}]::bigint[])`,
-    ].filter((w): w is string => w !== null);
-    const def = listDefs.changes as ListDef<Change>;
-    const scoped: ListDef<Change> = where.length ? { ...def, baseWhere: where.join(" AND ") } : def;
+    const { def: scoped, people } = await scopedChangeList(pool, me);
     try {
       const page = await runList(pool, scoped, query);
       const canUndo = (c: Change) =>

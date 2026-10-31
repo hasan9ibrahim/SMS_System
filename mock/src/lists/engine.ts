@@ -15,6 +15,7 @@ import type {
 import type { Viewer } from "../visibility/policy.js";
 import { currentViewer } from "../visibility/context.js";
 import { modeSql, resolveSql, valueSql, type VisRule } from "../visibility/sql.js";
+import { endsInEscape } from "./validate.js";
 
 export interface ColumnSql {
   /** SQL expression, using the aliases of the list's FROM clause. */
@@ -27,6 +28,13 @@ export interface ColumnSql {
    */
   vis?: VisRule;
   rowKey?: string;
+  /**
+   * Decimals the row shows the value with (QA 2026-10-31): filters compare the value rounded so, so "−4.9" finds the
+   * row that shows −4.9; sorting keeps the exact value.
+   */
+  round?: number;
+  /** SQL the column sorts by when it is not `sql` (e.g. a list of names that sorts by how many there are). */
+  sort?: string;
 }
 
 export interface ListDef<Row> {
@@ -51,6 +59,12 @@ export interface ListDef<Row> {
   searchPrefix?: boolean;
   /** Unique, stable tie-breaker so paging never repeats or skips rows. */
   idSql: string;
+  /**
+   * A list that grows while it is read (audit log, incidents): `max` gives the newest row's `idSql` when the first page
+   * is read, and later pages leave out rows added since, so new rows do not push the next page back onto rows already
+   * shown (QA 2026-10-31, §13.25). They show on the next refresh.
+   */
+  snapshot?: { max: string };
   /** SELECT list; rows are passed to mapRow. */
   select: string;
   mapRow: (row: Record<string, unknown>) => Row;
@@ -69,25 +83,59 @@ const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const TIME = new Set(["date", "datetime"]);
 
 /**
- * `%` / `_` wildcards are used as typed; plain text means "contains" (§13.25), or "starts with" on prefix lists. A
- * neutral ID ("#123", the masked names of §13.17) is always found anywhere.
+ * `%` / `_` wildcards are used as typed, and the text is the start of a value unless it ends in `%` itself, so
+ * "ALDEX_C" finds "ALDEX_CUST" (QA 2026-10-31); plain text means "contains" (§13.25), or "starts with" on prefix
+ * lists. A neutral ID ("#123", the masked names of §13.17) is always found anywhere.
  */
 export function searchPattern(text: string, prefix = false): string {
-  return /[%_]/.test(text) ? text : prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
+  // A backslash at the very end is itself: PostgreSQL and ClickHouse refuse a pattern ending in the escape.
+  if (endsInEscape(text)) text = `${text}\\`;
+  if (/[%_]/.test(text)) return endsInWildcard(text) ? text : `${text}%`;
+  return prefix && !text.startsWith("#") ? `${text}%` : `%${text}%`;
 }
 
-/** Cursor = position in the sorted result. Valid for the same filter and sort only. */
-export function encodeCursor(offset: number): string {
-  return Buffer.from(JSON.stringify({ o: offset })).toString("base64url");
+/** Ends in a `%` that is a wildcard, not an escaped `\%`. */
+export const endsInWildcard = (s: string) => /(^|[^\\])(\\\\)*%$/.test(s);
+
+/**
+ * Cursor = position in the sorted result, plus what keeps later pages in place while rows arrive (QA 2026-10-31,
+ * §13.25): `k`, the last row's sort values (keyset, the EDR lists), or `b`, the newest row when the first page was read
+ * (lists that grow, `snapshot`). Valid for the same filter and sort only.
+ */
+export interface Cursor {
+  offset: number;
+  keys: (string | null)[] | null;
+  bound: string | null;
+}
+export function encodeCursor(offset: number, more: { keys?: (string | null)[]; bound?: string | null } = {}): string {
+  const c: Record<string, unknown> = { o: offset };
+  if (more.keys) c.k = more.keys;
+  if (more.bound != null) c.b = more.bound;
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+export function readCursor(cursor: string | null | undefined): Cursor {
+  const none: Cursor = { offset: 0, keys: null, bound: null };
+  if (!cursor) return none;
+  try {
+    const c = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      o?: unknown;
+      k?: unknown;
+      b?: unknown;
+    };
+    const o = c.o;
+    const keys =
+      Array.isArray(c.k) && c.k.every((x) => x === null || typeof x === "string") ? (c.k as (string | null)[]) : null;
+    return {
+      offset: typeof o === "number" && Number.isInteger(o) && o >= 0 ? o : 0,
+      keys,
+      bound: typeof c.b === "string" && /^\d{1,19}$/.test(c.b) ? c.b : null,
+    };
+  } catch {
+    return none;
+  }
 }
 export function decodeCursor(cursor: string | null | undefined): number {
-  if (!cursor) return 0;
-  try {
-    const o = (JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as { o?: unknown }).o;
-    return typeof o === "number" && Number.isInteger(o) && o >= 0 ? o : 0;
-  } catch {
-    return 0;
-  }
+  return readCursor(cursor).offset;
 }
 
 class Params {
@@ -131,8 +179,24 @@ function conditionSql(c: FilterCondition, field: FieldDescriptor, col: ColumnSql
         : field.type === "boolean"
           ? `${p(vs.map((v) => v === true || v === "true"))}::boolean[]`
           : `${p(vs.map((v) => String(v).toLowerCase()))}::text[]`;
-  const subject = numeric || time || field.type === "boolean" ? x : `lower((${x})::text)`;
   const values = c.values ?? [];
+  // Shown rounded: compared rounded.
+  if (numeric && col.round !== undefined) {
+    const shown = `round((${x})::numeric, ${col.round})`;
+    return conditionSql(c, field, { sql: shown }, p);
+  }
+  // Times are shown to the millisecond and stored to the microsecond (QA 2026-10-31): a shown time is its whole
+  // millisecond, so an upper bound takes it in and "equals" matches the value on screen.
+  if (field.type === "datetime") {
+    const next = (v: unknown) => `(${p(v)}::timestamptz + interval '1 millisecond')`;
+    const within = (v: unknown) => `(${x} >= ${p(v)}::timestamptz AND ${x} < ${next(v)})`;
+    if (c.op === "eq") return within(c.value);
+    if (c.op === "neq") return `(${x} IS NULL OR NOT ${within(c.value)})`;
+    if (c.op === "between") return `(${x} >= ${p(values[0])}::timestamptz AND ${x} < ${next(values[1])})`;
+    if (c.op === "lte") return `${x} < ${next(c.value)}`;
+    if (c.op === "gt") return `${x} >= ${next(c.value)}`;
+  }
+  const subject = numeric || time || field.type === "boolean" ? x : `lower((${x})::text)`;
   switch (c.op) {
     case "eq":
       return `${subject} = ${value(c.value)}`;
@@ -198,7 +262,14 @@ export function viewDef(def: ListDef<unknown>, viewer: Viewer | null): { def: Li
         else extra.push(`${resolveSql(modeSql(col.vis, viewer)!, viewer)} AS "__v_${field}"`);
       }
     }
-    columns[field] = { ...col, sql };
+    // Custom predicates and sorts see what this viewer sees too (§13.17).
+    const where = col.where;
+    columns[field] = {
+      ...col,
+      sql,
+      ...(where ? { where: (op, c, p) => resolveSql(where(op, c, p), viewer) } : {}),
+      ...(col.sort ? { sort: resolveSql(col.sort, viewer) } : {}),
+    };
   }
   const from = def.from;
   return {
@@ -214,12 +285,18 @@ export function viewDef(def: ListDef<unknown>, viewer: Viewer | null): { def: Li
 }
 
 /** Builds the page and count statements. The query must have passed checkListQuery. */
-export function compileQuery(def: ListDef<unknown>, query: ListQuery, extraSelect: string[] = []) {
+export function compileQuery(
+  def: ListDef<unknown>,
+  query: ListQuery,
+  extraSelect: string[] = [],
+  bound: string | null = null,
+) {
   const byName = new Map(def.fields.fields.map((f) => [f.field, f]));
   const params = new Params();
   const where: string[] = [];
   const showArchived = !!def.archivedField && !!query.filter && mentions(query.filter, def.archivedField);
   if (def.baseWhere && !showArchived) where.push(def.baseWhere);
+  if (bound !== null) where.push(`${def.idSql} <= ${params.add(bound)}`);
   if (query.filter) where.push(groupSql(query.filter, def, byName, params.add));
   if (query.search?.trim()) {
     const pattern = params.add(searchPattern(query.search.trim(), def.searchPrefix));
@@ -227,8 +304,14 @@ export function compileQuery(def: ListDef<unknown>, query: ListQuery, extraSelec
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const sort = query.sort?.length ? query.sort : def.fields.defaultSort;
+  // Text sorts case-insensitively (QA 2026-10-31): "acme" sits next to "ACME", not after every capital. Only text
+  // fields: codes, prefixes and enums keep their plain order, and with it their indexes.
+  const sortSql = (field: string) => {
+    const col = def.columns[field]!;
+    return col.sort ?? (byName.get(field)?.type === "text" ? `lower((${col.sql})::text)` : col.sql);
+  };
   const orderSql = [
-    ...sort.map((s) => `${def.columns[s.field]!.sql} ${s.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
+    ...sort.map((s) => `${sortSql(s.field)} ${s.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
     `${def.idSql} ${sort[0]?.dir === "desc" ? "DESC" : "ASC"}`,
   ].join(", ");
   const limit = query.limit ?? 100;
@@ -258,7 +341,15 @@ export async function runList<Row>(
   viewer?: Viewer | null,
 ): Promise<ListPage<Row>> {
   const view = viewDef(def as ListDef<unknown>, viewer === undefined ? await currentViewer() : viewer);
-  const q = compileQuery(view.def, query, view.extra);
+  let bound: string | null = null;
+  if (def.snapshot) {
+    bound = readCursor(query.cursor).bound;
+    if (bound === null && !query.cursor) {
+      const { rows } = await pool.query<{ b: string | null }>(`SELECT (${def.snapshot.max})::text AS b`);
+      bound = rows[0]?.b ?? null;
+    }
+  }
+  const q = compileQuery(view.def, query, view.extra, bound);
   const [page, count] = await Promise.all([
     pool.query(q.sql, q.values),
     query.withTotal === false ? null : pool.query<{ n: number }>(q.countSql, q.countValues),
@@ -275,7 +366,7 @@ export async function runList<Row>(
     rows,
     total: count ? Number(count.rows[0]?.n ?? 0) : q.offset + rows.length + (more ? 1 : 0),
     totalIsEstimate: count === null,
-    nextCursor: more ? encodeCursor(q.offset + q.limit) : null,
+    nextCursor: more ? encodeCursor(q.offset + q.limit, { bound }) : null,
     ...(masked.length ? { masked } : {}),
   };
 }
@@ -293,8 +384,8 @@ export async function exportRows<Row>(pool: pg.Pool, def: ListDef<Row>, query: L
   });
 }
 
-/** Puts masked names into the row and withholds hidden values (§13.17). */
-function applyVisibility(
+/** Puts masked names into the row and withholds hidden values (§13.17); the list export shows their text too. */
+export function applyVisibility(
   def: ListDef<unknown>,
   r: Record<string, unknown>,
   row: Record<string, unknown>,

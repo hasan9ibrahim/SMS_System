@@ -41,6 +41,14 @@ defmodule Sms.Switch.Customer.TrunkStore do
     end
   end
 
+  @doc "Whether any trunk lets a client bind from `ip` (its Host IPs)."
+  @spec known_ip?(:inet.ip_address()) :: boolean()
+  def known_ip?(ip) do
+    @table
+    |> :ets.match_object({{:id, :_}, :_})
+    |> Enum.any?(fn {_key, trunk} -> Trunk.ip_allowed?(trunk, ip) end)
+  end
+
   @doc "Whether the trunks have been loaded at least once."
   @spec ready?() :: boolean()
   def ready? do

@@ -48,6 +48,7 @@ function PortalUserDialog({ row, done }: { row: PortalUserRow | null; done: () =
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.username}` : "Add portal user"}
       saveLabel={row ? "Save" : "Add portal user"}
       saving={save.isPending}
@@ -159,6 +160,8 @@ export function CustomerPortalPage() {
   return (
     <ListScreen<PortalUserRow>
       list="customer_portal_users"
+      listExport
+      bulkDelete={{ noun: "portal user", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["portal_user", "portal_user_password"] }}

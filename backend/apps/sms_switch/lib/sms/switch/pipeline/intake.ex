@@ -4,14 +4,20 @@ defmodule Sms.Switch.Pipeline.Intake do
   `submit_sm_resp` (spec §2, §6, docs/BACKEND_PLAN.md §3.3). In memory, in this order:
 
     1. **checks**: the message body (short_message or message_payload, not both, S-2.8), the multipart header (UDH
-       or SAR, S-3.6), an empty message (0x01, D10), the addresses (0x0A / 0x0B, S-2.10);
+       or SAR, S-3.6), an empty message (0x01, D10), the addresses and their TON / NPI (0x0A / 0x0B / 0x48–0x51,
+       S-2.10), priority_flag, registered_delivery and esm_class, the scheduled time and validity period (0x61 /
+       0x62, S-2.12, S-2.13);
     2. **ingress translation**: the customer trunk's translation rules in their order (§6.4, §13.2); a block refuses
-       the message (0x45);
+       the message (0x45); a trunk set to auto TON / NPI then fixes them from the addresses (S-4.7), and a sender
+       SMPP cannot carry (no sender, a TON / NPI outside SMPP) is refused (0x0A / 0x48 / 0x49);
     3. **destination and rate**: the longest dial code of the receiver (§6.1) and the customer's rate (§5.4); none →
        0x0B (S-6.2);
     4. **routing**: the route rules and the egress-block skip (`Sms.Switch.Pipeline.Router`); no rule, a blocking rule
-       or no vendor → 0x45 (decided Q15);
-    5. **credit**: `Sms.Switch.Pipeline.Credit` (balances come with build step 6);
+       or no vendor → 0x45 (decided Q15); every vendor refusing the sender (a handset cannot show it, S-2.10, S-4.7)
+       → 0x0A. A message an SMS-to-voice rule turns into a call (§8, S-6.9, `Sms.Switch.Voice`) is not routed: it
+       goes on its voice gateway's queue after the credit step (`Sms.Switch.Voice.Calls`);
+    5. **credit**: `Sms.Switch.Pipeline.Credit`: checked and the message's cost held in one step until it is
+       charged or its outcome releases it (§7, S-6.3);
     6. **stored**: the message goes on the durable bus (`sms.msg.accepted`, JetStream), and only then the resp is
        sent with our message_id (S-2.2). The vendor leg runs from the bus (`Sms.Switch.Pipeline.Sender`).
 
@@ -26,10 +32,11 @@ defmodule Sms.Switch.Pipeline.Intake do
   """
   @behaviour Sms.Switch.Customer.Intake
   require Logger
+  import Bitwise, only: [band: 2]
   alias Sms.Core.Bus
   alias Sms.Switch.Customer.Intake.NotReady
   alias Sms.Switch.Customer.Trunk
-  alias Sms.Switch.Message.{Concat, Text}
+  alias Sms.Switch.Message.{Address, Concat, Text}
   alias Sms.Switch.Metrics
 
   alias Sms.Switch.Pipeline.{
@@ -45,29 +52,32 @@ defmodule Sms.Switch.Pipeline.Intake do
     Queries,
     Reassembly,
     Router,
+    Scheduled,
     Store
   }
 
   alias Sms.Switch.Rules.Translation
   alias Sms.Switch.Smpp.{Pdu, Status}
+  alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.Throttle
+  alias Sms.Switch.Voice
+  alias Sms.Switch.Voice.Calls
 
   # How long a queued mark lasts (a buffered message can wait for its TPS) and a cancelled one is remembered.
   @queued_s 86_400
+  # How long a copy waits for the first message's decision, and how often it looks (D6).
+  @pending_wait_ms 2_000
+  @pending_poll_ms 25
 
   @impl true
   def handle(context, %Pdu{command: command} = pdu) when command in [:submit_sm, :data_sm] do
     reply =
       cond do
         # Overload protection (backend step 7): the sender is too far behind to take more now.
-        Backlog.over?() -> {:error, :esme_rthrottled}
-        not Config.ready?() -> {:error, :esme_rsyserr}
+        Backlog.over?() -> unread(context, :esme_rthrottled)
+        not Config.ready?() -> unread(context, :esme_rsyserr)
         true -> accept(context, pdu)
       end
-
-    # A refused message leaves the overflow buffer at once (S-2.4); an accepted one when it is sent on (Sender).
-    if Map.get(context, :buffered, false) and match?({:error, _}, reply),
-      do: Throttle.buffer_release(Trunk.buffer_key(context.trunk))
 
     Metrics.submit(reply)
     reply
@@ -77,6 +87,23 @@ defmodule Sms.Switch.Pipeline.Intake do
   def handle(context, %Pdu{command: :query_sm} = pdu), do: Queries.query(context, pdu.fields)
   def handle(context, %Pdu{command: :cancel_sm} = pdu), do: Queries.cancel(context, pdu.fields)
   def handle(context, pdu), do: NotReady.handle(context, pdu)
+
+  defp unread(context, status) do
+    leave_buffer(context)
+    {:error, status}
+  end
+
+  @doc false
+  # S-2.4: a message accepted over its trunk's TPS holds an overflow buffer place until the buffer releases it
+  # (`Sms.Switch.Pipeline.Buffers`). One that never reaches the buffer (refused, a duplicate, not stored) gives its
+  # place back at once; the parts of a multipart message give theirs back as their group ends (`Reassembly`).
+  @spec leave_buffer(map(), non_neg_integer()) :: :ok
+  def leave_buffer(msg_or_context, n \\ 1)
+
+  def leave_buffer(%{buffered: true, trunk: %{id: id}}, n),
+    do: Throttle.buffer_release(Trunk.buffer_key(id), n)
+
+  def leave_buffer(_msg, _n), do: :ok
 
   @doc """
   A message from the platform itself (backend step 11c): Test SMS from the Route Simulator or EDR Repush (§9.2), taken
@@ -122,7 +149,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     case Config.customer_trunk(context.origin.trunk_id) do
       # The trunk is newer than the pipeline's configuration (loaded within seconds): the client retries.
       nil ->
-        {:error, :esme_rsyserr}
+        unread(context, :esme_rsyserr)
 
       trunk ->
         msg = new_message(context, pdu, trunk)
@@ -170,7 +197,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   # The checks of the message as sent; a part of a multipart message is then held for the rest (S-3.2).
   defp build(msg, pdu) do
     with {:ok, msg} <- body(msg, pdu),
-         {:ok, msg} <- addresses(msg) do
+         {:ok, msg} <- addresses(msg),
+         {:ok, msg} <- times(msg) do
       if msg.concat, do: {:part, msg}, else: {:ok, msg}
     end
   end
@@ -182,10 +210,107 @@ defmodule Sms.Switch.Pipeline.Intake do
   def process(msg) do
     with {:ok, msg} <- run_ingress(msg),
          msg = hlr(msg),
-         {:ok, msg} <- rate(msg),
-         {:ok, msg} <- route_now(msg),
-         :ok <- credit(msg) do
-      store(msg)
+         {:ok, msg} <- rate(msg) do
+      if scheduled?(msg), do: schedule(msg), else: send_now(msg)
+    end
+  end
+
+  # §8 SMS to voice (S-6.9): a message an SMS-to-voice rule turns into a call is not routed: its credit is held as one
+  # message at the customer's rate and it goes on its voice gateway's queue (`Sms.Switch.Voice`).
+  defp send_now(msg) do
+    case Voice.plan(msg) do
+      {:call, call} ->
+        msg = Voice.as_call(msg, call)
+        with :ok <- credit(msg), do: call_queued_or_unreserved(msg)
+
+      :sms ->
+        with {:ok, msg} <- route_now(msg),
+             :ok <- credit(msg),
+             do: stored_or_unreserved(msg)
+    end
+  end
+
+  # Stored on the gateway's queue: a buffered message gives its overflow buffer place back (a call waits for a line,
+  # not for the trunk's TPS), and a Delayed Submit customer gets its resp now (the call's outcome comes as a receipt).
+  defp call_queued_or_unreserved(msg) do
+    case Calls.enqueue(msg) do
+      :ok ->
+        leave_buffer(msg)
+        _ = Delayed.notify(msg.id, :ok)
+        :ok
+
+      {:error, _} = error ->
+        _ = Credit.impl().unreserve(msg)
+        error
+    end
+  end
+
+  # S-2.12 (decided 2026-10-31): a message scheduled ahead is checked as if it went now (a route, the credit without a
+  # hold, its TPS not counted) and held until its time (`Sms.Switch.Pipeline.Scheduled`); rated, routed and its credit
+  # held again when it goes (`release/1`). A Test SMS or Repush always goes at once.
+  defp scheduled?(msg), do: Map.get(msg, :scheduled, false) and not is_map(msg[:internal])
+
+  defp schedule(msg) do
+    case Voice.plan(msg) do
+      # A call at its time (§8): its credit checked as one message, no route needed; planned again when it goes.
+      {:call, call} ->
+        with :ok <- credit_check(Voice.as_call(msg, call)), do: Scheduled.hold(msg)
+
+      :sms ->
+        with {:ok, _route} <- route_check(msg),
+             :ok <- credit_check(msg),
+             do: Scheduled.hold(msg)
+    end
+  end
+
+  defp route_check(msg) do
+    case Router.route(router_input(msg)) do
+      {:ok, routed} -> {:ok, routed}
+      {:error, reason, _decision} -> route_refused(reason, msg)
+    end
+  end
+
+  defp credit_check(msg) do
+    case Credit.impl().check(msg) do
+      :ok -> :ok
+      {:error, status} -> {:reject, status, :credit, msg}
+    end
+  end
+
+  @doc false
+  # S-2.12: a scheduled message at its time, as the sender takes it: rated, routed (its TPS counted) and its credit held
+  # now, on the customer trunk as it is now (prices and routes valid when it goes). The ingress translation and HLR
+  # answer stay those of its intake. One an SMS-to-voice rule turns into a call now (§8) is `{:call, msg}`: rated and
+  # its credit held as one message, for the caller to put on its gateway's queue.
+  @spec release(map()) :: {:ok, map()} | {:call, map()} | {:reject, atom(), term(), map()}
+  def release(msg) do
+    case Config.ready?() && Config.customer_trunk(msg.trunk.id) do
+      %{} = trunk ->
+        msg = msg |> Map.put(:trunk, trunk) |> Map.put(:rated_at, System.os_time(:millisecond))
+
+        with {:ok, msg} <- rate(msg), do: release_rated(msg, Voice.plan(msg))
+
+      _ ->
+        {:reject, :esme_rsubmitfail, :unknown_trunk, msg}
+    end
+  end
+
+  defp release_rated(msg, {:call, call}) do
+    msg = Voice.as_call(msg, call)
+    with :ok <- credit(msg), do: {:call, Map.put(msg, :credit_held, true)}
+  end
+
+  defp release_rated(msg, :sms) do
+    with {:ok, msg} <- route_now(msg),
+         :ok <- credit(msg),
+         do: {:ok, Map.put(msg, :credit_held, true)}
+  end
+
+  # A message the bus could not take was never accepted: its credit hold goes back at once (§7).
+  defp stored_or_unreserved(msg) do
+    with {:error, _} = error <- store(msg) do
+      _ = if credit_held?(msg), do: Credit.impl().unreserve(msg)
+      error
     end
   end
 
@@ -200,6 +325,7 @@ defmodule Sms.Switch.Pipeline.Intake do
           "duplicate of #{first} on trunk #{msg.trunk.id}: answered with its id, not sent (D6)"
         )
 
+        leave_buffer(msg)
         {:ok, %{message_id: first}, []}
 
       :new ->
@@ -207,16 +333,34 @@ defmodule Sms.Switch.Pipeline.Intake do
           do: refuse_filtered(msg, fingerprint, :esme_rsubmitfail, :loop),
           else: go(kind, msg, fingerprint)
 
+      :undecided ->
+        Logger.info("copy of a message still being decided on trunk #{msg.trunk.id}: 0x58 (D6)")
+        unread(msg, :esme_rthrottled)
+
       {:error, reason} ->
         Logger.error("duplicate filter unavailable, message taken: #{inspect(reason)}")
         go(kind, msg, nil)
     end
   end
 
-  defp go(:part, msg, _fingerprint), do: Reassembly.hold(msg)
+  # A part is answered once held; one not held gives its fingerprint back, so its resend is held.
+  defp go(:part, msg, fingerprint) do
+    case Reassembly.hold(msg) do
+      {:ok, _, _} = ok ->
+        confirm_fingerprint(msg, fingerprint)
+        ok
+
+      error ->
+        forget_fingerprint(msg, fingerprint)
+        error
+    end
+  end
 
   defp go(:ok, msg, fingerprint) do
-    reply = if Delayed.delayed?(msg), do: delayed(msg), else: answer(msg, process(msg))
+    reply =
+      if Delayed.delayed?(msg),
+        do: delayed(msg, fingerprint),
+        else: answer(msg, stored(msg, fingerprint))
 
     case reply do
       {:ok, _, _} = ok ->
@@ -228,11 +372,16 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
+  # Decided and stored: from now on its copies get its id (D6).
+  defp stored(msg, fingerprint) do
+    with :ok <- process(msg), do: confirm_fingerprint(msg, fingerprint)
+  end
+
   # S-2.18, D11: stored as usual, then the resp waits for the vendor's outcome.
-  defp delayed(msg) do
+  defp delayed(msg, fingerprint) do
     :ok = Delayed.join(msg.id)
 
-    case process(msg) do
+    case stored(msg, fingerprint) do
       :ok ->
         Delayed.await(msg.id)
 
@@ -255,12 +404,45 @@ defmodule Sms.Switch.Pipeline.Intake do
     :ok
   end
 
+  # Only a trunk with a duplicate window claimed the fingerprint.
+  defp confirm_fingerprint(_msg, nil), do: :ok
+
+  defp confirm_fingerprint(msg, fingerprint) do
+    _ =
+      case msg.trunk[:duplicate_window_s] || 0 do
+        0 -> :ok
+        window -> Store.confirm_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+      end
+
+    :ok
+  end
+
   defp duplicate(msg, fingerprint) do
     case msg.trunk[:duplicate_window_s] || 0 do
       0 -> :new
-      window -> Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window)
+      window -> claim(msg, fingerprint, window, now_ms() + @pending_wait_ms)
     end
   end
+
+  # D6: a copy that comes while the first is still being decided (rated, routed, its credit or HLR checked) waits for
+  # the decision: the first's id once it was taken, a new message if it was refused. Still undecided after
+  # `@pending_wait_ms`: 0x58, and the client sends it again later.
+  defp claim(msg, fingerprint, window, deadline) do
+    case Store.claim_fingerprint(msg.trunk.id, fingerprint, msg.id, window) do
+      {:pending, _first} ->
+        if now_ms() < deadline do
+          Process.sleep(@pending_poll_ms)
+          claim(msg, fingerprint, window, deadline)
+        else
+          :undecided
+        end
+
+      other ->
+        other
+    end
+  end
+
+  defp now_ms, do: System.monotonic_time(:millisecond)
 
   defp loop?(%{trunk: %{loop_detection: true}} = msg) do
     f = msg.fields
@@ -293,6 +475,7 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   defp answer(msg, {:error, reason}) do
     Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
+    leave_buffer(msg)
     {:error, :esme_rmsgqful}
   end
 
@@ -338,7 +521,11 @@ defmodule Sms.Switch.Pipeline.Intake do
         :binary -> nil
       end
 
-    parts = if concat, do: 1, else: max(1, Text.part_count(data, alphabet))
+    # A single message's other UDH elements (ports, a language shift table) go with it and take room (D9).
+    parts =
+      if concat,
+        do: 1,
+        else: max(1, Text.part_count(data, alphabet, byte_size(Concat.other_elements(udh))))
 
     {:ok,
      %{
@@ -353,34 +540,103 @@ defmodule Sms.Switch.Pipeline.Intake do
      }}
   end
 
-  # S-2.10: a receiver must be a number (an optional + then digits); a sender must be there, and an alphanumeric one
-  # (TON 5) at most 11 characters.
+  # S-2.10: a receiver must be a number (an optional + then digits) with a TON and NPI SMPP defines; a sender must be
+  # there, with a TON and NPI SMPP defines (`Sms.Switch.Message.Address.protocol_problem/3`); on a customer trunk set
+  # to auto TON / NPI, with the TON / NPI auto gives it (S-4.7). What a handset can show (an alphanumeric sender at
+  # most 11 characters, a numeric one at most 20 digits) is each vendor trunk's choice, checked when routing (S-4.7).
+  # Then the flags (`flags/1`).
   defp addresses(msg) do
-    source = Map.get(msg.fields, :source_addr, "")
-    dest = Map.get(msg.fields, :destination_addr, "")
+    f = msg.fields
+    dest = Map.get(f, :destination_addr, "")
 
     cond do
       not Regex.match?(~r/\A\+?[0-9]{1,20}\z/, dest) ->
         {:reject, :esme_rinvdstadr, :invalid_destination, msg}
 
-      source == "" ->
-        {:reject, :esme_rinvsrcadr, :no_source, msg}
+      not Address.ton?(f[:dest_addr_ton] || 0) ->
+        {:reject, :esme_rinvdstton, :invalid_destination_ton, msg}
 
-      Map.get(msg.fields, :source_addr_ton) == 5 and String.length(source) > 11 ->
-        {:reject, :esme_rinvsrcadr, :sender_too_long, msg}
+      not Address.npi?(f[:dest_addr_npi] || 0) ->
+        {:reject, :esme_rinvdstnpi, :invalid_destination_npi, msg}
+
+      status = source_problem(msg.trunk, f) ->
+        {:reject, status, :invalid_source, msg}
+
+      true ->
+        flags(msg)
+    end
+  end
+
+  defp source_problem(%{ton_npi_mode: :auto}, f) do
+    a =
+      Address.auto(%{
+        sender: f[:source_addr],
+        receiver: "",
+        sender_ton: f[:source_addr_ton],
+        sender_npi: f[:source_addr_npi],
+        dest_ton: nil,
+        dest_npi: nil
+      })
+
+    Address.protocol_problem(a.sender, a.sender_ton, a.sender_npi)
+  end
+
+  defp source_problem(_trunk, f),
+    do: Address.protocol_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi])
+
+  # SMPP 3.4 §5.2.12–§5.2.17: priority_flag 0–3; registered_delivery without its reserved bits (7–5) or the reserved
+  # receipt value 3; esm_class with a message type a submit can have (default, delivery or manual / user
+  # acknowledgement; the mode bits and UDHI / reply path are free).
+  defp flags(msg) do
+    f = msg.fields
+
+    cond do
+      (f[:priority_flag] || 0) > 3 ->
+        {:reject, :esme_rinvprtflg, :invalid_priority_flag, msg}
+
+      band(f[:registered_delivery] || 0, 0xE0) != 0 or
+          band(f[:registered_delivery] || 0, 0x03) == 3 ->
+        {:reject, :esme_rinvregdlvflg, :invalid_registered_delivery, msg}
+
+      band(Map.get(f, :esm_class, 0), 0x3C) not in [0x00, 0x08, 0x10] ->
+        {:reject, :esme_rinvesmclass, :invalid_esm_class, msg}
 
       true ->
         {:ok, msg}
     end
   end
 
-  # Ingress translation (§6.4, S-4.8).
+  # S-2.12, S-2.13: the scheduled time and the end of the validity period as moments (`Sms.Switch.Smpp.Time`); a field
+  # that does not read is refused (0x61, 0x62), as is a schedule more than `:max_schedule_s` ahead (0x61, 7 days) and a
+  # validity period that ends before the message could go. A time still ahead holds the message (`scheduled`).
+  defp times(msg) do
+    f = msg.fields
+
+    with {:sched, {:ok, scheduled}} <-
+           {:sched, SmppTime.parse(f[:schedule_delivery_time], msg.received_at)},
+         {:sched, true} <-
+           {:sched, scheduled == nil or scheduled - msg.received_at <= Scheduled.max_ahead_ms()},
+         {:expiry, {:ok, expires}} <-
+           {:expiry, SmppTime.parse(f[:validity_period], msg.received_at)},
+         {:expiry, true} <-
+           {:expiry, expires == nil or expires > max(scheduled || 0, msg.received_at)} do
+      held = is_integer(scheduled) and scheduled > msg.received_at
+      {:ok, Map.merge(msg, %{scheduled_at: scheduled, expires_at: expires, scheduled: held})}
+    else
+      {:sched, _} -> {:reject, :esme_rinvsched, :invalid_schedule_delivery_time, msg}
+      {:expiry, _} -> {:reject, :esme_rinvexpiry, :invalid_validity_period, msg}
+    end
+  end
+
+  # Ingress translation (§6.4, S-4.8); a customer trunk set to auto TON / NPI then fixes them from the addresses as the
+  # translation left them (S-4.7), except a field a translation rule set.
   defp run_ingress(msg) do
     f = msg.fields
+    rules = Config.translation_rules(:customer, msg.trunk.id)
 
     result =
       Translation.run(
-        Config.translation_rules(:customer, msg.trunk.id),
+        rules,
         %{
           sender: Map.get(f, :source_addr, ""),
           receiver: Map.get(f, :destination_addr, ""),
@@ -391,7 +647,8 @@ defmodule Sms.Switch.Pipeline.Intake do
         Router.translation_context()
       )
 
-    after_ = result.after
+    pinned = Translation.ton_npi_set(rules, result)
+    after_ = ton_npi(msg.trunk, result.after, pinned)
     fired = for s <- result.steps, s.fired, do: s.rule_id
     # Binary messages have no text to change.
     text_changed = msg.text != nil and after_.text != msg.text
@@ -409,15 +666,30 @@ defmodule Sms.Switch.Pipeline.Intake do
       dest_npi: after_.dest_npi,
       registered_delivery: after_.registered_delivery,
       billing_type: after_.billing_type,
-      fired: fired
+      fired: fired,
+      # The TON / NPI fields an ingress rule set: a vendor's auto TON / NPI leaves them too (S-4.7).
+      ton_npi_set: pinned
     }
 
     msg = %{msg | ingress: ingress}
 
-    if result.blocked,
-      do: {:reject, :esme_rsubmitfail, :blocked_by_translation, msg},
-      else: {:ok, msg}
+    cond do
+      result.blocked ->
+        {:reject, :esme_rsubmitfail, :blocked_by_translation, msg}
+
+      # S-4.7: a translation that leaves no sender, or a TON or NPI SMPP does not define, fails the message here, never
+      # at the vendor; on an auto trunk, with the TON / NPI auto set. A sender too long to show is each vendor's
+      # choice (Refuse invalid senders), checked when routing.
+      status = Address.protocol_problem(ingress.sender, ingress.sender_ton, ingress.sender_npi) ->
+        {:reject, status, :invalid_sender_after_translation, msg}
+
+      true ->
+        {:ok, msg}
+    end
   end
+
+  defp ton_npi(%{ton_npi_mode: :auto}, after_, pinned), do: Address.auto(after_, pinned)
+  defp ton_npi(_trunk, after_, _pinned), do: after_
 
   defp digits(receiver, original) do
     case String.replace(receiver, ~r/\D/, "") do
@@ -470,13 +742,16 @@ defmodule Sms.Switch.Pipeline.Intake do
         msg = %{msg | destination: dest}
 
         # A blocked customer line refuses the message like no rate (blocked means blocked, decided 2026-10-30).
-        case Config.sell_price(msg.trunk.id, dest.mccmnc, msg.received_at, rate_sender(msg)) do
+        case Config.sell_price(msg.trunk.id, dest.mccmnc, rated_at(msg), rate_sender(msg)) do
           nil -> {:reject, :esme_rinvdstadr, :no_customer_rate, msg}
           :blocked -> {:reject, :esme_rinvdstadr, :customer_rate_blocked, msg}
           sell -> {:ok, %{msg | sell: sell}}
         end
     end
   end
+
+  # The rates in force when the message was received (S-6.1), or when a scheduled one is released (S-2.12).
+  defp rated_at(msg), do: Map.get(msg, :rated_at, msg.received_at)
 
   # Test SMS or Repush to a chosen vendor trunk (backend step 11c): that vendor, whatever the route rules say.
   defp route_now(%{internal: %{vendor_trunk_id: vt}} = msg) when is_integer(vt) do
@@ -499,13 +774,20 @@ defmodule Sms.Switch.Pipeline.Intake do
          %{msg | route: Map.put(route, :measured_tps, LiveTps.rate("ct:#{msg.trunk.id}", 5))}}
 
       {:error, reason, _decision} ->
-        {:reject, :esme_rsubmitfail, reason, msg}
+        route_refused(reason, msg)
     end
   end
+
+  # S-4.7: each vendor that could take it refuses its sender: the sender is what is wrong (0x0A, not 0x45); any other
+  # routing refusal is 0x45 (Q15). The same for a scheduled message checked at intake (S-2.12).
+  defp route_refused(:invalid_sender, msg), do: {:reject, :esme_rinvsrcadr, :invalid_sender, msg}
+  defp route_refused(reason, msg), do: {:reject, :esme_rsubmitfail, reason, msg}
 
   @doc false
   # What the router needs, from a message after ingress translation.
   def router_input(msg) do
+    f = msg.fields
+
     %{
       customer_trunk: msg.trunk,
       sender: msg.ingress.sender,
@@ -516,9 +798,18 @@ defmodule Sms.Switch.Pipeline.Intake do
       destination: msg.destination,
       sell: msg.sell,
       hlr_ported: msg[:hlr][:ported],
-      now_ms: System.os_time(:millisecond)
+      now_ms: System.os_time(:millisecond),
+      # What a vendor's capability filter and Deny Multipart look at (§5.5, §6.3, S-3.9, S-4.4).
+      parts: msg.parts,
+      message: Map.take(msg, [:body, :alphabet, :data_coding, :text]),
+      dest_ton: first_set([msg.ingress[:dest_ton], f[:dest_addr_ton]]),
+      dest_npi: first_set([msg.ingress[:dest_npi], f[:dest_addr_npi]]),
+      # The TON / NPI fields an ingress rule set, which a vendor's auto TON / NPI leaves (S-4.7).
+      ton_npi_set: msg.ingress[:ton_npi_set] || []
     }
   end
+
+  defp first_set(values), do: Enum.find(values, &(&1 != nil))
 
   # Customer Sender ID rates (§6.2) match the sender as the customer sent it, the EDR's src_addr that Re-rating matches
   # too. A vendor's match the sender it receives (the router, after egress translation; EDR v_src_addr).
@@ -551,22 +842,30 @@ defmodule Sms.Switch.Pipeline.Intake do
     }
   end
 
-  # A Test SMS or Repush is not the customer's traffic and never charges it (backend step 11c).
-  defp credit(%{internal: %{}}), do: :ok
-
+  # The check and the hold of the message's cost in one step (§7, S-6.3, decision 2026-10-31). A Test SMS or Repush is
+  # not the customer's traffic and never charges it (backend step 11c).
   defp credit(msg) do
-    case Credit.impl().check(msg) do
-      :ok -> :ok
-      {:error, status} -> {:reject, status, :credit, msg}
+    if credit_held?(msg) do
+      case Credit.impl().reserve(msg) do
+        :ok -> :ok
+        {:error, status} -> {:reject, status, :credit, msg}
+      end
+    else
+      :ok
     end
   end
 
+  defp credit_held?(msg), do: not is_map(msg[:internal])
+
   # ---------------------------------------------------------------- stored, or refused
 
+  @doc false
   # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3). A message accepted
   # over the trunk's TPS goes to the trunk's own overflow buffer, which releases it at the trunk's TPS (S-2.4,
-  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender.
-  defp store(msg) do
+  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender. A scheduled message is stored this way when
+  # its time comes (`Sms.Switch.Pipeline.Scheduled`, S-2.12).
+  @spec store(map()) :: :ok | {:error, term()}
+  def store(msg) do
     data = event_data(msg)
 
     # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
@@ -616,6 +915,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   defp refuse(msg, status, reason) do
     code = Status.code(status)
     Logger.info("message refused (#{inspect(reason)}): 0x#{Integer.to_string(code, 16)}")
+    leave_buffer(msg)
 
     row =
       Edr.attempt_row(msg, %{

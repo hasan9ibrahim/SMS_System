@@ -1,7 +1,8 @@
-/* Colour tokens. Light is the default; dark applies with [data-theme="dark"] on <html>. Use these variables
-   everywhere, never raw colours. Design refresh (team trial round 2, decision 2026-10-22): a white header and
-   white cards on a soft grey page, a brighter accent and roomier rows, replacing the §15.2 palette. Colour still
-   carries meaning only: green good, amber warning, red problem. */
+/* Design tokens, as spec §15.2 / §15.3 list them. Light is the default; dark and blue-grey apply with
+   [data-theme="dark"] / [data-theme="bluegrey"] on <html>. Use these variables everywhere, never raw colours.
+   Design refresh (team trial round 2, decision 2026-10-22): a white header and white cards on a soft grey page, a
+   brighter accent and roomier rows. Colour carries meaning only: green good, amber warning, red problem; categories
+   are neutral (§15.3). */
 :root {
   --color-page-bg: #f6f7f9;
   --color-panel: #ffffff;
@@ -12,22 +13,58 @@
   --color-good: #16a34a;
   --color-warning: #b45309;
   --color-error: #dc2626;
+  /* Text in those colours, and fills under white text, at WCAG AA (4.5:1; design QA round 13): the brighter green
+     stays for dots, bars and icons, green figures use the text shade; selected items use the accent text shade on
+     their soft accent fill. */
+  --color-good-text: #157a3b;
+  --color-accent-text: #1d4ed8;
+  --color-accent-fill: var(--color-accent);
+  --color-error-fill: var(--color-error);
   /* Dark surfaces on a light page: toasts, the bulk bar, terminals. */
   --color-menu-bar: #1f2937;
-  /* The two-row header (logo, search and status; the main menu). */
+  /* The top bar (logo, main menu, search and status in one row, team trial round 3). */
   --color-header: #ffffff;
-  /* Selected pill (sibling page links): dark in light mode, light in dark mode. */
+  /* Strong selection (selected pill or segment): dark in light mode, light in dark mode. */
   --color-strong: #18202f;
   --color-on-strong: #ffffff;
   /* Table and card headers (team trial round 3): a light shade of the accent pill fill breaks up the white. */
   --color-head-tint: color-mix(in srgb, var(--color-accent) 7%, var(--color-panel));
+  /* Chart series that only tell things apart (vendors on one chart): blue, magenta, violet, cyan, never green,
+     amber or red, which mean good, warning and problem (§15.3). Checked for colour-blind separation per theme. */
+  --chart-1: var(--color-accent);
+  --chart-2: #c2417d;
+  --chart-3: #7c3aed;
+  --chart-4: #0e8fa8;
 
-  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-size-body: 14px;
-  --font-size-title: 28px;
+  /* Inter is bundled with the app (@fontsource-variable/inter, served from our own origin, weights 100-900);
+     the installed "Inter" and the system fonts are only a fallback while it loads. */
+  --font-family: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Type scale (§15): six sizes, each with its line height (as a ratio, so it inherits safely). No text under 11 px.
+     xs 11/16 captions, badges, uppercase labels · sm 12/16 secondary text, hints, chips, status bar ·
+     md 13/18 grid headers and filters, menus, compact controls · base 14/20 body, grid cells, inputs ·
+     lg 17/24 page titles on phones, large figures · xl 22/28 page titles, headline figures. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-base: 14px;
+  --text-lg: 17px;
+  --text-xl: 22px;
+  --leading-xs: 1.4545;
+  --leading-sm: 1.3333;
+  --leading-md: 1.3846;
+  --leading-base: 1.4286;
+  --leading-lg: 1.4118;
+  --leading-xl: 1.2727;
+  /* Inputs on phones stay at 16 px so mobile Safari does not zoom in on focus. */
+  --text-touch-input: 16px;
+  /* Corners (§15.3): buttons and inputs 8-10 px, cards 14 px (design refresh, decision 2026-10-22). */
   --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
+  /* Names some styles use (phone drawer, portal, incident facts) for the tokens above (design QA round 13). */
+  --radius: var(--radius-md);
+  --color-bg: var(--color-page-bg);
+  --color-text-muted: var(--color-text-secondary);
   --border-width: 1px;
   --card-shadow: 0 1px 2px color-mix(in srgb, #101828 5%, transparent);
 
@@ -42,8 +79,9 @@
   --tg-cyan: #007b83;
   --tg-orange: #fa7b17;
 
-  --menu-bar-height: 96px;
-  --tab-strip-height: 40px;
+  /* Window zones (§15.1). */
+  --menu-bar-height: 50px;
+  --tab-strip-height: 36px;
   --grid-row-height: 42px;
   --status-bar-height: 28px;
 
@@ -60,11 +98,19 @@
   --color-good: #4cc38a;
   --color-warning: #e9b25f;
   --color-error: #f07178;
+  --color-good-text: #4cc38a;
+  --color-accent-text: #7aa5f5;
+  /* White text on the bright dark-theme accent and red was 3.2:1 and 2.9:1. */
+  --color-accent-fill: #3b6fd8;
+  --color-error-fill: #c9454d;
   --color-menu-bar: #0b0f14;
   --color-header: #141921;
   --color-strong: #e6e9ef;
   --color-on-strong: #111827;
   --color-head-tint: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
+  --chart-2: #d0538f;
+  --chart-3: #8f6cf0;
+  --chart-4: #1a9fb3;
   --card-shadow: none;
   --tg-grey: #bdc1c6;
   --tg-blue: #8ab4f8;
@@ -91,6 +137,10 @@
   --color-good: #16a34a;
   --color-warning: #b45309;
   --color-error: #dc2626;
+  --color-good-text: #157a3b;
+  --color-accent-text: #2b63c6;
+  --color-accent-fill: #2b63c6;
+  --color-error-fill: #dc2626;
   --color-menu-bar: #1f3350;
   --color-header: #1f3350;
   --color-strong: #1f3350;

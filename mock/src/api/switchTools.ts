@@ -5,6 +5,9 @@
 import { inetText } from "../ipRanges.js";
 import { appendText, fillBody, fillText } from "../email/html.js";
 import { isIP } from "node:net";
+import { createHash } from "node:crypto";
+import { toVoiceWav, WavError } from "../audio/wav.js";
+import { decideVoice, likeMatch, loadVoiceConfig, phraseFor } from "../routing/smsVoice.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type pg from "pg";
 import type {
@@ -17,6 +20,7 @@ import type {
   NotificationPreviewInput,
   NotificationTrunksInput,
   SendRateInput,
+  SmsVoiceRecordingUpload,
   SmsVoiceRuleInput,
   SmsVoiceTestInput,
   TrafficAlertCheck,
@@ -47,10 +51,18 @@ import {
   TRAFFIC_ALERT_SELECT,
 } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
+import { contactsHidden, sellRatesHidden } from "../visibility/records.js";
 import { spreadsheetXml } from "../billing/files.js";
 import { contentDisposition, fillFileName, nowValues } from "../billing/fileNames.js";
 import { edrCoverage } from "../billing/edrFigures.js";
-import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
+import {
+  companyDetails,
+  companyMailbox,
+  companyPlaceholders,
+  companyTemplate,
+  logEmail,
+  OTP_HIDDEN,
+} from "./emailLog.js";
 import { exportList, notFound, setArchived } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -109,11 +121,13 @@ export function getEmailLog(request: FastifyRequest, reply: FastifyReply) {
       [id],
     );
     if (!rows[0]) return notFound(reply, "E-mail log", id);
+    // A sign-in code is never shown: anyone with the log and a password would pass 2FA (§13.28, round 13 review).
+    const code = rows[0].email_type === "otp";
     return {
       ...mapEmailLog(rows[0]),
-      body: rows[0].body ?? "",
+      body: code ? OTP_HIDDEN : (rows[0].body ?? ""),
       sender: rows[0].sender ?? null,
-      bodyHtml: rows[0].body_html ?? null,
+      bodyHtml: code ? null : (rows[0].body_html ?? null),
       inlineImages: rows[0].inline_images ?? [],
     };
   });
@@ -298,6 +312,7 @@ export function downloadRateSheet(request: FastifyRequest, reply: FastifyReply) 
   return withDb(reply, async (pool) => {
     const t = await trunkInfo(pool, id);
     if (!t) return notFound(reply, "Customer trunk", id);
+    if (await sellRatesHidden(t.enterpriseId)) return refuseHidden(reply, "sell rates");
     if (!t.rateTableId) return sendProblem(reply, 409, `${t.name} has no rate table`);
     const f = sheetFile(t, await rateSheet(pool, t), fileType, (await getCurrentUser()).username);
     return reply.type(f.type).header("content-disposition", contentDisposition(f.name)).send(f.body);
@@ -320,6 +335,9 @@ async function rateMail(c: Db, t: TrunkInfo) {
   };
 }
 
+/** What a preview shows instead of the SMPP password: only the e-mail itself carries it (round 13 security review). */
+const PREVIEW_PASSWORD = "••••••••";
+
 /** One trunk's connection details as a text block (the {trunks} placeholder, team trial round 3). */
 const techBlock = (t: TrunkInfo) =>
   [
@@ -338,7 +356,9 @@ const techBlock = (t: TrunkInfo) =>
  * The Customer Tech Info e-mail for one trunk, or for several trunks of one enterprise in one e-mail (`trunks` =
  * all of them; the first gives the single-trunk placeholders).
  */
-async function techMail(c: Db, t: TrunkInfo, trunks: TrunkInfo[] = [t]) {
+async function techMail(c: Db, first: TrunkInfo, group: TrunkInfo[] = [first], preview = false) {
+  const trunks = preview ? group.map((x) => ({ ...x, password: PREVIEW_PASSWORD })) : group;
+  const t = trunks[0]!;
   const tpl = await templateFor(c, t.enterpriseId, "customer_tech_info");
   const many = trunks.length > 1;
   const vars = {
@@ -372,12 +392,25 @@ async function techMail(c: Db, t: TrunkInfo, trunks: TrunkInfo[] = [t]) {
   };
 }
 
+/** 403 for a viewer whose visibility policy withholds what the e-mail or file would carry (§13.17). */
+const refuseHidden = (reply: FastifyReply, what: string) =>
+  sendProblem(reply, 403, `Your visibility policy hides this client's ${what}`, {
+    detail: "Ask the account manager of this enterprise, or an administrator.",
+  });
+
+/**
+ * What the e-mail will look like. The recipients are the client's contacts and a rate e-mail carries its sell rates,
+ * so a viewer whose policy hides them is refused (§13.17); a tech info preview never shows the SMPP password, which
+ * only the e-mail itself carries (round 13 security review).
+ */
 export function previewNotification(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as NotificationPreviewInput;
   return withDb(reply, async (pool) => {
     const t = await trunkInfo(pool, b.trunkId);
     if (!t) return notFound(reply, "Customer trunk", b.trunkId);
-    const m = b.kind === "send_rate" ? await rateMail(pool, t) : await techMail(pool, t);
+    if (await contactsHidden(t.enterpriseId)) return refuseHidden(reply, "contacts and credentials");
+    if (b.kind === "send_rate" && (await sellRatesHidden(t.enterpriseId))) return refuseHidden(reply, "sell rates");
+    const m = b.kind === "send_rate" ? await rateMail(pool, t) : await techMail(pool, t, [t], true);
     return { recipients: m.to, subject: m.subject, body: m.body };
   });
 }
@@ -437,6 +470,11 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
       failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "no rate table" });
       continue;
     }
+    // §13.17: the e-mail carries the client's sell rates to its contacts.
+    if ((await contactsHidden(t.enterpriseId)) || (await sellRatesHidden(t.enterpriseId))) {
+      failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "your visibility policy hides it" });
+      continue;
+    }
     if (!b.sendEmail) continue;
     const m = await rateMail(pool, t);
     const lines = await rateSheet(pool, t);
@@ -472,8 +510,11 @@ export function sendTechInfoNotifications(request: FastifyRequest, reply: Fastif
     const found: TrunkInfo[] = [];
     for (const id of [...new Set(b.trunkIds)]) {
       const t = await trunkInfo(pool, id);
-      if (t) found.push(t);
-      else failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
+      if (!t) failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
+      // §13.17: the e-mail carries the trunk's credentials to the client's contacts.
+      else if (await contactsHidden(t.enterpriseId))
+        failed.push({ trunkId: id, trunk: t.name, reason: "your visibility policy hides its credentials" });
+      else found.push(t);
     }
     // One e-mail per trunk, or per enterprise with all its trunks (team trial round 3).
     const byEnterprise = new Map<number, TrunkInfo[]>();
@@ -1014,40 +1055,102 @@ export const restoreTrafficAlert = alertArchiver.restore;
 
 // ---------------------------------------------------------------- sms to voice
 
-const VOICE_FIELDS: [keyof SmsVoiceRuleInput, string][] = [
+// SMS to voice over SIP (§8, decided 2026-10-31, docs/SMS_TO_VOICE.md): a rule names its voice gateway (null = the
+// default one) and may carry its own recording in place of the default phrase (product owner 2026-10-31).
+const VOICE_FIELDS: [keyof SmsVoiceRuleFields, string][] = [
   ["senderId", "sender_id"],
   ["receiverId", "receiver_id"],
   ["prefix", "prefix"],
   ["repeat", "repeat_count"],
   ["mccmnc", "mccmnc"],
+  ["gatewayId", "gateway_id"],
   ["status", "status"],
 ];
+type SmsVoiceRuleFields = Omit<SmsVoiceRuleInput, "recording">;
 const loadVoice = (c: Db, id: number) => one(c, SMS_VOICE_SELECT, SMS_VOICE_FROM, "sv.id", id, mapSmsVoiceRule);
 export const getSmsVoiceRule = (request: FastifyRequest, reply: FastifyReply) => {
   const { id } = request.params as Params;
   return withDb(reply, async (pool) => (await loadVoice(pool, id)) ?? notFound(reply, "SMS to voice rule", id));
 };
-const voiceValues = (b: SmsVoiceRuleInput) => ({
-  ...b,
+const voiceValues = (b: SmsVoiceRuleInput): SmsVoiceRuleFields => ({
   senderId: b.senderId?.trim() || null,
   receiverId: b.receiverId?.trim() || null,
   prefix: b.prefix?.trim() || null,
+  repeat: b.repeat,
+  mccmnc: b.mccmnc,
+  gatewayId: b.gatewayId ?? null,
+  status: b.status,
 });
 
-async function checkVoice(c: Db, b: SmsVoiceRuleInput): Promise<FieldError[]> {
+async function checkVoice(c: Db, b: SmsVoiceRuleFields): Promise<FieldError[]> {
   if (!b.senderId && !b.receiverId && !b.prefix && !b.mccmnc)
     return [{ path: "/prefix", message: "set at least one of sender, receiver, prefix or destination" }];
   if (b.mccmnc) {
     const { rows } = await c.query("SELECT 1 FROM mccmnc WHERE mccmnc = $1 AND deleted_at IS NULL", [b.mccmnc]);
     if (!rows[0]) return [{ path: "/mccmnc", message: "unknown MCCMNC" }];
   }
+  if (b.gatewayId !== null) {
+    const { rows } = await c.query("SELECT deleted_at FROM voice_gateways WHERE id = $1", [b.gatewayId]);
+    if (!rows[0]) return [{ path: "/gatewayId", message: "unknown voice gateway" }];
+    if (rows[0].deleted_at) return [{ path: "/gatewayId", message: "this gateway is deleted" }];
+  }
   return [];
 }
 
+/**
+ * A recording as kept in the rule and in its change history (undo puts the bytes back, §13.10): the file name, the
+ * SHA-256 the switch names the sound file after, and the WAV as base64. The history shows only the name
+ * (lists/defs.ts mapChange); null = the default phrase.
+ */
+export interface StoredRecording {
+  name: string;
+  sha256: string;
+  wav: string;
+}
+
+/** The stored recording converted from an upload, or a field error with the plain reason it was refused. */
+function recordingFrom(upload: SmsVoiceRecordingUpload): StoredRecording | FieldError {
+  try {
+    const wav = toVoiceWav(Buffer.from(upload.contentBase64, "base64"));
+    const name = upload.name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "_").trim().slice(0, 200) || "recording.wav";
+    return { name, sha256: createHash("sha256").update(wav).digest("hex"), wav: wav.toString("base64") };
+  } catch (err) {
+    if (err instanceof WavError) return { path: "/recording", message: err.message };
+    throw err;
+  }
+}
+
+async function storedRecording(c: Db, id: number): Promise<StoredRecording | null> {
+  const { rows } = await c.query(
+    "SELECT prompt_wav, prompt_wav_name, prompt_wav_sha256 FROM sms_voice_rules WHERE id = $1",
+    [id],
+  );
+  const r = rows[0];
+  if (!r?.prompt_wav) return null;
+  return {
+    name: r.prompt_wav_name ?? "recording.wav",
+    sha256: r.prompt_wav_sha256 ?? "",
+    wav: (r.prompt_wav as Buffer).toString("base64"),
+  };
+}
+
+/** Writes a rule's recording (null = back to the default phrase); also how undo puts one back. */
+export async function applySmsVoiceRecording(c: pg.PoolClient, id: number, value: unknown, userId: number | null) {
+  const v = value as StoredRecording | null;
+  await c.query(
+    `UPDATE sms_voice_rules SET prompt_wav = $2, prompt_wav_name = $3, prompt_wav_sha256 = $4, updated_at = now(),
+            updated_by_id = COALESCE($5, updated_by_id) WHERE id = $1`,
+    [id, v ? Buffer.from(v.wav, "base64") : null, v?.name ?? null, v?.sha256 ?? null, userId],
+  );
+}
+
 export function createSmsVoiceRule(request: FastifyRequest, reply: FastifyReply) {
-  const b = voiceValues(request.body as SmsVoiceRuleInput);
+  const body = request.body as SmsVoiceRuleInput;
+  const b = voiceValues(body);
   return withDb(reply, async (pool) => {
     const errors = await checkVoice(pool, b);
+    const recording = body.recording ? recordingFrom(body.recording) : null;
+    if (recording && "path" in recording) errors.push(recording);
     if (errors.length) return badInput(reply, errors);
     const me = await getCurrentUser();
     const { id, change } = await inTransaction(pool, async (c) => {
@@ -1057,6 +1160,7 @@ export function createSmsVoiceRule(request: FastifyRequest, reply: FastifyReply)
         [...VOICE_FIELDS.map(([k]) => b[k]), me.id],
       );
       const id = Number(rows[0].id);
+      if (recording && !("path" in recording)) await applySmsVoiceRecording(c, id, recording, me.id);
       const change = await recordChange(c, {
         entityType: "sms_voice_rule",
         entityIds: [id],
@@ -1074,11 +1178,17 @@ export function createSmsVoiceRule(request: FastifyRequest, reply: FastifyReply)
 
 export function updateSmsVoiceRule(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as Params;
-  const b = voiceValues(request.body as SmsVoiceRuleInput);
+  const body = request.body as SmsVoiceRuleInput;
+  const b = voiceValues(body);
   return withDb(reply, async (pool) => {
     const before = await loadVoice(pool, id);
     if (!before) return notFound(reply, "SMS to voice rule", id);
+    if (before.archivedAt) return sendProblem(reply, 400, "This rule is deleted; restore it before editing");
     const errors = await checkVoice(pool, b);
+    // Left out: the recording stays; null: back to the default phrase; a file: the new recording.
+    const next =
+      body.recording === undefined ? undefined : body.recording === null ? null : recordingFrom(body.recording);
+    if (next && "path" in next) errors.push(next);
     if (errors.length) return badInput(reply, errors);
     const diff: DiffEntry[] = VOICE_FIELDS.filter(([k]) => (before[k] ?? null) !== (b[k] ?? null)).map(([k]) => ({
       entity_id: id,
@@ -1086,6 +1196,12 @@ export function updateSmsVoiceRule(request: FastifyRequest, reply: FastifyReply)
       before: before[k] ?? null,
       after: b[k] ?? null,
     }));
+    const after = next as StoredRecording | null | undefined;
+    if (after !== undefined) {
+      const was = before.recording;
+      if ((was?.sha256 ?? null) !== (after?.sha256 ?? null) || (was?.name ?? null) !== (after?.name ?? null))
+        diff.push({ entity_id: id, field: "recording", before: await storedRecording(pool, id), after });
+    }
     if (!diff.length) return { record: before, change: null };
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {
@@ -1094,6 +1210,7 @@ export function updateSmsVoiceRule(request: FastifyRequest, reply: FastifyReply)
                 updated_by_id = $${VOICE_FIELDS.length + 2}, updated_at = now() WHERE id = $1`,
         [id, ...VOICE_FIELDS.map(([k]) => b[k]), me.id],
       );
+      if (diff.some((d) => d.field === "recording")) await applySmsVoiceRecording(c, id, after ?? null, me.id);
       return recordChange(c, {
         entityType: "sms_voice_rule",
         entityIds: [id],
@@ -1110,48 +1227,78 @@ export function updateSmsVoiceRule(request: FastifyRequest, reply: FastifyReply)
 
 const voiceArchiver = archiver("sms_voice_rules", "sms_voice_rule", "SMS to voice rule", loadVoice);
 export const archiveSmsVoiceRule = voiceArchiver.archive;
-export const restoreSmsVoiceRule = voiceArchiver.restore;
 
-/** % = any characters, _ = one character, case-insensitive (§13.25 wildcards). */
-export function likeMatch(pattern: string, value: string): boolean {
-  const re = pattern
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    .replace(/%/g, ".*")
-    .replace(/_/g, ".");
-  return new RegExp(`^${re}$`, "i").test(value);
+/** Why a deleted rule cannot come back yet: its gateway is deleted too (restore the gateway first), or null. */
+export async function voiceRuleRestoreRefusal(c: Db, id: number): Promise<string | null> {
+  const { rows } = await c.query(
+    `SELECT g.name, g.deleted_at FROM sms_voice_rules r JOIN voice_gateways g ON g.id = r.gateway_id WHERE r.id = $1`,
+    [id],
+  );
+  return rows[0]?.deleted_at ? `Its voice gateway ${rows[0].name} is deleted; restore it first` : null;
 }
 
-/** What the call reads: digits spaced out so a code is read one digit at a time, repeated. */
-export function spokenText(text: string, repeat: number): string {
-  const once = text.replace(/\d+/g, (d) => d.split("").join(" "));
-  return Array.from({ length: repeat }, () => once).join(" … ");
+export function restoreSmsVoiceRule(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as Params;
+  return withDb(reply, async (pool) => {
+    const refusal = await voiceRuleRestoreRefusal(pool, id);
+    if (refusal) return sendProblem(reply, 409, refusal);
+    return voiceArchiver.restore(request, reply);
+  });
 }
+
+export { likeMatch };
+
+/** "Your verification code is 4, 8, 2, 9." said `repeat` times, one second apart (the test box's line). */
+export const spokenPhrase = (code: string, repeat: number, recording: string | null = null) =>
+  `${phraseFor(code, recording)}${repeat > 1 ? ` (${repeat} times)` : ""}`;
 
 export function testSmsVoiceRules(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as SmsVoiceTestInput;
   return withDb(reply, async (pool) => {
-    const receiver = b.receiver.replace(/^\+/, "");
     const lookup = await mccmncLookup(pool);
-    const code = lookup(receiver);
-    const { rows } = await pool.query(
-      `SELECT ${SMS_VOICE_SELECT} FROM ${SMS_VOICE_FROM} WHERE sv.deleted_at IS NULL AND sv.status = 'active' ORDER BY sv.id`,
-    );
-    for (const r of rows.map(mapSmsVoiceRule)) {
-      if (r.senderId && !likeMatch(r.senderId, b.senderId)) continue;
-      if (r.receiverId && !likeMatch(r.receiverId, receiver)) continue;
-      if (r.prefix && !receiver.startsWith(r.prefix)) continue;
-      if (r.mccmnc && r.mccmnc !== code) continue;
-      return {
-        matched: true,
-        rule: r,
-        mccmnc: code,
-        spoken: spokenText(b.text, r.repeat),
-        reason: `Rule ${r.id} matches: the SMS becomes a voice call`,
-      };
-    }
-    return { matched: false, rule: null, mccmnc: code, spoken: null, reason: "No active rule matches: sent as SMS" };
+    const mccmnc = lookup(b.receiver.replace(/^\+/, ""));
+    const { rules, gateways } = await loadVoiceConfig(pool);
+    const d = decideVoice(rules, gateways, { sender: b.senderId, receiver: b.receiver, text: b.text, mccmnc });
+    return {
+      outcome: d.outcome,
+      matched: d.rule !== null,
+      rule: d.rule ? await loadVoice(pool, d.rule.id) : null,
+      mccmnc,
+      code: d.code,
+      call: d.call,
+      smsReason: d.smsReason,
+      reason: d.reason,
+    };
   });
 }
+
+/** The upload converted as it would be stored, for the form to play before saving; nothing is kept. */
+export function previewSmsVoiceRecording(request: FastifyRequest, reply: FastifyReply) {
+  const b = request.body as SmsVoiceRecordingUpload;
+  try {
+    const wav = toVoiceWav(Buffer.from(b.contentBase64, "base64"));
+    return reply.type("audio/wav").header("cache-control", "no-store").send(wav);
+  } catch (err) {
+    if (err instanceof WavError) return badInput(reply, [{ path: "/contentBase64", message: err.message }]);
+    throw err;
+  }
+}
+
+/** A rule's own recording for the form's play button; 404 while the rule uses the default phrase. */
+export function downloadSmsVoiceRecording(request: FastifyRequest, reply: FastifyReply) {
+  const { id } = request.params as Params;
+  return withDb(reply, async (pool) => {
+    const { rows } = await pool.query("SELECT prompt_wav, prompt_wav_sha256 FROM sms_voice_rules WHERE id = $1", [id]);
+    if (!rows[0]) return notFound(reply, "SMS to voice rule", id);
+    if (!rows[0].prompt_wav) return sendProblem(reply, 404, "This rule uses the default phrase");
+    return reply
+      .type("audio/wav")
+      .header("cache-control", "private, no-cache")
+      .header("etag", `"${rows[0].prompt_wav_sha256 ?? ""}"`)
+      .send(rows[0].prompt_wav as Buffer);
+  });
+}
+
 
 // ---------------------------------------------------------------- broadcast
 

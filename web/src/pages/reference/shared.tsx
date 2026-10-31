@@ -203,6 +203,7 @@ export function RecordDialog({
   onClose,
   width,
   children,
+  form,
 }: {
   title: string;
   saveLabel: string;
@@ -212,7 +213,14 @@ export function RecordDialog({
   onClose: () => void;
   width?: number;
   children: ReactNode;
+  /** The dialog's form: its fields are checked before onSave runs, and what is wrong shows under them. */
+  form?: { check: () => Record<string, string> };
 }) {
+  // Client checks first (functional QA round 13): an empty name or a bad e-mail is said at once, in plain words.
+  const save = () => {
+    if (form && Object.keys(form.check()).length) return;
+    onSave();
+  };
   return (
     <Modal
       title={title}
@@ -221,7 +229,7 @@ export function RecordDialog({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={saving} onClick={onSave}>
+          <Button variant="primary" disabled={saving} onClick={save}>
             {saveLabel}
           </Button>
         </>
@@ -230,7 +238,7 @@ export function RecordDialog({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSave();
+          save();
         }}
       >
         <div className="fgrid cols-2">{children}</div>

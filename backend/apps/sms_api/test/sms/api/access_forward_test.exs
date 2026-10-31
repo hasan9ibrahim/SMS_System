@@ -134,6 +134,29 @@ defmodule Sms.Api.AccessTest do
     assert as(invoices, :post, "/api/v1/lookups/nothing/query", "{}").status == 404
   end
 
+  test "generic list calls are checked by the list: export by its page's Export, bulk by its own Delete (§13.22, §13.29)" do
+    id =
+      user(%{
+        "categories" => ["view"],
+        "countries" => ["view", "export"],
+        "mccmnc" => ["view", "delete"]
+      })
+
+    # View alone is no export; View and Export is; another page is not.
+    assert as(id, :post, "/api/v1/lists/product_categories/export", "{}").status == 403
+    assert as(id, :post, "/api/v1/lists/countries/export", "{}").status == 200
+    assert as(id, :post, "/api/v1/lists/enterprises/export", "{}").status == 403
+    # Change history is open to everyone; the service scopes it to the user's pages and people.
+    assert as(id, :post, "/api/v1/lists/changes/export", "{}").status == 200
+    assert as(id, :post, "/api/v1/lists/nothing/export", "{}").status == 404
+
+    # Bulk delete: the list's own single delete; restore needs the single restore's action (the page's Edit).
+    assert as(id, :post, "/api/v1/lists/destinations/bulk-delete", "{}").status == 200
+    assert as(id, :post, "/api/v1/lists/product_categories/bulk-delete", "{}").status == 403
+    assert as(id, :post, "/api/v1/lists/destinations/bulk-restore", "{}").status == 403
+    refute_received {:mock_request, "POST", "/api/v1/lists/product_categories/export", _, _, _}
+  end
+
   test "the user's own override taking a page away beats the group's every-page grant" do
     id = user(%{"*" => ["view", "add", "edit", "delete"]}, %{"transactions" => []})
     assert as(id, :post, "/api/v1/enterprises", "{}").status == 200

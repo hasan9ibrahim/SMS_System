@@ -95,7 +95,7 @@ function TestDialog({ input, done }: { input: EmailTemplatePreviewInput; done: (
         <span className="ff-label">To (up to 5 addresses)</span>
         <input type="text" value={to} placeholder="you@company.example" onChange={(e) => setTo(e.target.value)} />
       </label>
-      <p className="muted small">Trial: written to Email Logs, not sent.</p>
+      <p className="muted small">Each test is logged in Email Logs.</p>
     </Modal>
   );
 }
@@ -291,6 +291,8 @@ export function EmailTemplatesPage() {
   return (
     <ListScreen<EmailTemplateRow>
       list="email_templates"
+      noExport
+      bulkDelete={{ noun: "e-mail template", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["email_template"] }}

@@ -2231,6 +2231,10 @@
       "label": "SMS to voice rule"
      },
      {
+      "value": "voice_gateway",
+      "label": "Voice gateway"
+     },
+     {
       "value": "user",
       "label": "User"
      },
@@ -2432,6 +2436,17 @@
      "empty",
      "not_empty",
      "regex"
+    ]
+   },
+   {
+    "sortable": false,
+    "hidden": true,
+    "field": "numberListId",
+    "label": "Number list ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq"
     ]
    }
   ]
@@ -2764,7 +2779,7 @@
     ]
    },
    {
-    "sortable": true,
+    "sortable": false,
     "hidden": true,
     "field": "entityId",
     "label": "Record ID",
@@ -2773,11 +2788,6 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
@@ -6892,6 +6902,46 @@
    {
     "sortable": true,
     "hidden": true,
+    "field": "routeType",
+    "label": "Route Type",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "static",
+      "label": "Static"
+     },
+     {
+      "value": "dynamic",
+      "label": "Least cost"
+     },
+     {
+      "value": "qbr",
+      "label": "Quality"
+     },
+     {
+      "value": "block",
+      "label": "Block"
+     },
+     {
+      "value": "voice",
+      "label": "Voice"
+     },
+     {
+      "value": "",
+      "label": "(not routed)"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
     "field": "routeDecidedBy",
     "label": "Decided By",
     "type": "text",
@@ -6906,6 +6956,100 @@
      "empty",
      "not_empty",
      "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "voiceGateway",
+    "label": "Voice Gateway",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "voiceGatewayId",
+    "label": "Voice Gateway ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "voiceAnswered",
+    "label": "Answered",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "voiceHangupCause",
+    "label": "Hangup Cause",
+    "type": "text",
+    "defaultOperator": "eq",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "voiceDurationMs",
+    "label": "Call Duration (ms)",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
     ]
    },
    {
@@ -8294,6 +8438,27 @@
    },
    {
     "sortable": true,
+    "hidden": false,
+    "field": "customerReserved",
+    "label": "Reserved",
+    "type": "decimal",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
     "hidden": true,
     "field": "customerCurrency",
     "label": "Customer Currency",
@@ -9548,20 +9713,18 @@
     "hidden": false,
     "field": "customerTrunkCount",
     "label": "Customer trunks",
-    "type": "integer",
-    "defaultOperator": "gte",
+    "type": "text",
+    "defaultOperator": "like",
     "operators": [
+     "like",
+     "not_like",
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
-     "not_empty"
+     "not_empty",
+     "regex"
     ]
    },
    {
@@ -9569,20 +9732,18 @@
     "hidden": false,
     "field": "vendorTrunkCount",
     "label": "Vendor trunks",
-    "type": "integer",
-    "defaultOperator": "gte",
+    "type": "text",
+    "defaultOperator": "like",
     "operators": [
+     "like",
+     "not_like",
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
      "not_in",
      "empty",
-     "not_empty"
+     "not_empty",
+     "regex"
     ]
    },
    {
@@ -13949,15 +14110,8 @@
     "operators": [
      "eq",
      "neq",
-     "gt",
-     "gte",
-     "lt",
-     "lte",
-     "between",
      "in",
-     "not_in",
-     "empty",
-     "not_empty"
+     "not_in"
     ]
    }
   ]
@@ -22475,6 +22629,65 @@
    {
     "sortable": true,
     "hidden": false,
+    "field": "gateway",
+    "label": "Gateway",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "gatewayId",
+    "label": "Gateway ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "recording",
+    "label": "Recording",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
     "field": "status",
     "label": "Status",
     "type": "enum",
@@ -26493,6 +26706,427 @@
     "hidden": false,
     "field": "updatedAt",
     "label": "Updated",
+    "type": "datetime",
+    "defaultOperator": "between",
+    "operators": [
+     "between",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "archived",
+    "label": "Deleted",
+    "type": "boolean",
+    "defaultOperator": "eq",
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   }
+  ]
+ },
+ "voice_gateways": {
+  "list": "voice_gateways",
+  "defaultSort": [
+   {
+    "field": "priority",
+    "dir": "asc"
+   },
+   {
+    "field": "id",
+    "dir": "asc"
+   }
+  ],
+  "fields": [
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "id",
+    "label": "ID",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "name",
+    "label": "Name",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "host",
+    "label": "Host",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "port",
+    "label": "Port",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "transport",
+    "label": "Transport",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "udp",
+      "label": "UDP"
+     },
+     {
+      "value": "tcp",
+      "label": "TCP"
+     },
+     {
+      "value": "tls",
+      "label": "TLS"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "username",
+    "label": "Username",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "fromDomain",
+    "label": "From Domain",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "callerIdMode",
+    "label": "Caller ID",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "sender",
+      "label": "Sender if numeric"
+     },
+     {
+      "value": "fixed",
+      "label": "Fixed"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "fixedCallerId",
+    "label": "Fixed Caller ID",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "dialPrefix",
+    "label": "Dial Prefix",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "codecs",
+    "label": "Codecs",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "maxCalls",
+    "label": "Max Calls",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "ringTimeoutS",
+    "label": "Ring Timeout (s)",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "retryDelayS",
+    "label": "Retry Delay (s)",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "priority",
+    "label": "Priority",
+    "type": "integer",
+    "defaultOperator": "eq",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "status",
+    "label": "Status",
+    "type": "enum",
+    "defaultOperator": "in",
+    "enumValues": [
+     {
+      "value": "active",
+      "label": "Active"
+     },
+     {
+      "value": "inactive",
+      "label": "Inactive"
+     }
+    ],
+    "operators": [
+     "in",
+     "not_in",
+     "eq",
+     "neq"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": false,
+    "field": "rules",
+    "label": "Rules",
+    "type": "integer",
+    "defaultOperator": "gte",
+    "operators": [
+     "eq",
+     "neq",
+     "gt",
+     "gte",
+     "lt",
+     "lte",
+     "between",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "updatedBy",
+    "label": "Updated By",
+    "type": "text",
+    "defaultOperator": "like",
+    "operators": [
+     "like",
+     "not_like",
+     "eq",
+     "neq",
+     "in",
+     "not_in",
+     "empty",
+     "not_empty",
+     "regex"
+    ]
+   },
+   {
+    "sortable": true,
+    "hidden": true,
+    "field": "updatedAt",
+    "label": "Updated Time",
     "type": "datetime",
     "defaultOperator": "between",
     "operators": [

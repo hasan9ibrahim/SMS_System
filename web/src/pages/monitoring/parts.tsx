@@ -180,6 +180,7 @@ export function DownloadsList({
     <ListScreen<EdrDownloadRow>
       key={kind}
       list="edr_downloads"
+      noExport
       page={page}
       title={title}
       queryScope={kind}
@@ -259,7 +260,8 @@ export function DownloadsList({
       ]}
       trailing={{
         header: "Action",
-        width: 110,
+        // Fits the small Download button with its icon (design QA round 13).
+        width: 128,
         render: (r) =>
           r.status === "success" ? (
             <Button small icon="download" onClick={() => download(r.id)}>

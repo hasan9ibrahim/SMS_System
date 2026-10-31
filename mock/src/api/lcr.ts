@@ -197,6 +197,7 @@ export const getLcrProfileDependencies = profiles.dependencies;
 export const createLcrProfile = profiles.create;
 export const updateLcrProfile = profiles.update;
 export const archiveLcrProfile = profiles.archive;
+export const lcrProfileSpec = profiles.spec;
 export const restoreLcrProfile = profiles.restore;
 
 // ---------------------------------------------------------------- LCR table
@@ -619,8 +620,9 @@ export const lcrChangeList: ListDef<import("@sms/contract").LcrChangeRow> = {
     kind: { sql: "ch.kind" },
     oldVendor: { sql: "ov.name" },
     newVendor: { sql: "nv.name" },
-    oldCost: { sql: `(ch.old_cost_eur * ${PLATFORM})` },
-    newCost: { sql: `(ch.new_cost_eur * ${PLATFORM})` },
+    // Shown to 6 decimals; filters compare the same (QA 2026-10-31).
+    oldCost: { sql: `(ch.old_cost_eur * ${PLATFORM})`, round: 6 },
+    newCost: { sql: `(ch.new_cost_eur * ${PLATFORM})`, round: 6 },
     changePct: { sql: "ch.change_pct" },
   },
   search: ["country", "network", "mccmnc", "oldVendor", "newVendor"],

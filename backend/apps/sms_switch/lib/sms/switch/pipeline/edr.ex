@@ -74,6 +74,48 @@ defmodule Sms.Switch.Pipeline.Edr do
     |> Map.merge(hlr(msg[:hlr], attempt.no))
   end
 
+  @doc """
+  The `edr` row of a call try (§8 SMS to voice, ClickHouse `011_edr_voice.sql`): route type `voice`, no vendor trunk
+  (`v_trunk_id` 0) and no cost (the operator's own voice switch), the number dialled and the caller ID as the routed
+  receiver and sender, and the call's four columns. `attempt` as for `attempt_row/2` (`customer_billable` when an
+  answered call bills the message); `voice`: `gateway_id`, `answered`, `cause`, `duration_ms`, `answered_at` (ms or
+  nil), `dial`, `caller_id`, and on the try that ends the message `status` and `error` (the receipt's), or only
+  `customer_status` for a message that ended without a call (EXPIRED, DELETED). The code read out is never written in
+  these columns.
+  """
+  @spec voice_row(map(), map(), %{required(:gateway_id) => integer(), optional(atom()) => term()}) ::
+          %{optional(String.t()) => term()}
+  def voice_row(msg, attempt, voice) do
+    v =
+      Map.merge(
+        %{dial: "", caller_id: "", status: "", error: "", cause: "", duration_ms: 0},
+        voice
+      )
+
+    msg
+    |> attempt_row(Map.merge(attempt, %{vendor: nil, vendor_billable: false}))
+    |> Map.merge(%{
+      "route_type" => "voice",
+      "v_trunk_id" => 0,
+      "routed_dst_addr" => v.dial || "",
+      "v_src_addr" => v.caller_id || "",
+      "msg_status" => v.status || "",
+      "c_msg_status" => v[:customer_status] || v.status || "",
+      "delivery_error" => v.error || "",
+      "voice_gateway_id" => v.gateway_id,
+      "voice_answered" => flag(v[:answered]),
+      "voice_hangup_cause" => v.cause,
+      "voice_duration_ms" => v.duration_ms
+    })
+    |> Map.merge(delivered(msg, v[:answered_at]))
+  end
+
+  # An answered call is delivered when answered.
+  defp delivered(_msg, nil), do: %{"delivery_time" => nil, "delivery_delay_ms" => 0}
+
+  defp delivered(msg, at),
+    do: %{"delivery_time" => time(at), "delivery_delay_ms" => max(0, at - msg.received_at)}
+
   # §13.24: the message's HLR lookup on each of its rows; its cost on the first attempt only, so sums count it once.
   defp hlr(nil, _no), do: %{"hlr_fetch_type" => "none"}
 
@@ -162,7 +204,8 @@ defmodule Sms.Switch.Pipeline.Edr do
     }
   end
 
-  # What the vendor was sent: the egress translation's result, else the ingress one, else the customer's.
+  # What the vendor was sent: the egress translation's result (with the vendor's auto TON / NPI, S-4.7), else the
+  # ingress one (with the customer trunk's), else the customer's; TON / NPI as the PDU took them (`Sender.fields/3`).
   defp vendor_addresses(msg, vendor, egress) do
     ingress = msg.ingress
     f = msg.fields
@@ -172,15 +215,16 @@ defmodule Sms.Switch.Pipeline.Edr do
       "v_src_addr" => Map.get(egress, :sender, ingress[:sender] || ""),
       "message_text" => msg.text || hex(msg.body),
       "v_message_text" => Map.get(egress, :text) || msg.text || hex(msg.body),
-      "v_src_ton" => egress_or(egress, :sender_ton, f, :source_addr_ton),
-      "v_src_npi" => egress_or(egress, :sender_npi, f, :source_addr_npi),
-      "v_dst_ton" => egress_or(egress, :dest_ton, f, :dest_addr_ton),
-      "v_dst_npi" => egress_or(egress, :dest_npi, f, :dest_addr_npi),
+      "v_src_ton" => sent(egress, ingress, :sender_ton, f[:source_addr_ton]),
+      "v_src_npi" => sent(egress, ingress, :sender_npi, f[:source_addr_npi]),
+      "v_dst_ton" => sent(egress, ingress, :dest_ton, f[:dest_addr_ton]),
+      "v_dst_npi" => sent(egress, ingress, :dest_npi, f[:dest_addr_npi]),
       "v_coding" => (vendor && vendor[:data_coding]) || msg.data_coding
     }
   end
 
-  defp egress_or(egress, key, f, field), do: Map.get(egress, key) || f[field] || 0
+  defp sent(egress, ingress, key, as_sent),
+    do: Map.get(egress, key) || ingress[key] || as_sent || 0
 
   defp destination(nil),
     do: %{"c_mccmnc" => "", "c_mcc" => "", "c_mnc" => "", "c_country_iso" => ""}
@@ -225,7 +269,12 @@ defmodule Sms.Switch.Pipeline.Edr do
       "v_message_keys" => attempt[:vendor_message_keys] || [],
       "v_mccmnc" => mccmnc(msg.destination),
       "v_billing_type" => to_string(vt[:billing_type] || ""),
-      "v_translation_rule_ids" => egress[:fired] || []
+      "v_translation_rule_ids" => egress[:fired] || [],
+      # The vendor connection's address as connected (0.0.0.0 when no connection answered).
+      "v_ip" => ip(vendor[:peer][:ip]),
+      "v_port" => vendor[:peer][:port] || 0,
+      # An attempt made because the vendor before sent a failed receipt (S-5.11, D2).
+      "dlr_reroute" => flag(vendor[:dlr_reroute])
     })
     |> Map.merge(route(vendor))
   end
@@ -251,6 +300,8 @@ defmodule Sms.Switch.Pipeline.Edr do
   defp route(vendor) do
     %{
       "route_rule_id" => vendor[:rule_id] || 0,
+      # Route rule groups were removed (product owner R4, migration 069): the column stays 0.
+      "route_rule_group_id" => 0,
       "route_type" => to_string(vendor[:route_type] || ""),
       "route_level" => vendor[:level] || 0,
       "route_decided_by" => to_string(vendor[:decided_by] || "")
@@ -317,11 +368,16 @@ defmodule Sms.Switch.Pipeline.Edr do
     bill = data.bill
     base = bill.base_currency
 
+    # In the base currency at the exchange rates of the send, not of the receipt (S-6.7).
     {revenue, revenue_sys} =
-      if o.customer_billable, do: Billing.amount(bill.sell, bill.c_parts, base), else: {"0", "0"}
+      if o.customer_billable,
+        do: Billing.amount(bill.sell, bill.c_parts, base, bill[:c_sys_rate]),
+        else: {"0", "0"}
 
     {cost, cost_sys} =
-      if o.vendor_billable, do: Billing.amount(bill.cost, bill.v_parts, base), else: {"0", "0"}
+      if o.vendor_billable,
+        do: Billing.amount(bill.cost, bill.v_parts, base, bill[:v_sys_rate]),
+        else: {"0", "0"}
 
     %{
       edr_id: data.edr_id,

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { Dependencies, Enterprise, FilterCondition, ListId } from "@sms/contract";
 import { ApiError } from "../api/client";
 import { fetchPickPage, useListFields, useMe } from "../api/hooks";
@@ -13,6 +13,7 @@ import { DataGrid, type ColumnOverride } from "../grid/DataGrid";
 import { emptyState, type GridState } from "../grid/filterModel";
 import { useNotifySaved } from "../history/undo";
 import { ShowDeleted } from "../page/ListScreen";
+import { useBulkArchive } from "./bulkDelete";
 import { useTabNavigate } from "../shell/tabContext";
 import { ask, toast } from "../ui/feedback";
 import { Icon } from "../ui/Icon";
@@ -282,146 +283,58 @@ function DeleteDialog({
   );
 }
 
-/**
- * Delete several records from a list without opening them (team trial round 1). Each record's
- * dependencies are checked (§13.29); blocked ones are skipped unless an administrator overrides with a
- * reason. Each delete is its own change in History, so each can be undone.
- */
-function BulkDeleteDialog({
-  kind,
-  rows,
-  noun,
-  plural,
-  done,
-}: {
-  kind: RecordKind;
-  rows: { id: number; name: string }[];
-  noun: string;
-  plural: string;
-  done: (deleted: number) => void;
-}) {
-  const { data: me } = useMe();
-  const admin = isAdminUser(me?.permissions);
-  const deps = useQueries({
-    queries: rows.map((r) => ({
-      queryKey: ["deps", kind, r.id],
-      queryFn: () => fetchDependencies(kind, r.id),
-      staleTime: 0,
-      retry: false,
-    })),
-  });
-  const archive = useArchive(kind);
-  const [reason, setReason] = useState("");
-  const [override, setOverride] = useState(false);
-  const [running, setRunning] = useState<{ done: number; failed: string[] } | null>(null);
-  const checking = deps.some((d) => d.isPending);
-  const blockedOf = (i: number) => deps[i]?.data?.blocked ?? false;
-  const blockers = (i: number) =>
-    (deps[i]?.data?.items ?? []).filter((d) => d.blocking && d.count !== null && d.count !== 0).map((d) => d.label);
-  const targets = rows.filter((_, i) => deps[i]?.data && (!blockedOf(i) || override));
-  const blockedCount = rows.filter((_, i) => blockedOf(i)).length;
-  const submit = async () => {
-    const failed: string[] = [];
-    let n = 0;
-    setRunning({ done: 0, failed });
-    for (const r of targets) {
-      const blocked = blockedOf(rows.indexOf(r));
-      try {
-        await archive.mutateAsync({
-          id: r.id,
-          body: { ...(reason.trim() ? { reason: reason.trim() } : {}), ...(blocked ? { override: true } : {}) },
-        });
-        n++;
-      } catch (e) {
-        failed.push(`${r.name}: ${e instanceof ApiError ? e.message : String(e)}`);
-      }
-      setRunning({ done: n, failed: [...failed] });
-    }
-    if (!failed.length) done(n);
-  };
-  return (
-    <Modal
-      title={`Delete ${rows.length} ${rows.length === 1 ? noun : plural}?`}
-      width={620}
-      onClose={() => done(running?.done ?? 0)}
-      footer={
-        <>
-          <Button onClick={() => done(running?.done ?? 0)}>{running ? "Close" : "Cancel"}</Button>
-          {!running && (
-            <Button
-              variant="danger"
-              icon="trash"
-              disabled={checking || !targets.length || (override && !reason.trim())}
-              onClick={() => void submit()}
-            >
-              Delete {targets.length}
-            </Button>
-          )}
-        </>
-      }
-    >
-      <p>
-        Delete archives each record (§13.29): it leaves lists, pickers and routing, and stays in reports, invoices and
-        history. Each one is a change you can undo from History.
-      </p>
-      <ul className="dep-list bulk-del">
-        {rows.map((r, i) => {
-          const d = deps[i]!;
-          const b = blockers(i);
-          return (
-            <li key={r.id} className={b.length ? "blocking" : ""}>
-              <Icon name={d.isPending ? "clock" : b.length ? "alert" : d.isError ? "x" : "check"} size={14} />
-              <span className="strong">{r.name}</span>
-              <span className="muted small">
-                {d.isPending
-                  ? "checking…"
-                  : d.isError
-                    ? "could not check"
-                    : b.length
-                      ? `blocked: ${b.join(", ")}`
-                      : "can be deleted"}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {blockedCount > 0 && (
-        <p className={admin ? "muted" : "error-text"}>
-          {blockedCount} blocked{" "}
-          {admin
-            ? "— skipped unless you override with a reason."
-            : "— they are skipped; only an administrator can override."}
-        </p>
-      )}
-      {blockedCount > 0 && admin && (
-        <label className="toggle-inline">
-          <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} />
-          Override the blockers
-        </label>
-      )}
-      <label className="field" style={{ marginTop: 10 }}>
-        <span>Reason{override && <span className="req">*</span>}</span>
-        <textarea rows={2} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
-      </label>
-      {running && (
-        <p className={running.failed.length ? "error-text" : "muted"}>
-          Deleted {running.done} of {targets.length}
-          {running.failed.length ? ` · failed: ${running.failed.join("; ")}` : ""}
-        </p>
-      )}
-    </Modal>
-  );
-}
+/** The list of each record kind, for the bulk delete of its records (§13.29). */
+const KIND_LISTS: Record<RecordKind, ListId> = {
+  enterprise: "enterprises",
+  customer: "customer_trunks",
+  vendor: "vendor_trunks",
+  rate_table: "rate_tables",
+  route_rule: "route_rules",
+  product_category: "product_categories",
+  destination: "destinations",
+  dial_code_profile: "dial_code_profiles",
+  mo_number: "mo_numbers",
+  number_list: "number_lists",
+  translation_rule: "translation_rules",
+  hlr_provider: "hlr_providers",
+  hlr_rule: "hlr_rules",
+  hlr_policy: "hlr_policies",
+  transaction: "transactions",
+  billing_cycle: "billing_cycles",
+  invoice: "invoices",
+  vendor_invoice: "vendor_invoices",
+  recon_rule: "recon_rules",
+  firewall_rule: "firewall_rules",
+  traffic_alert: "traffic_alerts",
+  sms_voice_rule: "sms_voice_rules",
+  voice_gateway: "voice_gateways",
+  edr_template: "edr_templates",
+  scheduled_report: "scheduled_reports",
+  daily_traffic_alert: "daily_traffic_alerts",
+  user: "users",
+  department: "departments",
+  access_group: "access_groups",
+  email_template: "email_templates",
+  business_company: "business_companies",
+  portal_user: "customer_portal_users",
+  alert_rule: "alert_rules",
+};
 
-/** Opens the bulk delete dialog; resolves with how many were deleted. */
+/**
+ * Deletes several records without opening them, as one change in History (§13.29, §13.10): two confirmations, the
+ * single delete's rules per row on the server, the refused rows with their reasons (records/bulkDelete.tsx). Resolves
+ * with how many were deleted. List pages get the same through ListScreen's `bulkDelete`.
+ */
 export function useBulkDelete() {
-  return async (kind: RecordKind, rows: { id: number; name: string }[], noun: string, plural = `${noun}s`) => {
-    const n = await ask<number>((resolve) => (
-      <BulkDeleteDialog kind={kind} rows={rows} noun={noun} plural={plural} done={resolve} />
-    ));
-    if (n) toast({ tone: "good", message: `Deleted ${n} ${n === 1 ? noun : plural} · undo each from History` });
-    return n ?? 0;
-  };
+  const bulkArchive = useBulkArchive();
+  return (kind: RecordKind, rows: { id: number; name: string }[], noun: string, plural = `${noun}s`) =>
+    bulkArchive(
+      KIND_LISTS[kind],
+      "delete",
+      rows.map((r) => r.id),
+      noun,
+      plural,
+    );
 }
 
 /** Opens the delete dialog; resolves with the archive result (with its change for Undo), or null. */

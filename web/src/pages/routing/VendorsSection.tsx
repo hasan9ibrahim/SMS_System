@@ -1,7 +1,7 @@
 // Vendors section of a route rule (§6.3 Route Information, §13.8 vendor capacity, §13.27
 // warm-up threshold and number whitelists). Edits stay local until Save, which writes the
 // rule once (one undoable change, §13.10).
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useMemo, useRef, useState } from "react";
 import type {
   RouteRuleDetail,
   RouteRuleInput,
@@ -19,6 +19,7 @@ import { problemText } from "./dialogs";
 import { Button, Menu, Popover } from "../../ui/primitives";
 import { TrunkPick, type Picked } from "./pickers";
 import { MarginInput } from "./MarginInput";
+import { PendingDestinationContext } from "./ConditionEditor";
 import {
   backupProblems,
   categoryFilter,
@@ -265,9 +266,11 @@ export function VendorsSection({
     set({ whitelists: d.whitelists!.map((w, j) => (j === i ? { ...w, ...patch } : w)) });
   const vendors = d.vendors ?? [];
   const whitelists = d.whitelists ?? [];
+  // In the rule window the Cost follows the destination picked there before Save (functional QA round 13).
+  const pendingDest = useContext(PendingDestinationContext);
   const costs = useVendorCosts(
     vendors.map((v) => v.vendorTrunkId),
-    destOf(rule),
+    pendingDest?.dest ?? destOf(rule),
   );
   const block = d.routeType === "block";
   const scoped = d.routeType === "dynamic" || d.routeType === "qbr";
@@ -381,7 +384,7 @@ export function VendorsSection({
                 </th>
                 {d.huntPolicy === "percentage" && <th className="num">Share %</th>}
                 <th>Backup</th>
-                <th title="Send the first N messages to this vendor before the normal split (§13.27)">Warm-up first</th>
+                <th title="Send the first N messages to this vendor before the normal split">Warm-up first</th>
                 <th>Counted per</th>
                 <th>Resets</th>
                 <th />
@@ -729,7 +732,7 @@ export function VendorsSection({
               </div>
               {d.routeType === "dynamic" && (
                 <div className="field">
-                  <span>LCR profile (§13.23)</span>
+                  <span>LCR profile</span>
                   <ListLookup<{ id: number; name: string; vendorCount: number; split: string }>
                     list="lcr_profiles"
                     value={d.lcrProfileId ?? null}

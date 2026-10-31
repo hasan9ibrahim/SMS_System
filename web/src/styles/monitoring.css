@@ -1,7 +1,9 @@
 /* Live analytics (§13.4), alert rules and incidents (§13.6). Tokens only (§15.2). */
 
-.row-muted {
-  opacity: 0.62;
+/* Dimmed with the secondary text colour, not opacity, so the text stays readable (design QA round 13). */
+.row-muted,
+.row-muted .gc {
+  color: var(--color-text-secondary);
 }
 .row-alert {
   box-shadow: inset 3px 0 0 var(--color-error);
@@ -40,10 +42,10 @@
   background: var(--color-panel);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 .la-totals b {
-  font-size: 16px;
+  font-size: var(--text-lg);
 }
 .la-table-wrap {
   flex: 1;
@@ -71,7 +73,7 @@
   text-align: right;
 }
 .la-table td.num {
-  font-size: 14px;
+  font-size: var(--text-base);
 }
 /* Fixed header and sticky first column (§13.4 readable layout). */
 .la-table thead th {
@@ -259,7 +261,7 @@
   border-radius: var(--radius-sm);
   background: var(--color-panel);
   color: var(--color-text);
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .la-chip.on {
@@ -301,7 +303,7 @@
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 .la-col-name {
@@ -337,14 +339,6 @@
 .la-grid td.num {
   text-align: right;
   font-weight: 700;
-}
-.la-grid td.la-warn {
-  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  color: #1d1d1d;
-}
-.la-grid td.la-bad {
-  background: var(--color-error);
-  color: #fff;
 }
 .la-total td {
   background: color-mix(in srgb, var(--color-accent) 8%, var(--color-panel));
@@ -392,7 +386,7 @@
   border-radius: var(--radius-sm);
   background: var(--color-panel);
   color: var(--color-accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   padding: 1px 6px;
   cursor: pointer;
 }
@@ -457,7 +451,7 @@
 }
 .la-grid th .la-h2 {
   font-weight: 500;
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 .la-presets {
   padding-bottom: 0;
@@ -479,10 +473,10 @@
   color: var(--color-text-secondary);
 }
 .la-grid th {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 .la-grid td {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 .la-col-name {
   width: 13%;
@@ -542,7 +536,7 @@
   min-width: 0;
   height: 24px;
   padding: 0 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 400;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -556,8 +550,8 @@
 }
 .la-by {
   flex: none;
-  color: var(--color-text-secondary);
-  font-size: 11px;
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
+  font-size: var(--text-xs);
   font-weight: 400;
 }
 .la-menu {
@@ -572,15 +566,7 @@
   font-weight: 700;
 }
 .la-grid td.la-good {
-  color: var(--color-good);
-}
-.la-grid td.la-warn {
-  background: color-mix(in srgb, var(--color-warning) 85%, transparent);
-  color: #1d1d1d;
-}
-.la-grid td.la-bad {
-  background: var(--color-error);
-  color: #1d1d1d;
+  color: var(--color-good-text);
 }
 .la-total td.num {
   font-weight: 700;
@@ -608,14 +594,7 @@
   border-radius: 5px;
   text-align: right;
 }
-.la-warn .la-pill {
-  background: #ffa500;
-  color: #1d1d1d;
-}
-.la-bad .la-pill {
-  background: #f00;
-  color: #fff;
-}
+/* The amber and red chip colours live in calm.css (team request, §13.7). */
 /* Sortable headers (team trial round 1). */
 .la-grid th .la-sort {
   border: 0;
@@ -636,7 +615,7 @@
 }
 .la-th-search .la-sort {
   flex: none;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 /* Live analytics "+" menu: Time opens its periods to the right (team trial round 2). */
 .la-submenu {
@@ -707,7 +686,7 @@
 }
 .la-cols legend {
   padding: 0 0 4px;
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -717,7 +696,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--text-md);
   white-space: nowrap;
 }
 .la-cols-foot {
@@ -769,9 +748,20 @@
   padding: 2px 4px 2px 8px;
   border: var(--border-width) dashed var(--color-border);
   border-radius: 7px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--color-text-secondary);
   white-space: nowrap;
+  /* Shrinks with its address cut by an ellipsis when the cell is narrow (a phone card; design QA round 13). */
+  min-width: 0;
+}
+.ip-chip > .num {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ip-dot,
+.ip-count {
+  flex: none;
 }
 .ip-chip.on {
   border-style: solid;
@@ -792,13 +782,14 @@
 .ip-count {
   padding: 0 5px;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
   background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
 }
 .ip-chip.on .ip-count {
-  background: var(--color-good);
-  color: #fff;
+  background: var(--color-good-text);
+  color: var(--color-panel);
 }
 .conn-bar-cell {
   width: 100%;
@@ -859,7 +850,7 @@
 }
 .chip-tag.red {
   background: color-mix(in srgb, var(--color-error) 11%, var(--color-panel));
-  color: var(--color-error);
+  color: color-mix(in srgb, var(--color-error) 80%, var(--color-text));
 }
 /* Alert rules (team trial round 4): summary tiles and rules as cards with a severity edge. */
 .kpi-tiles {
@@ -879,7 +870,7 @@
   box-shadow: var(--card-shadow);
 }
 .kpi-label {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--color-text-secondary);
 }
@@ -902,12 +893,12 @@
   background: var(--color-accent);
 }
 .kpi-value {
-  font-size: 24px;
+  font-size: var(--text-xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .kpi-value small {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--color-text-secondary);
 }
@@ -947,7 +938,7 @@
   cursor: pointer;
 }
 .open-inc-btn {
-  color: var(--color-error);
+  color: color-mix(in srgb, var(--color-error) 85%, var(--color-text));
   border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
   background: color-mix(in srgb, var(--color-error) 6%, var(--color-panel));
   gap: 6px;
@@ -980,7 +971,7 @@
   flex-basis: 100%;
 }
 .kpi-value {
-  font-size: 19px;
+  font-size: var(--text-lg);
 }
 /* Live analytics header bands (team trial round 5): Traffic blue, Quality green, Money amber, Network violet. The
    band row is sticky at the top and the column titles stick just under it. */
@@ -991,7 +982,7 @@
   height: var(--la-band-h);
   box-sizing: border-box;
   padding: 4px 8px;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1010,7 +1001,7 @@
   --band: var(--color-accent);
 }
 .la-grid th.la-band-quality {
-  --band: var(--color-good);
+  --band: var(--color-good-text);
 }
 .la-grid th.la-band-money {
   --band: var(--color-warning);
@@ -1066,11 +1057,11 @@
   height: 20px;
   border-radius: 50%;
   background: var(--color-head-tint);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
 }
 .rs-step-sum {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 .rs-step-sum.tone-good {
   color: var(--color-text-secondary);
@@ -1098,7 +1089,7 @@
   width: 100%;
   border-collapse: collapse;
   margin: 2px 0 10px;
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 .rs-xlate th,
 .rs-xlate td {
@@ -1107,7 +1098,7 @@
   vertical-align: top;
 }
 .rs-xlate thead th {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .rs-xlate tbody th {
   width: 130px;

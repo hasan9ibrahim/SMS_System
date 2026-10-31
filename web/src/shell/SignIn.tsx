@@ -6,6 +6,7 @@ import type { SignInResult } from "@sms/contract";
 import { api, ApiError, SIGN_IN_REQUIRED_EVENT, unwrap } from "../api/client";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Button } from "../ui/primitives";
+import { UsernameHint, looksLikeCode } from "../ui/UsernameHint";
 
 /** True once any call answered 401 sign_in_required (no session, or it ended: idle 8 h, 24 h, signed out elsewhere). */
 export function useSignInRequired(): boolean {
@@ -28,6 +29,7 @@ export async function signOut() {
 }
 
 const message = (e: unknown) => (e instanceof ApiError ? e.message : "Something went wrong. Try again.");
+
 
 export function SignInScreen() {
   const [username, setUsername] = useState("");
@@ -87,12 +89,32 @@ export function SignInScreen() {
           <h1>Sign in</h1>
           <label className="signin-field">
             <span>Username</span>
-            <input autoFocus autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input
+              autoFocus
+              id="username"
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              aria-describedby={looksLikeCode(username) ? "username-code-hint" : undefined}
+            />
           </label>
+          {/* A browser that saved an earlier sign-in code as the username fills it in here (§13.28); the code step
+              no longer lets that happen, but an entry saved before stays until the user corrects it. */}
+          {looksLikeCode(username) && (
+            <p id="username-code-hint" className="muted small">
+              This looks like a sign-in code, not a username. If your browser filled it in, type your username instead
+              and let the browser update its saved login.
+            </p>
+          )}
           <label className="signin-field">
             <span>Password</span>
             <input
               type="password"
+              id="current-password"
+              name="current-password"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -110,6 +132,8 @@ export function SignInScreen() {
         </form>
       ) : (
         <form className="pw-gate-card signin-card" onSubmit={submitCode}>
+          {/* The password is saved with this username, not with the code typed below (§13.28). */}
+          <UsernameHint username={username} />
           <BrandLogo height={36} className="pw-gate-brand" />
           <h1>Enter your code</h1>
           <p className="muted">
@@ -121,6 +145,8 @@ export function SignInScreen() {
             <span>Code</span>
             <input
               autoFocus
+              id="one-time-code"
+              name="one-time-code"
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={6}

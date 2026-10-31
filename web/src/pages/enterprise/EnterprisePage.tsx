@@ -23,6 +23,7 @@ import {
   useSectionTab,
 } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
+import { newTabOf, type OpenEvent } from "../../shell/useOpener";
 import { confirmDialog, toast } from "../../ui/feedback";
 import { fetchListPage } from "../../api/hooks";
 import { openSendRate, openTechInfo } from "../switch/tools/NotificationsPage";
@@ -109,8 +110,8 @@ function NotificationsMenu({ enterpriseId, trunks }: { enterpriseId: number; tru
   );
 }
 
+// The type is a category, so its tag stays neutral (§15.3: colour only carries meaning).
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
-const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
 
 export function EnterprisePage() {
   const raw = useParams().id;
@@ -184,10 +185,10 @@ export function EnterprisePage() {
     slot: key === section ? slot : null,
     onDirty: onDirty[key as keyof typeof onDirty] ?? (() => {}),
   });
-  const openTrunk = (kind: "customer" | "vendor") => (row: TrunkListRow, ev: { ctrlKey: boolean; metaKey: boolean }) =>
+  const openTrunk = (kind: "customer" | "vendor") => (row: TrunkListRow, ev: OpenEvent) =>
     // In this tab, Back returns to the enterprise's trunks (team trial round 12); Ctrl/Cmd-click: a new tab.
     navigate(`/enterprises/${kind}-trunks/${row.id}`, {
-      forceNew: ev.ctrlKey || ev.metaKey,
+      ...newTabOf(ev),
       title: `${kind === "customer" ? "Customer" : "Vendor"} trunk · ${row.name}`,
     });
 
@@ -222,7 +223,7 @@ export function EnterprisePage() {
         meta={
           e && (
             <>
-              <span className={`chip-tag ${TYPE_TONE[e.type]}`}>{TYPE_LABEL[e.type]}</span>
+              <span className="chip-tag">{TYPE_LABEL[e.type]}</span>
               <span className="chip-tag">{e.tier.replace("tier", "Tier ")}</span>
               <StatusPill active={e.status === "active"} />
               <span className="meta">
@@ -355,7 +356,7 @@ function TrunkDelete({ kind, rows, done }: { kind: "customer" | "vendor"; rows: 
         const ok =
           live.length === 1
             ? await deleteOne(kind, live[0]!.id, live[0]!.name)
-            : await deleteMany(kind, live, `${what}s`);
+            : await deleteMany(kind, live, what);
         if (ok) done();
       }}
     >

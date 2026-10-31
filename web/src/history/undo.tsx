@@ -4,9 +4,9 @@
 //   useUndoShortcut(scope) Ctrl+Z on the page undoes the user's last change
 //   notifySaved(change)    the 10-second "Undo" toast right after a save
 //   <HistoryDrawer>        a record's or page's History list with Undo per change
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Change, ChangeField, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
+import type { Change, ChangeField, FilterCondition, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
 import { fetchListPage, useMe } from "../api/hooks";
 import { ask, confirmDialog, toast } from "../ui/feedback";
@@ -17,12 +17,15 @@ export interface HistoryScope {
   /** e.g. route_rule, rate_line, translation_rule, customer_trunk */
   entityTypes: string[];
   entityId?: number;
+  /** More conditions on the changes list, e.g. numberListId for one number list's entries (QA 2026-10-31, §6.4). */
+  conditions?: FilterCondition[];
 }
 
 export function scopeFilter(scope: HistoryScope | null, userId?: number): FilterGroup | undefined {
   const conditions: FilterGroup["conditions"] = [];
   if (scope?.entityTypes.length) conditions.push({ field: "entityType", op: "in", values: scope.entityTypes });
   if (scope?.entityId) conditions.push({ field: "entityId", op: "eq", value: scope.entityId });
+  if (scope?.conditions) conditions.push(...scope.conditions);
   if (userId) conditions.push({ field: "userId", op: "eq", value: userId });
   return conditions.length ? { logic: "and", conditions } : undefined;
 }
@@ -380,8 +383,20 @@ export function HistoryList({ scope }: { scope: HistoryScope }) {
 
 /** Side drawer with the History list of a record or page scope. */
 export function HistoryDrawer({ scope, title, onClose }: { scope: HistoryScope; title: string; onClose: () => void }) {
+  const backdrop = useRef<HTMLDivElement>(null);
+  // Escape closes it like a dialog (functional QA round 13): only the drawer of the tab in view (a hidden tab's has
+  // no layout box), and not while a dialog opened from it (an undo question) is on top.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !backdrop.current?.getClientRects().length) return;
+      if ([...document.querySelectorAll(".modal-backdrop")].some((m) => m.getClientRects().length)) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div ref={backdrop} className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-label={`History: ${title}`}>
         <div className="drawer-head">
           <Icon name="history" />

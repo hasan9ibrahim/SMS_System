@@ -2,7 +2,7 @@
 // File Size (bytes); trace files list with Sr. No., File Name, File Size, Download and Update Time (UTC),
 // deleted 30 days after they end unless kept (team trial round 1). Running captures refresh every 2 s.
 import { useState, type ReactNode } from "react";
-import type { SignalingCaptureRow } from "@sms/contract";
+import type { ListQuery, SignalingCaptureRow } from "@sms/contract";
 import { fetchListPage } from "../../api/hooks";
 import { downloadCapture, useKeepCapture, useStartCapture, useStopCapture } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
@@ -138,26 +138,25 @@ export function CaptureFiles({
     ) : (
       muted("after it ends")
     );
+  const ofSource = (body: ListQuery): ListQuery =>
+    source
+      ? {
+          ...body,
+          filter: {
+            logic: "and",
+            conditions: [{ field: "source", op: "in", values: [source] }, ...(body.filter ? [body.filter] : [])],
+          },
+        }
+      : body;
   return (
     <ListScreen<SignalingCaptureRow>
       list="signaling_captures"
       page={page}
       {...(title ? { title } : {})}
       queryScope={source ?? "all"}
-      fetchPage={(body) =>
-        fetchListPage<SignalingCaptureRow>(
-          "signaling_captures",
-          source
-            ? {
-                ...body,
-                filter: {
-                  logic: "and",
-                  conditions: [{ field: "source", op: "in", values: [source] }, ...(body.filter ? [body.filter] : [])],
-                },
-              }
-            : body,
-        )
-      }
+      fetchPage={(body) => fetchListPage<SignalingCaptureRow>("signaling_captures", ofSource(body))}
+      // Signaling exports its captures (§13.22); PCAP Trace's extracted files have no use as a list file.
+      {...(source === "recording" ? { noExport: true } : { listExport: { query: ofSource } })}
       noSelection
       historyScope={null}
       above={above}
@@ -245,7 +244,8 @@ export function CaptureFiles({
       ]}
       trailing={{
         header: "Action",
-        width: 110,
+        // Fits the small Download button with its icon (design QA round 13).
+        width: 128,
         render: (r) =>
           r.status === "running" ? (
             <Button

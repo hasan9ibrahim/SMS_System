@@ -77,6 +77,7 @@ export const TABLE_ORDER = [
   "email_logs",
   "rn_reports",
   "traffic_alerts",
+  "voice_gateways",
   "sms_voice_rules",
   "broadcasts",
   "edr_templates",

@@ -204,6 +204,7 @@ defmodule Sms.Switch.Commands.Inject do
   def reason_text(:no_rule), do: "no route rule matches"
   def reason_text(:blocked), do: "blocked by a route or translation rule"
   def reason_text(:no_vendor), do: "no vendor qualifies"
+  def reason_text(:invalid_sender), do: "every vendor that could take it refuses the sender"
   def reason_text(:unknown_vendor), do: "unknown vendor trunk"
   def reason_text(:vendor_inactive), do: "the vendor trunk is inactive or stopped"
   def reason_text(:unknown_trunk), do: "unknown customer trunk"

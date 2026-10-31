@@ -310,6 +310,7 @@ function RateDialog({
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Price for ${row.mccmnc} ${row.country}` : "Set a destination price"}
       saveLabel="Save price"
       saving={set.isPending}
@@ -546,6 +547,8 @@ export function ProvidersView() {
   return (
     <ListScreen<HlrProviderRow>
       list="hlr_providers"
+      listExport
+      bulkDelete={{ noun: "HLR provider", restore: true }}
       page={page}
       title="HLR · Providers"
       selectId={selectId}

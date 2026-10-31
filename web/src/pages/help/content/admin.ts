@@ -453,10 +453,6 @@ export const topics: HelpTopic[] = [
             kind: "warning",
             text: "The password itself is never shown or stored, only a secure fingerprint of it. If a user forgets theirs, set a new temporary password.",
           },
-          {
-            kind: "tip",
-            text: "In the trial there is no real sign-in screen yet: you are always signed in as a demo admin, so temporary passwords and 2FA only change the stored state.",
-          },
         ],
       },
     ],
@@ -1317,7 +1313,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial, **Check SMTP Connection** is simulated: it checks the host name, port, encryption and that a password exists, but does not contact a real mail server.",
+            text: "**Check SMTP Connection** ends by connecting to the mail server and logging in. On the test system it stops before that: it checks the host name, port, encryption and that a password exists, but does not contact the mail server.",
           },
         ],
       },
@@ -1561,7 +1557,7 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Send test",
-                what: "Sends the template with sample values to up to five addresses, from the mailbox that sends this kind of e-mail, so you can open it in your own Outlook. In the trial it is written to [[email-logs|Email Logs]] (type Template Test) instead of being sent.",
+                what: "Sends the template with sample values to up to five addresses, from the mailbox that sends this kind of e-mail, so you can open it in your own Outlook. It shows in [[email-logs|Email Logs]] as type Template Test.",
               },
             ],
           },
@@ -2404,10 +2400,6 @@ export const topics: HelpTopic[] = [
               "The download link is made for you, works once and expires after 15 minutes.",
               "Every credential export and import is written to the [[audit|Audit trail]] and the other admins get an e-mail.",
             ],
-          },
-          {
-            kind: "tip",
-            text: "In the trial there is no sign-in screen: you are always signed in as a demo admin, and every credential in the data is fake.",
           },
         ],
       },

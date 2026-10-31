@@ -53,6 +53,7 @@ function AlertDialog({ row, done }: { row: DailyTrafficAlertRow | null; done: ()
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add daily traffic alert"}
       saveLabel={row ? "Save" : "Add alert"}
       saving={save.isPending}
@@ -151,6 +152,8 @@ export function DailyTrafficAlertsPage() {
   return (
     <ListScreen<DailyTrafficAlertRow>
       list="daily_traffic_alerts"
+      listExport
+      bulkDelete={{ noun: "daily traffic alert", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["daily_traffic_alert"] }}

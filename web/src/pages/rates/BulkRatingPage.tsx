@@ -20,6 +20,7 @@ import { actOnMove, fetchMarketMove } from "../../api/market";
 import { moveLabel } from "./market/marketModel";
 import { fetchPickPage } from "../../api/hooks";
 import { ApiError } from "../../api/client";
+import { fieldLabel, problemFields } from "../../api/problems";
 import { previewRateBulk, useApplyRateBulk } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
 import { pageForPath } from "../../nav/registry";
@@ -102,12 +103,12 @@ const BULK_FIELD: Record<string, string> = {
 /** What is wrong, field by field ("Destinations: pick at least one"), else the problem's title. */
 export function bulkProblem(err: unknown): string {
   if (!(err instanceof ApiError)) return String(err);
-  const errors = (err.problem.errors ?? []) as { path: string; message: string }[];
-  if (!errors.length) return err.problem.detail ? `${err.message}: ${err.problem.detail}` : err.message;
+  const errors = problemFields(err.problem);
+  if (!errors.length) return err.message;
   return errors
     .map((x) => {
       const parts = x.path.replace(/^\//, "").split("/");
-      const name = BULK_FIELD[parts.find((p) => BULK_FIELD[p]) ?? ""] ?? (parts.join(" ") || "Form");
+      const name = BULK_FIELD[parts.find((p) => BULK_FIELD[p]) ?? ""] ?? (fieldLabel(x.path) || "Form");
       return `${name}: ${x.message}`;
     })
     .join(" · ");
@@ -336,7 +337,7 @@ function ApplyDialog({
       }
     >
       <p>
-        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change (§13.10).
+        The rates change on {tables} table{tables === 1 ? "" : "s"} as one change.
       </p>
       <label className="field">
         <span>Note (optional, shown in History)</span>

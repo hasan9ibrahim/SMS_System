@@ -170,7 +170,7 @@ function TechInfoDialog({ ids, done, oneEmail = false }: { ids: number[]; done: 
         )}
       </div>
       <p className="muted small">
-        The e-mail includes the SMPP password in plain text (team decision); check the recipients before sending.
+        The e-mail includes the SMPP password in plain text; check the recipients before sending.
       </p>
     </Modal>
   );
@@ -223,6 +223,7 @@ export function NotificationsPage() {
   return (
     <ListScreen<TrunkListRow>
       list="customer_trunks"
+      noExport
       page={page}
       historyScope={null}
       initialState={{ visible: ["enterpriseName", "name", "category", "protocol", "tps", "status"] }}

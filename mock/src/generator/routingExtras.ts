@@ -116,7 +116,7 @@ export async function generateRoutingExtras(world: World, rng: Rng, sink: TableS
       description: rng.pick([
         "Rate correction after vendor dispute",
         "Wrong rate loaded for the period",
-        "Back-dated RN accepted by billing (§13.32)",
+        "Back-dated RN accepted by billing",
         "Customer rate fix agreed with AM",
         null,
       ]),

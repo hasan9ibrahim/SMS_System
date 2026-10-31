@@ -59,7 +59,7 @@ export function updateSecuritySettings(request: FastifyRequest, reply: FastifyRe
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     if (!me.permissions.includes("*"))
-      return sendProblem(reply, 403, "Security settings are changed by administrators only (§13.28)");
+      return sendProblem(reply, 403, "Security settings are changed by administrators only");
     const next = { ...b, reminderDays: [...new Set(b.reminderDays)].sort((x, y) => y - x) };
     if (next.reminderDays[0]! >= next.passwordLifetimeDays)
       return sendProblem(reply, 400, "Check the highlighted fields", {
@@ -268,7 +268,7 @@ export function runPasswordReminders(_request: FastifyRequest, reply: FastifyRep
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     if (!me.permissions.includes("*"))
-      return sendProblem(reply, 403, "Reminders are run by administrators only (§13.28)");
+      return sendProblem(reply, 403, "Reminders are run by administrators only");
     return runReminders(pool);
   });
 }

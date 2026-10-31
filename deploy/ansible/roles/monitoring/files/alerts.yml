@@ -115,6 +115,17 @@ groups:
           summary: "NATS JetStream on {{ $labels.machine }} is unhealthy or has no leader"
           runbook: "RUNBOOKS.md#nats"
 
+  # SMS to voice (roles/asterisk): node_exporter's systemd collector reports the unit only where Asterisk is installed.
+  - name: voice
+    rules:
+      - alert: AsteriskDown
+        expr: node_systemd_unit_state{name="asterisk.service", state="active"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Asterisk is not running on {{ $labels.machine }}: SMS-to-voice calls from this server fail"
+          runbook: "RUNBOOKS.md#asteriskdown"
+
   # The off-site backup alerts are in alerts-backup.yml (only once there is a bucket, s3_enabled).
   - name: recording
     rules:

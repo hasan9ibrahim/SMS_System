@@ -45,6 +45,7 @@ function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
   const submit = () => {
     if (!v.customerTrunkId) return setError("Choose the customer trunk.");
     if (v.rate === null || Number.isNaN(v.rate)) return setError("Enter the rate.");
+    if (v.rate < 0 || (v.vendorRate ?? 0) < 0) return setError("A rate cannot be negative.");
     save.mutate(
       {
         id: row?.id ?? null,
@@ -66,6 +67,7 @@ function MoDialog({ row, done }: { row: MoNumber | null; done: () => void }) {
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit MO number ${label(row)}` : "Add MO number"}
       saveLabel={row ? "Save" : "Add MO number"}
       saving={save.isPending}
@@ -145,6 +147,7 @@ export function MoBookPage() {
   return (
     <ListScreen<MoNumber>
       list="mo_numbers"
+      bulkDelete={{ noun: "MO number", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["mo_number"] }}
       primary={{ label: "Add MO number", icon: "plus", onClick: () => void openDialog(null) }}

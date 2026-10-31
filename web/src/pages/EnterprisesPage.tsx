@@ -8,8 +8,9 @@ import { useMe } from "../api/hooks";
 import { useEnterprise, useRestore } from "../api/records";
 import { Fragment } from "react";
 import { useNotifySaved } from "../history/undo";
-import { isAdminUser, useBulkDelete, useDeleteRecord } from "../records/parts";
+import { isAdminUser, useDeleteRecord } from "../records/parts";
 import { useTabNavigate } from "../shell/tabContext";
+import { newTabOf } from "../shell/useOpener";
 import { toast } from "../ui/feedback";
 import { problemText } from "./routing/dialogs";
 import { Avatar } from "../page/PageHeader";
@@ -69,8 +70,8 @@ function EnterpriseEmails({ id }: { id: number }) {
     </dl>
   );
 }
+// The type is a category, so its tag stays neutral (§15.3: colour only carries meaning).
 const TYPE_LABEL = { customer: "Customer", vendor: "Vendor", reciprocal: "Bilateral" } as const;
-const TYPE_TONE = { customer: "blue", vendor: "amber", reciprocal: "violet" } as const;
 
 /** The trunks by name, one after another (team trial round 7); pointing at the cell lists them all. */
 function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[] }) {
@@ -89,7 +90,6 @@ function TrunkCount({ count = 0, names = [] }: { count?: number; names?: string[
 export function EnterprisesPage() {
   const navigate = useTabNavigate();
   const deleteOne = useDeleteRecord();
-  const deleteMany = useBulkDelete();
   const { data: me } = useMe();
   const restore = useRestore("enterprise");
   const notifySaved = useNotifySaved();
@@ -101,6 +101,8 @@ export function EnterprisesPage() {
   return (
     <ListScreen<Enterprise>
       list="enterprises"
+      listExport
+      bulkDelete={{ noun: "enterprise", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["enterprise"] }}
       rowActions={(r) => [
@@ -127,21 +129,6 @@ export function EnterprisesPage() {
               onSelect: () => void deleteOne("enterprise", r.id, r.name),
             },
       ]}
-      // Several selected: the header's Delete acts on all of them (team trial round 4, replacing Bulk edit).
-      selection={{
-        bulk: (ids, clear, rows) => [
-          {
-            label: `Delete ${ids.length} enterprises…`,
-            icon: "trash",
-            danger: true,
-            disabled: !rows.some((r) => !r.archivedAt),
-            onSelect: async () => {
-              const live = rows.filter((r) => !r.archivedAt);
-              if (await deleteMany("enterprise", live, "enterprise")) clear();
-            },
-          },
-        ],
-      }}
       primary={{
         label: "New enterprise",
         onClick: () => navigate("/enterprises/new", { newTab: true, title: "New enterprise" }),
@@ -162,10 +149,7 @@ export function EnterprisesPage() {
       }}
       // The record opens in this tab, Back returns to the list (team trial round 12); Ctrl/Cmd-click: a new tab.
       onOpen={(row, e) =>
-        navigate(`/enterprises/${row.id}`, {
-          forceNew: e.ctrlKey || e.metaKey,
-          title: `Enterprise · ${row.name}`,
-        })
+        navigate(`/enterprises/${row.id}`, { ...newTabOf(e), title: `Enterprise · ${row.name}` })
       }
       // The detail panel as a card (team trial round 4): tile, name and chips; the key facts; then the
       // contacts' emails under the ID, without names or phones.
@@ -189,7 +173,7 @@ export function EnterprisesPage() {
             content: (
               <div className="ent-card">
                 <div className="record-chips">
-                  <span className={`chip-tag ${TYPE_TONE[r.type]}`}>{TYPE_LABEL[r.type]}</span>
+                  <span className="chip-tag">{TYPE_LABEL[r.type]}</span>
                   <span className="chip-tag">{r.tier.replace("tier", "Tier ")}</span>
                   <StatusPill active={r.status === "active"} />
                   {r.archivedAt && <span className="chip-tag amber">Deleted {r.archivedAt.slice(0, 10)}</span>}

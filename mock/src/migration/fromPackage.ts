@@ -30,7 +30,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   const rrv = table("route_rule_vendors");
   const warnings: string[] = [];
   if (customerTrunks.length && !("username" in customerTrunks[0]!))
-    warnings.push("The package has no credentials: trunks get placeholder connection details");
+    warnings.push(
+      "The package has no credentials: vendor trunks get placeholder connection details, and new customer trunks " +
+        "are refused (they need their allowed IPs)",
+    );
 
   const name = (m: Map<string, Row>, id: string | undefined) => (id ? (m.get(id)?.name ?? "") : "");
   const out: { entity: MigrationImportEntity; rows: Row[] }[] = [];
@@ -72,6 +75,10 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       email: u.email!,
       department: name(departments, u.department_id),
       accessGroup: name(groups, u.access_group_id),
+      // What a new user needs besides (§13.22).
+      businessCompany: name(companies, u.business_company_id),
+      address: u.address1 ?? "",
+      country: u.country_iso?.trim() ?? "",
       isAccountManager: u.is_account_manager === "t" ? "yes" : "no",
       status: u.status!,
     })),
@@ -96,6 +103,7 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       accountManager: e.account_manager_id ? (usersById.get(e.account_manager_id)?.id ?? "") : "",
       country: e.country_id ? (countries.get(e.country_id)?.iso ?? "") : "",
       vatNumber: e.vat_number ?? "",
+      website: e.website ?? "",
       address: e.address_line1 ?? "",
       emails: emailsOf("commercial", e.id!),
       technicalEmails: emailsOf("technical", e.id!),
@@ -113,6 +121,8 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     tps: t.tps ?? "",
     category: name(categories, t.product_category_id),
     billingType: t.billing_type ?? "",
+    // S-4.7 (migration 101); a package from before it has none: as_sent on create.
+    tonNpiMode: t.ton_npi_mode ?? "",
   });
   out.push({
     entity: "customer_trunks",
@@ -121,7 +131,12 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
   // Customer trunks carry no port (it follows the SSL type, migration 070); vendor trunks keep theirs.
   out.push({
     entity: "vendor_trunks",
-    rows: vendorTrunks.map((t) => ({ ...trunk(t), host: t.host ?? "", port: t.port ?? "" })),
+    rows: vendorTrunks.map((t) => ({
+      ...trunk(t),
+      host: t.host ?? "",
+      port: t.port ?? "",
+      refuseInvalidSenders: t.refuse_invalid_senders === "f" ? "no" : t.refuse_invalid_senders === "t" ? "yes" : "",
+    })),
   });
   const sellers = new Map<string, string[]>();
   for (const l of ctrt) sellers.set(l.rate_table_id!, [...(sellers.get(l.rate_table_id!) ?? []), l.customer_trunk_id!]);

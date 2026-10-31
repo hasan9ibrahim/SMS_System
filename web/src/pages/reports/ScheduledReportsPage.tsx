@@ -125,6 +125,7 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit scheduled report ${row.name}` : "Add scheduled report"}
       saveLabel={row ? "Save" : "Add schedule"}
       saving={save.isPending}
@@ -154,7 +155,7 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
         options={[
           { value: "preset", label: "Ready-made report" },
           { value: "view", label: "Saved Master Report view" },
-          { value: "team", label: "Team report (§13.18)" },
+          { value: "team", label: "Team report" },
         ]}
       />
       {v.templateKind === "team" ? (
@@ -293,6 +294,8 @@ export function ScheduledReportsPage() {
   return (
     <ListScreen<ScheduledReportRow>
       list="scheduled_reports"
+      noExport
+      bulkDelete={{ noun: "scheduled report", restore: true }}
       page={page}
       noSelection
       historyScope={{ entityTypes: ["scheduled_report"] }}

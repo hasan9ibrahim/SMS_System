@@ -25,7 +25,7 @@ export const GROUPS = [
   "Admin",
 ];
 
-/** Help pictures (team trial round 6): figure id -> the topic whose "Quick tour" opens with it. */
+/** Help pictures (§15.1 help): figure id -> the topic whose "Quick tour" opens with it. */
 const TOUR_TOPIC: Record<string, string> = { grids: "grids-and-filters" };
 const FIGURES = figures as Record<string, HelpFigure>;
 

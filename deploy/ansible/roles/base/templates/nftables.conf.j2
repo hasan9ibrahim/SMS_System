@@ -33,6 +33,12 @@ table inet sms {
     # SMPP from the partners (Q33).
     ip saddr { {{ smpp_cidrs | join(', ') }} } tcp dport { {{ (ports.smpp + ports.smpp_tls) | join(', ') }} } accept
 {% endif %}
+{% if inventory_hostname in groups['servers'] and voice_enabled | bool and voice_cidrs | length > 0 %}
+    # SMS to voice (roles/asterisk): SIP and the calls' audio (RTP) from the operator's voice switch only. Asterisk's
+    # manager interface listens on this server's loopback only.
+    ip saddr { {{ voice_cidrs | join(', ') }} } udp dport { {{ ports.sip }}, {{ voice_rtp_start }}-{{ voice_rtp_end }} } accept
+    ip saddr { {{ voice_cidrs | join(', ') }} } tcp dport { {{ ports.sip }}, {{ ports.sip_tls }} } accept
+{% endif %}
 {% if inventory_hostname in groups['servers'] and web_enabled %}
     # The screens and the customer portal over HTTPS (nginx, backend step 14); 80 only redirects to 443. The API and
     # the TypeScript service listen on this server's loopback only, behind nginx.

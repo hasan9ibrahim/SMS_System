@@ -15,6 +15,9 @@ const f = (
   allowed: opts.allowed ?? [],
   credential: !!opts.credential,
 });
+// S-4.7: a trunk's TON / NPI as sent, or set from the address after its translation.
+const TON_NPI_HELP =
+  "as_sent (default) keeps them as the message has them; auto sets them from the address after translation.";
 const EXT = f(
   "externalId",
   "External ID",
@@ -63,8 +66,17 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("firstName", "First name", "", { required: true }),
       f("lastName", "Last name", "", { required: true }),
       f("email", "E-mail", "", { required: true }),
-      f("department", "Department", "Name of an existing department."),
-      f("accessGroup", "GUI access group", "Name of an existing access group."),
+      // A new user needs what the Add user form needs (§13.22, approved 2026-10-31): department, access group,
+      // business company, address and country. On an update an empty cell keeps the user's value.
+      f(
+        "department",
+        "Department",
+        "Name of an existing department (or one in the departments file). New users need it.",
+      ),
+      f("accessGroup", "GUI access group", "Name of an existing access group. New users need it."),
+      f("businessCompany", "Business company", "Name of an existing business company. New users need it."),
+      f("address", "Address", "First address line. New users need it."),
+      f("country", "Country", "ISO code, e.g. AE. New users need it."),
       f("isAccountManager", "Account manager", "yes / no", { allowed: ["yes", "no"] }),
       f("status", "Status", "", { allowed: ["active", "inactive"] }),
     ],
@@ -85,14 +97,21 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("tier", "Tier", "", { allowed: ["tier1", "tier2", "tier3"] }),
       f("status", "Status", "", { allowed: ["active", "inactive"] }),
       f("businessCompany", "Business company", "Name of an existing business company.", { required: true }),
-      f("accountManager", "Account manager", "Username (existing or in the users file)."),
-      f("country", "Country", "ISO code, e.g. AE."),
+      // A new enterprise needs what the Add form needs (§13.22): an account manager, the country, the address and an
+      // e-mail for each of the four contacts. On an update an empty cell keeps the enterprise's value.
+      f(
+        "accountManager",
+        "Account manager",
+        "Username of an account manager (existing or in the users file). New enterprises need it.",
+      ),
+      f("country", "Country", "ISO code, e.g. AE. New enterprises need it."),
       f("vatNumber", "VAT number", ""),
-      f("address", "Address", "First address line."),
-      f("emails", "Commercial e-mails", "Separated by , or ;"),
-      f("technicalEmails", "Technical / NOC e-mails", "Separated by , or ;"),
-      f("ratesEmails", "Rates e-mails", "Separated by , or ; (rate notifications)"),
-      f("financeEmails", "Finance / billing e-mails", "Separated by , or ; (invoices, SOA)"),
+      f("website", "Website", "An http(s) address; a bare domain such as partner.example gets https:// in front."),
+      f("address", "Address", "First address line. New enterprises need it."),
+      f("emails", "Commercial e-mails", "Separated by , or ; New enterprises need one."),
+      f("technicalEmails", "Technical / NOC e-mails", "Separated by , or ; New enterprises need one."),
+      f("ratesEmails", "Rates e-mails", "Separated by , or ; (rate notifications). New enterprises need one."),
+      f("financeEmails", "Finance / billing e-mails", "Separated by , or ; (invoices, SOA). New enterprises need one."),
     ],
   },
   {
@@ -109,7 +128,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("name", "Trunk name", "", { required: true }),
       f("username", "System ID", "SMPP username; unique.", { credential: true }),
       f("password", "Password", "SMPP password.", { credential: true }),
-      f("hostIps", "Allowed IPs", "Separated by , or ;", { credential: true }),
+      f("hostIps", "Allowed IPs", "Separated by , or ; New trunks need at least one.", { credential: true }),
       // No port: customers bind on 2775 (no TLS) or 2776 (TLS), set by the SSL type (product owner, 2026-10-24).
       f("sslType", "SSL", "Connection type; the port follows: none → 2775, TLS → 2776. Default none.", {
         allowed: ["none", "tls1.0", "tls1.2", "tls1.3"],
@@ -118,6 +137,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("tps", "TPS", "Messages per second.", { required: true }),
       f("category", "Product category", "Name of an existing category."),
       f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
+      f("tonNpiMode", "TON / NPI", TON_NPI_HELP, { allowed: ["as_sent", "auto"] }),
     ],
   },
   {
@@ -140,6 +160,13 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
       f("tps", "TPS", "", { required: true }),
       f("category", "Product category", "Name of an existing category.", { required: true }),
       f("billingType", "Billing type", "", { allowed: ["attempt", "submit", "reported", "delivery"] }),
+      f("tonNpiMode", "TON / NPI", TON_NPI_HELP, { allowed: ["as_sent", "auto"] }),
+      f(
+        "refuseInvalidSenders",
+        "Refuse invalid senders",
+        "yes (default): a sender a handset cannot show is not sent to this vendor; no: it takes such senders.",
+        { allowed: ["yes", "no"] },
+      ),
     ],
   },
   {
@@ -310,7 +337,7 @@ export const IMPORT_ENTITIES: MigrationEntityInfo[] = [
     fields: [
       f("enterprise", "Enterprise", "Name or external ID.", { required: true }),
       f("side", "Side", "", { required: true, allowed: ["customer", "vendor"] }),
-      f("amount", "Amount", "Positive = the partner's credit, negative = owed (§7).", { required: true }),
+      f("amount", "Amount", "Positive = the partner's credit, negative = owed.", { required: true }),
       f("currency", "Currency", "", { required: true }),
       f("date", "Date", "YYYY-MM-DD", { required: true }),
     ],
@@ -358,6 +385,9 @@ export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record
       email: "Email",
       department: "Department",
       accessGroup: "GUI Access Group",
+      businessCompany: "Business Company",
+      address: "Address 1",
+      country: "Country",
       isAccountManager: "Account Manager",
       status: "Status",
     },
@@ -375,6 +405,7 @@ export const BUILT_IN_MAPPINGS: { entity: MigrationImportEntity; columns: Record
       accountManager: "Account Manager",
       country: "Country",
       vatNumber: "VAT No",
+      website: "Website",
       address: "Address 1",
       emails: "Commercial Email",
       technicalEmails: "Technical Email",
@@ -523,6 +554,9 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     email: ["Email address", "Mail"],
     department: ["Dept", "Department name"],
     accessGroup: ["Access group", "GUI access group", "Group", "Role", "User group"],
+    businessCompany: ["Company", "Business company name"],
+    address: ["Address 1", "Address line 1", "Street"],
+    country: ["Country code", "Country ISO"],
     isAccountManager: ["Account manager", "Is account manager", "AM", "Is AM"],
     status: ["State", "User status"],
   },
@@ -537,6 +571,7 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     accountManager: ["AM", "Account manager username"],
     country: ["Country code", "Country ISO"],
     vatNumber: ["VAT", "VAT no", "Tax number", "TRN"],
+    website: ["Web site", "Web", "URL", "Homepage", "Web address"],
     address: ["Address 1", "Address line 1", "Street"],
     emails: ["Email", "Emails", "Commercial email"],
     technicalEmails: ["Technical email", "NOC email", "Support email"],
@@ -555,6 +590,7 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     tps: ["Throughput", "Max TPS"],
     category: ["Product", "Category"],
     billingType: ["Billed on", "Charge on"],
+    tonNpiMode: ["TON/NPI", "TON NPI mode", "TON/NPI mode", "Auto TON/NPI"],
   },
   vendor_trunks: {
     externalId: ["ID", "Trunk ID", "Vendor trunk ID"],
@@ -568,6 +604,7 @@ export const HEADER_ALIASES: Record<MigrationImportEntity, Record<string, string
     tps: ["Throughput", "Max TPS"],
     category: ["Product", "Category"],
     billingType: ["Billed on", "Charge on"],
+    tonNpiMode: ["TON/NPI", "TON NPI mode", "TON/NPI mode", "Auto TON/NPI"],
   },
   rate_tables: {
     externalId: ["ID", "Table ID", "Rate table ID"],
@@ -624,6 +661,9 @@ export const CHOICE_SYNONYMS: Record<string, string[]> = {
   submit: ["Submitted", "Submit SM"],
   reported: ["Report", "Reports"],
   delivery: ["Delivered", "DLR"],
+  // Trunk TON / NPI (S-4.7).
+  as_sent: ["As sent", "Keep"],
+  auto: ["Automatic", "Auto fix", "Auto (fix after translation)"],
   // Translation rules and number lists (team trial round 12).
   ingress: ["In", "Incoming", "Customer side", "Customer"],
   egress: ["Out", "Outgoing", "Vendor side", "Vendor"],

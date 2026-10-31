@@ -16,6 +16,7 @@ import type {
   FirewallRuleSaved,
   NotificationResult,
   SendRateInput,
+  SmsVoiceRecordingUpload,
   SmsVoiceRuleInput,
   SmsVoiceRuleSaved,
   SmsVoiceTestInput,
@@ -23,6 +24,9 @@ import type {
   TrafficAlertCheck,
   TrafficAlertInput,
   TrafficAlertSaved,
+  VoiceGatewayInput,
+  VoiceGatewayRow,
+  VoiceGatewaySaved,
 } from "@sms/contract";
 import { api, apiFetch, unwrap } from "./client";
 import { useRefreshRecords } from "./records";
@@ -127,6 +131,43 @@ export const useSaveSmsVoiceRule = () =>
 
 export const testSmsVoice = (body: SmsVoiceTestInput): Promise<SmsVoiceTestResult> =>
   unwrap(api.POST("/sms-voice-rules/test", { body }));
+
+/**
+ * A rule's recording as callers would hear it (mono 8 kHz WAV), converted by the server but not stored, so the form
+ * can play it before saving. Rejects with the server's plain reason (an MP3, a compressed WAV, too long …).
+ */
+export async function previewVoiceRecording(upload: SmsVoiceRecordingUpload): Promise<Blob> {
+  const res = await apiFetch("/api/v1/sms-voice-rules/recording-preview", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(upload),
+  });
+  if (!res.ok) {
+    const p = (await res.json().catch(() => ({}))) as { title?: string; detail?: string; errors?: { message: string }[] };
+    throw new Error(p.errors?.[0]?.message ?? p.detail ?? p.title ?? `Request failed (HTTP ${res.status})`);
+  }
+  return res.blob();
+}
+
+/** Where the form's player streams a rule's stored recording from. */
+export const voiceRecordingUrl = (ruleId: number) => `/api/v1/sms-voice-rules/${ruleId}/recording`;
+
+// ---------------------------------------------------------------- voice gateways
+
+export function useVoiceGateway(id: number | null) {
+  return useQuery<VoiceGatewayRow>({
+    queryKey: ["record", "voice-gateway", id],
+    queryFn: () => unwrap(api.GET("/voice-gateways/{id}", { params: { path: { id: id! } } })),
+    enabled: id !== null,
+  });
+}
+
+export const useSaveVoiceGateway = () =>
+  useWrite(({ id, input }: { id: number | null; input: VoiceGatewayInput }): Promise<VoiceGatewaySaved> =>
+    id === null
+      ? unwrap(api.POST("/voice-gateways", { body: input }))
+      : unwrap(api.PUT("/voice-gateways/{id}", { params: { path: { id } }, body: input })),
+  );
 
 // ---------------------------------------------------------------- broadcast
 

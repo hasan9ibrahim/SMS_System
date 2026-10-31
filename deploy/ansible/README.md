@@ -19,6 +19,7 @@ domain at it and adding the second server and the witness later, is `docs/DEPLOY
 | API (in `sms-switch`, 127.0.0.1:4100) | ✓ | ✓ | – |
 | TypeScript service (`sms-service`, 127.0.0.1:4010; jobs on one server at a time) | ✓ | ✓ | – |
 | nginx: the screens and the portal over HTTPS (80 → 443) | ✓ | ✓ | – |
+| Asterisk: SMS-to-voice calls, only with `sms_voice_enabled` (manager interface on 127.0.0.1:5038) | ✓ | ✓ | – |
 | PostgreSQL 16 (Patroni) | primary or standby | primary or standby | – |
 | HAProxy → current primary | 127.0.0.1:5432 | 127.0.0.1:5432 | – |
 | etcd (Patroni's lease) | ✓ | ✓ | ✓ |
@@ -84,6 +85,10 @@ traffic: at about 150 million messages a month, look again at the disks or the m
 
    Keep the vault password and a copy of `vault_pgbackrest_cipher_pass` outside the servers: without it the backups
    cannot be read.
+
+   The settings every environment shares (versions, ports, retention, `smpp_cidrs`, `web_cidrs` …) are the defaults
+   in `roles/settings/defaults/main.yml`. To change one for this environment, set it in the inventory's
+   `group_vars/all/main.yml`: the inventory's value always wins (the role's are Ansible's lowest-precedence defaults).
 4. **Install:** `pip install ansible-core`, then
 
    ```sh
@@ -168,10 +173,98 @@ into one pcapng), and Extract Recording (`tshark` cuts the window's files with t
 and write to `/var/lib/sms-pcap/captures`, kept 30 days unless kept on the screen. Network Diagnosis uses `ping`,
 `traceroute`, `mtr` and a TCP connect on the server that has the chosen source address.
 
+## Content-Security-Policy
+
+nginx sends a Content-Security-Policy with every page (`roles/web/templates/sms.conf.j2`, policy in
+`roles/web/defaults/main.yml` as `web_csp_policy`). It allows only what the screens use: scripts, fonts and styles
+from the site itself (the app's fonts are bundled), the Google Fonts stylesheet and font hosts
+(`fonts.googleapis.com`, `fonts.gstatic.com`) for web fonts an e-mail template uses, shown in its preview and the
+designer, images from the site plus `data:` / `blob:`
+(QR codes, downloads), the API and the live WebSocket on the same name, no frames from anywhere (the e-mail previews
+are sandboxed `srcdoc` frames, which need none) and no embedding by other sites. Inline styles stay allowed because
+the e-mail previews and the e-mail designer show e-mails as they are written, styled inline.
+
+It starts **report-only** (`web_csp_enforce: false`, header `Content-Security-Policy-Report-Only`): the browser
+blocks nothing and reports what the policy would block to `POST /api/v1/csp-reports` (no sign-in; at most 64 KB and
+60 a minute per address in nginx, the API and the service). The TypeScript service logs one line per violation,
+e.g. `csp report: img-src blocked https://cdn.example/x.png on https://sms.example/admin/email-templates`; read them
+with `journalctl -u sms-service | grep "csp "`. When a week of normal use logs
+none, set `web_csp_enforce: true` in the inventory (`group_vars/all/main.yml` or the host) and run `site.yml`: the same
+policy is then sent as `Content-Security-Policy` and enforced. Set it back to `false` to return to report-only.
+Changing the policy: edit `web_csp_policy` (production) and `deploy/nginx.conf` (the docker-compose trial instance,
+always report-only), then check the screens again.
+
 ## Firewall
 
 Only listed traffic is accepted (`roles/base/templates/nftables.conf.j2`): SSH and the monitoring pages from
 `admin_cidrs`, SMPP from `smpp_cidrs`, HTTPS (and 80, which only redirects) to the servers from `web_cidrs` (everyone
 by default, for the customer portal), the cluster's ports between the three machines only. The API and the TypeScript
-service listen on the servers' loopback only, behind nginx. The Firewall screen's
+service listen on the servers' loopback only, behind nginx. With SMS to voice on, SIP and the calls' audio are
+accepted from `voice_switch_cidrs` only (below); Asterisk's manager interface is never opened. The Firewall screen's
 banned and trusted lists (§8) apply on top, in the switch.
+
+## SMS to voice (Asterisk)
+
+A message that matches an SMS-to-voice rule becomes a phone call (`docs/SMS_TO_VOICE.md`, spec §8): the switch asks
+the Asterisk on its own server to call the receiver through the operator's own voice switch over SIP, and Asterisk
+says the code. `roles/asterisk` sets it up on the servers (not the witness), and only when `sms_voice_enabled` is
+true; otherwise nothing is installed, no SIP port is open and the switch gets no Asterisk settings, so it sends such
+messages as SMS. The docker-compose trial stack has no Asterisk: the test system simulates the calls.
+
+**What is installed** (Ubuntu 24.04 packages): `asterisk` (20), `asterisk-core-sounds-en` and
+`asterisk-core-sounds-en-wav` (the English digit prompts, 8 kHz WAV), `flite` and `sox`. At setup flite speaks the
+default phrase "Your verification code is" (`asterisk_prompt_phrase`) and sox converts it to 8 kHz mono 16-bit WAV:
+`/usr/share/asterisk/sounds/en/custom/sms-voice-code.wav`, recorded again only when it is missing or the phrase
+changes. Asterisk loads only what the calls need (SIP over res_pjsip, audio, the dialplan); Ubuntu's sample dialplans,
+other channel drivers, voicemail, ARI and database back ends are not loaded, so nothing else is reachable.
+
+| On each server | Written by | What |
+| --- | --- | --- |
+| `/etc/asterisk/manager.conf` | Ansible | The manager interface (AMI) on 127.0.0.1:5038 only; one user, `sms_switch`, with the secret `vault_asterisk_ami_secret`; read `call,system` (call outcomes and hang-ups), write `originate,command` (place calls; `module reload res_pjsip.so`) |
+| `/etc/asterisk/pjsip.conf` | Ansible | SIP transports `transport-udp` and `transport-tcp` on 5060, `transport-tls` on 5061 when a certificate is configured; includes the gateways file |
+| `/etc/asterisk/pjsip_sms_voice.conf` | the switch | The voice gateways (endpoint, aor and auth `smsvoice-gw<id>` per active gateway). Created empty once (owner `sms`, group `asterisk`, 0640) and never written by Ansible again |
+| `/etc/asterisk/extensions_sms_voice.conf` | Ansible | The only dialplan, context `sms-voice`: a second's pause, then `REPEAT` times the recording (`PROMPT`, or the default phrase), the digits (`SayDigits(${CODE})`) and a second's pause; then hang up |
+| `/etc/asterisk/rtp.conf`, `modules.conf`, `extensions.conf` | Ansible | The RTP port range; the modules loaded; the include of the dialplan |
+| `/usr/share/asterisk/sounds/en/custom/` | both | Owner `sms`, group `asterisk`, 2750: the default phrase (Ansible's) and the rules' own recordings (`sms-voice-rule-<sha256>.wav`, 0640), which the switch writes and removes |
+
+The switch's settings (`/etc/sms/switch.env`, on the servers, only with `sms_voice_enabled`): `SMS_ASTERISK_AMI_HOST`
+(127.0.0.1), `SMS_ASTERISK_AMI_PORT` (5038), `SMS_ASTERISK_AMI_USER`, `SMS_ASTERISK_AMI_SECRET`,
+`SMS_ASTERISK_PJSIP_FILE` (the gateways file) and `SMS_ASTERISK_SOUNDS_DIR` (`/usr/share/asterisk/sounds`).
+
+**Variables** (in the inventory's `group_vars/all/main.yml`, the secret in `secrets.yml`):
+
+| Variable | Default | What |
+| --- | --- | --- |
+| `sms_voice_enabled` | `false` | Turns SMS to voice on |
+| `voice_switch_cidrs` | `[]` | The voice switch's addresses (IPv4). SIP (UDP and TCP 5060, TLS 5061) and RTP are accepted from these only; required when on |
+| `asterisk_rtp_start`, `asterisk_rtp_end` | `10000`, `10999` | The calls' audio ports: two per call (RTP and RTCP), so 500 calls at once per server |
+| `vault_asterisk_ami_secret` | – | The switch's AMI password (`openssl rand -hex 24`); at least 16 characters |
+| `asterisk_prompt_phrase` | Your verification code is | The default phrase before the digits |
+| `asterisk_tls_certfile`, `asterisk_tls_keyfile` | `smpp_tls_certfile`, `smpp_tls_keyfile` | The certificate for SIP over TLS; empty for UDP and TCP only. Asterisk uses a copy in `/etc/asterisk/keys`: after the certificate is renewed, run `site.yml` again |
+
+**Pointing it at the voice switch:**
+
+1. In the inventory set `sms_voice_enabled: true` and `voice_switch_cidrs` (the voice switch's signalling and media
+   addresses), and `vault_asterisk_ami_secret` in the secrets. Run `site.yml`: each server's switch gets its Asterisk
+   settings (and restarts, one server at a time), then Asterisk is installed and started, one server at a time.
+2. In the screens, Switch tools › Voice gateways: the voice switch's host, port, transport, login, caller ID, dial
+   prefix, codecs and call limit. The switch writes the gateways file on each server and reloads it; nothing is
+   changed on the servers by hand. Then the rules on SMS To Voice.
+
+A change to `modules.conf`, `pjsip.conf` or the certificate restarts Asterisk on that server (calls in progress there
+end and the switch tries them once more); other changes reload it without dropping calls. Turning it off
+(`sms_voice_enabled: false`, then `site.yml`) removes the switch's Asterisk settings and closes the SIP ports;
+Asterisk stays installed but unused (`apt purge asterisk` removes it). Alert: AsteriskDown (`docs/RUNBOOKS.md`).
+
+**Checking a call** (on a server):
+
+```sh
+systemctl status asterisk
+asterisk -rx "manager show connected"     # the switch's login, sms_switch from 127.0.0.1
+asterisk -rx "pjsip show endpoints"       # the voice gateways the switch wrote (smsvoice-gw<id>) and their state
+asterisk -rx "core show channels"         # calls in progress
+asterisk -rvvv                            # live: each call's dialplan steps; "pjsip set logger on" adds the SIP messages
+```
+
+Then send a message that matches a rule to a phone you hold: it rings, says the phrase and the code, and EDR search
+shows the attempt with route type Voice, Answered and the hang-up cause.

@@ -213,7 +213,7 @@ function VendorInvoiceEditor({
             path="timezone"
             label="Timezone"
             options={tzOptions(ref?.timezones ?? ["UTC"])}
-            placeholder="Partner's billing time zone"
+            placeholder="Partner's vendor billing time zone"
             hint="Our figures are cut at midnight here"
           />
           <FormField label="Invoice Date" required error={form.error("invoiceDate")}>
@@ -753,6 +753,7 @@ function InvoicesView() {
   return (
     <ListScreen<VendorInvoiceRow>
       list="vendor_invoices"
+      bulkDelete={{ noun: "vendor invoice", restore: true }}
       page={page}
       selectId={selectId}
       historyScope={{ entityTypes: ["vendor_invoice"] }}
@@ -1077,6 +1078,8 @@ function RulesView() {
   return (
     <ListScreen<ReconRuleRow>
       list="recon_rules"
+      listExport
+      bulkDelete={{ noun: "partner rule", restore: true }}
       page={page}
       title="Reconciliation rules"
       noSelection

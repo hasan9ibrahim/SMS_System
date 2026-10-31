@@ -21,3 +21,8 @@ web_tls_certfile: /etc/sms/tls/web.crt
 web_tls_keyfile: /etc/sms/tls/web.key
 # Platform e-mail (sign-in codes, alerts): the sender address; the server and login are vault_smtp_url.
 smtp_from: noreply@example.com
+# SMS to voice (deploy/ansible/README.md "SMS to voice (Asterisk)"): off until the operator's voice switch is ready.
+# To turn it on: true, the voice switch's addresses (SIP and the calls' audio are accepted from these only, e.g.
+# [192.0.2.80/29]) and vault_asterisk_ami_secret in the secrets.
+sms_voice_enabled: false
+voice_switch_cidrs: []

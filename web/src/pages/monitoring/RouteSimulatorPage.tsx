@@ -8,7 +8,7 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouteRule } from "../../api/routing";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
-import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
+import { autoCoding, autoTonNpi, parseReceivers, receiverProblem } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
@@ -19,6 +19,7 @@ import { Button, Popover, StatusDot } from "../../ui/primitives";
 import { problemText } from "../routing/dialogs";
 import { codeChips, DestinationTree, useDestinationTree, type TreeCountry } from "../rates/DestinationTree";
 import { Icon } from "../../ui/Icon";
+import { repeatText } from "../switch/tools/toolsModel";
 import { messageEncoding, msgStatusTone, needsUcs2 } from "./monitorModel";
 
 const page = pageForPath("/routing/simulator")!;
@@ -149,6 +150,11 @@ function Result({ r }: { r: RouteSimulatorResult }) {
         <StatusDot tone={r.blocked ? "error" : "good"} />{" "}
         {r.blocked ? (
           <strong>{r.blocked}</strong>
+        ) : r.voiceCall ? (
+          <strong>
+            Phone call through {r.voiceCall.gateway} to {r.voiceCall.dialled} (no vendor) · cost{" "}
+            {money(r.vendorCost?.rate, r.vendorCost?.currency)} · margin {margin}
+          </strong>
         ) : forced ? (
           <strong>
             Sent straight to {forced.name} (routing skipped) · cost {money(forced.rate, forced.currency ?? undefined)}{" "}
@@ -213,50 +219,90 @@ function Result({ r }: { r: RouteSimulatorResult }) {
             </dd>
           </dl>
         </Step>
-        <Step
-          n={3}
-          title={d ? `Route rule #${d.ruleId}` : "Route rule"}
-          tone={!d || d.outcome !== "route" ? "error" : "good"}
-          summary={
-            forced
-              ? "skipped: the test went straight to a vendor"
-              : !d
-                ? "no rule matched"
-                : d.outcome === "route"
-                  ? `${d.vendor!.name} picked (${d.vendor!.decidedBy})`
-                  : d.outcome.replace("_", " ")
-          }
-          open
-        >
-          {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
-          {r.route.tried.some((x) => x.reason.startsWith("shadowed")) && (
-            <div className="rs-shadowed">
-              <strong className="small">Also match, never reached (rule #{d?.ruleId} decides first):</strong>
-              <ul>
-                {r.route.tried
-                  .filter((x) => x.reason.startsWith("shadowed"))
-                  .map((x) => (
-                    <li key={x.ruleId} className="small">
-                      <span className="num">#{x.ruleId}</span> {x.name} <span className="muted">· priority {x.priority}</span>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-          <details className="rs-more">
-            <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
-            <ol className="rs-tried">
-              {r.route.tried.map((x) => (
-                <li
-                  key={x.ruleId}
-                  className={x.matched ? "" : x.reason.startsWith("shadowed") ? "tone-warning" : "muted"}
-                >
-                  <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
-                </li>
-              ))}
-            </ol>
-          </details>
-        </Step>
+        {r.voiceCall ? (
+          // SMS to voice (§8): the switch calls before routing; no route rule or vendor is used.
+          <Step
+            n={3}
+            title={`SMS to voice rule #${r.voiceCall.ruleId}`}
+            tone="good"
+            summary={`a call through ${r.voiceCall.gateway}, not sent to a vendor`}
+            open
+          >
+            <dl className="kv">
+              <dt>Gateway</dt>
+              <dd>
+                {r.voiceCall.gateway}
+                {r.voiceCall.gatewayDefault && <span className="muted"> · default gateway</span>}
+              </dd>
+              <dt>Dials</dt>
+              <dd>
+                <span className="num">{r.voiceCall.dialled}</span>
+              </dd>
+              <dt>Caller ID</dt>
+              <dd>
+                {r.voiceCall.callerId ? (
+                  <span className="num">{r.voiceCall.callerId}</span>
+                ) : (
+                  <span className="muted">withheld</span>
+                )}
+              </dd>
+              <dt>Says</dt>
+              <dd>
+                {r.voiceCall.phrase} <span className="muted">· {repeatText(r.voiceCall.repeat)}</span>
+              </dd>
+              <dt>No answer</dt>
+              <dd>
+                rings {r.voiceCall.ringTimeoutS} s, one retry after {r.voiceCall.retryDelayS} s, then not delivered
+                and not charged
+              </dd>
+            </dl>
+          </Step>
+        ) : (
+          <Step
+            n={3}
+            title={d ? `Route rule #${d.ruleId}` : "Route rule"}
+            tone={!d || d.outcome !== "route" ? "error" : "good"}
+            summary={
+              forced
+                ? "skipped: the test went straight to a vendor"
+                : !d
+                  ? "no rule matched"
+                  : d.outcome === "route"
+                    ? `${d.vendor!.name} picked (${d.vendor!.decidedBy})`
+                    : d.outcome.replace("_", " ")
+            }
+            open
+          >
+            {d && <RuleSplit ruleId={d.ruleId} picked={d.vendor?.vendorTrunkId ?? null} r={r} />}
+            {r.route.tried.some((x) => x.reason.startsWith("shadowed")) && (
+              <div className="rs-shadowed">
+                <strong className="small">Also match, never reached (rule #{d?.ruleId} decides first):</strong>
+                <ul>
+                  {r.route.tried
+                    .filter((x) => x.reason.startsWith("shadowed"))
+                    .map((x) => (
+                      <li key={x.ruleId} className="small">
+                        <span className="num">#{x.ruleId}</span> {x.name} <span className="muted">· priority {x.priority}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
+            <details className="rs-more">
+              <summary className="small">Every rule tried, in order ({r.route.tried.length})</summary>
+              <ol className="rs-tried">
+                {r.route.tried.map((x) => (
+                  <li
+                    key={x.ruleId}
+                    className={x.matched ? "" : x.reason.startsWith("shadowed") ? "tone-warning" : "muted"}
+                  >
+                    <span className="num">#{x.ruleId}</span> {x.name} <span className="small">({x.reason})</span>
+                  </li>
+                ))}
+              </ol>
+            </details>
+          </Step>
+        )}
         {r.egressSkipped.length > 0 && (
           <Step n={4} title="Vendors skipped" tone="warning" summary={`${r.egressSkipped.length} blocked by their own rules`}>
             <dl className="kv">
@@ -507,6 +553,7 @@ export function RouteSimulatorPage() {
     shortcuts: "Enter runs",
   });
   const list = parseReceivers(receivers);
+  const numbersProblem = receiverProblem(receivers);
   const realNumber = testNumber.replace(/\D/g, "");
   // Numbers and destinations together (team trial round 12, no switch between them): one run each.
   const runs = [
@@ -524,6 +571,7 @@ export function RouteSimulatorPage() {
   const isAuto = !touched.coding && !touched.src && !touched.dst;
   const go = async () => {
     if (!trunkId) return toast({ tone: "warning", message: "Choose the customer trunk" });
+    if (numbersProblem) return toast({ tone: "warning", message: numbersProblem });
     if (!runs.length) return toast({ tone: "warning", message: "Enter a number or pick a destination" });
     if (list.length > 20) return toast({ tone: "warning", message: "At most 20 numbers at once" });
     if (dests.length > MAX_DESTS) return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
@@ -628,9 +676,13 @@ export function RouteSimulatorPage() {
                 placeholder="e.g. 447700900123, 33612345678"
                 onChange={(e) => setReceivers(e.target.value)}
               />
-              <span className="muted small">
-                {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
-              </span>
+              {numbersProblem ? (
+                <span className="error-text small">{numbersProblem}</span>
+              ) : (
+                <span className="muted small">
+                  {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
+                </span>
+              )}
             </label>
             <div className="field">
               <span>Destinations</span>

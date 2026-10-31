@@ -238,11 +238,11 @@ describe("§9 EDR search", { skip }, () => {
       }),
     );
     assert.ok(page.total > 0 && page.rows.length === 50);
-    assert.ok(
-      page.rows.every(
-        (r) => r.isFinalAttempt && r.startTime >= "2026-10-16T00:00" && r.startTime <= "2026-10-16T01:00",
-      ),
+    // The row that breaks the filter, if any, with what it holds (CI once saw one it could not name).
+    const off = page.rows.find(
+      (r) => !(r.isFinalAttempt && r.startTime >= "2026-10-16T00:00" && r.startTime <= "2026-10-16T01:00:00Z"),
     );
+    assert.equal(off, undefined, JSON.stringify(off && { id: off.id, final: off.isFinalAttempt, at: off.startTime }));
     const trunk = page.rows.find((r) => r.customerTrunk)!.customerTrunk!;
     const byTrunk = await ok<EdrPage>(
       "queryEdrs",

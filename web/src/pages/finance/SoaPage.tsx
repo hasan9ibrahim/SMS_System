@@ -535,7 +535,7 @@ function SideView({ st, s }: { st: SoaStatement; s: SoaSide }) {
       )}
       {s.excludedPayments.length > 0 && (
         <details className="soa-section">
-          <summary>Payments left off the SOA ({s.excludedPayments.length}) · still in balances (§13.33)</summary>
+          <summary>Payments left off the SOA ({s.excludedPayments.length}) · still in balances</summary>
           <table className="mini-table soa-lines">
             {HEAD}
             <tbody>

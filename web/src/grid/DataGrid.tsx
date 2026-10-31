@@ -19,8 +19,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { FieldDescriptor, ListFields, ListId, ListQuery } from "@sms/contract";
 import { fetchListPage, type ListPage } from "../api/hooks";
 import { ApiError } from "../api/client";
+import { fieldLine, problemFields, problemTitle } from "../api/problems";
 import { Icon } from "../ui/Icon";
 import { StatusPill } from "../ui/primitives";
+import { nodeText, shareWidth } from "./fit";
 import { ColumnFilter } from "./ColumnFilter";
 import { isChoice, isNumeric, isTime, nextSort, toListQuery, type GridState } from "./filterModel";
 
@@ -28,15 +30,21 @@ export const ROW_HEIGHT = 42;
 /** Most rows "Select all matching" takes (one bulk action stays reviewable). */
 const SELECT_ALL_MAX = 5000;
 const PAGE_SIZE = 200;
-/** Narrowest a column gets when the columns are fitted to the grid's width. */
+/** Narrowest a column gets when the columns are fitted to the grid's width (before its label and values count). */
 const FIT_MIN = 56;
-/** Phones (team trial round 5): below this grid width each row is a card instead of a table row. */
-const CARD_BELOW = 640;
+/** A text column shrinks to this before figures, codes and dates give up any room (design QA round 13). */
+const TEXT_MIN = 120;
+/** A column with a list filter keeps room for its "All ⌄" button. */
+const LIST_FILTER_MIN = 68;
+/** Phones (team trial round 5): up to the phone layout's width (mobile.css, 760 px) each row is a card. */
+const CARD_MAX = 760;
 const CARD_HEIGHT = 128;
 const CARD_FIELDS = 4;
 
 export interface ColumnOverride<Row> {
   width?: number;
+  /** Narrowest the column gets when the grid fits its columns: for a render wider than its value (a chip, a button). */
+  minWidth?: number;
   /** Header text instead of the field label (e.g. the traffic window "24h"). */
   label?: string;
   render?: (row: Row) => ReactNode;
@@ -111,38 +119,57 @@ const AUTO_FIT_ROWS = 400;
 let measureCanvas: HTMLCanvasElement | null = null;
 
 /** The text a cell shows, near enough to measure its width (renders add at most a dot or icon). */
-function fitText(f: FieldDescriptor, value: unknown): string {
+function fitText(f: FieldDescriptor, value: unknown, seconds: boolean): string {
   if (value === null || value === undefined || value === "") return "—";
-  if (isTime(f)) return String(value).slice(0, 19).replace("T", " ");
+  // Auto-fitted grids (EDRs) show the seconds; the others "YYYY-MM-DD HH:MM", as defaultCell does.
+  if (isTime(f)) return String(value).slice(0, seconds ? 19 : 16).replace("T", " ");
   if (typeof value === "number") return value.toLocaleString("en-US", { maximumFractionDigits: 6 });
   if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (f.type === "enum") return f.enumValues?.find((e) => e.value === value)?.label ?? String(value);
   return String(value);
 }
 
-/** Header and cell widths from the loaded rows, measured in the grid's own fonts. */
-function fitWidths(
+/**
+ * Values that are never cut when the columns are fitted: figures, dates, IDs, and list values shown as they are (a
+ * page's own render of a list value can be free text, e.g. "All but DIRECT, PROMO") (design QA round 13).
+ */
+const isAtomic = (f: FieldDescriptor, rendered: boolean) =>
+  isNumeric(f) || isTime(f) || f.field === "id" || (!rendered && (isChoice(f) || f.field === "status"));
+
+/**
+ * Each column's label and widest loaded value in px, padding included: the header in its bold weight, the cells in
+ * the grid's own font with room for a sign or symbol, or for a status pill's dot and padding.
+ */
+function measureFields(
   el: HTMLElement | null,
   fields: FieldDescriptor[],
   rows: object[],
   labels: (f: FieldDescriptor) => string,
-): Map<string, number> {
+  renders: (f: FieldDescriptor) => ((row: never) => ReactNode) | undefined,
+  seconds: boolean,
+): Map<string, { header: number; content: number }> {
   measureCanvas ??= document.createElement("canvas");
   const ctx = measureCanvas.getContext("2d");
-  const out = new Map<string, number>();
+  const out = new Map<string, { header: number; content: number }>();
   if (!ctx) return out;
   const style = el ? getComputedStyle(el) : null;
   const family = style?.fontFamily || "Inter, sans-serif";
   const size = style?.fontSize || "14px";
   const sample = rows.slice(0, AUTO_FIT_ROWS) as Record<string, unknown>[];
   for (const f of fields) {
-    // Header: bold label, sort arrow and padding; cells: text, a status dot or icon and padding.
-    ctx.font = `700 13px ${family}`;
-    let w = ctx.measureText(labels(f)).width + 34;
+    ctx.font = `600 13px ${family}`;
+    const header = Math.ceil(ctx.measureText(labels(f)).width) + 22;
     ctx.font = `400 ${size} ${family}`;
-    // Figures use tabular digits, as wide as "0" (the canvas measures proportional ones).
-    for (const r of sample) w = Math.max(w, ctx.measureText(fitText(f, r[f.field]).replace(/\d/g, "0")).width + 34);
-    out.set(f.field, Math.min(AUTO_FIT_MAX, Math.ceil(w)));
+    let text = 0;
+    const render = renders(f);
+    for (const r of sample) {
+      const shown = (render && nodeText(render(r as never))) || fitText(f, r[f.field], seconds);
+      // Figures use tabular digits, as wide as "0" (the canvas measures proportional ones).
+      text = Math.max(text, ctx.measureText(shown.replace(/\d/g, "0")).width);
+    }
+    const extra = f.field === "status" ? 50 : 34;
+    out.set(f.field, { header, content: sample.length ? Math.ceil(text) + extra : 0 });
   }
   return out;
 }
@@ -249,6 +276,9 @@ function GridRowInner<Row extends { id: number }>({
       aria-selected={checked}
       onClick={(e) => onClick(row, e)}
       onDoubleClick={(e) => onDoubleClick(row, e)}
+      // Middle button: the record in a new tab behind (§13.5). Pressing it must not start Windows' autoscroll, which
+      // swallows the click (QA round 14).
+      onMouseDown={(e) => e.button === 1 && e.preventDefault()}
       onAuxClick={(e) => e.button === 1 && onDoubleClick(row, e)}
     >
       <div className="gc gc-check" role="gridcell">
@@ -337,6 +367,9 @@ function MobileSort({
   );
 }
 
+/** Two taps on a card within this time are a double-tap: it opens the row, as a double-click does on a desktop. */
+const DOUBLE_TAP_MS = 400;
+
 /** A row as a card on phones: the first column as the title, the next few as label and value. */
 function MobileCardInner<Row extends { id: number }>({
   row,
@@ -346,9 +379,22 @@ function MobileCardInner<Row extends { id: number }>({
   active,
   checked,
   onClick,
+  onDoubleClick,
   extraClass,
   masked,
 }: RowProps<Row>) {
+  // Touch browsers send no reliable dblclick, so the second of two quick taps (or clicks) opens the row (design QA
+  // round 13, §15.1).
+  const lastTap = useRef<number | null>(null);
+  const tap = (e: MouseEvent) => {
+    const prev = lastTap.current;
+    lastTap.current = e.timeStamp;
+    onClick(row, e);
+    if (prev !== null && e.timeStamp - prev < DOUBLE_TAP_MS) {
+      lastTap.current = null;
+      onDoubleClick(row, e);
+    }
+  };
   const shown = cells.filter((c) => c.field.field !== "id");
   const [title, ...rest] = shown;
   const value = (c: (typeof cells)[number]) =>
@@ -365,7 +411,7 @@ function MobileCardInner<Row extends { id: number }>({
       style={{ transform: `translateY(${top}px)` }}
       role="row"
       aria-rowindex={index + 2}
-      onClick={(e) => onClick(row, e)}
+      onClick={tap}
     >
       <div className="gcard-title">{title ? value(title) : `#${row.id}`}</div>
       <div className="gcard-fields">
@@ -384,7 +430,7 @@ const MobileCard = memo(MobileCardInner) as typeof MobileCardInner;
 /** A value the visibility policy withholds (§13.17): Hidden, a band (Low / Normal / High) or Above limit. */
 export function Withheld({ text }: { text: string }) {
   return (
-    <span className="withheld" title="Withheld by your visibility policy (§13.17)">
+    <span className="withheld" title="Hidden by your visibility policy">
       {text}
     </span>
   );
@@ -480,16 +526,29 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return names.map((n) => byName.get(n)).filter((f): f is FieldDescriptor => !!f && !f.filterOnly);
   }, [fields, state.visible]);
 
-  // Auto-fit (team trial round 7): measured again when more of the first rows load or the columns change.
+  // Each column's label and widest value, measured again when more of the first rows load or the columns change:
+  // auto-fit sizes the columns by it (team trial round 7), the other grids never fit a column below it (design QA
+  // round 13).
   const fitRows = Math.min(rows.length, AUTO_FIT_ROWS);
-  const fitted = useMemo(
+  const measured = useMemo(
     () =>
-      autoFit && fitRows
-        ? fitWidths(scrollRef.current, visibleFields, rows, (f) => columns[f.field]?.label ?? f.label)
-        : null,
+      measureFields(
+        scrollRef.current,
+        visibleFields,
+        rows,
+        (f) => columns[f.field]?.label ?? f.label,
+        (f) => columns[f.field]?.render as ((row: never) => ReactNode) | undefined,
+        autoFit,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [autoFit, fitRows, rows[0], visibleFields, columns],
+    [fitRows, rows[0], visibleFields, columns, autoFit],
   );
+  const fitted = useMemo(() => {
+    if (!autoFit || !fitRows) return null;
+    const out = new Map<string, number>();
+    for (const [field, m] of measured) out.set(field, Math.min(AUTO_FIT_MAX, Math.max(m.header + 8, m.content)));
+    return out;
+  }, [autoFit, fitRows, measured]);
 
   // TanStack Table holds the column model and widths; data stays server-side (manual mode).
   const [sizing, setSizing] = useState<ColumnSizingState>({});
@@ -533,8 +592,10 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [headers.map((h) => `${h.column.id}:${h.getSize()}`).join(), visibleFields, columns],
   );
-  // Columns fit the grid's width (team trial round 5: no sideways scrolling): the set widths are scaled to the
-  // space there is, never below FIT_MIN, so dragging a column wider takes the room from the others.
+  // Columns fit the grid's width (team trial round 5): the set widths grow to the space there is, and dragging a
+  // column wider takes the room from the others. Short of room, text columns give theirs first; no column goes below
+  // its label, a figure, code or date below its widest value, and then the grid scrolls sideways instead of cutting
+  // them (design QA round 13).
   const [boxWidth, setBoxWidth] = useState(0);
   useEffect(() => {
     const el = scrollRef.current;
@@ -545,17 +606,48 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
     return () => ro.disconnect();
   }, []);
   const cells = useMemo(() => {
-    const fixed = 40 + (trailing?.width ?? 0);
-    const sum = naturalCells.reduce((n, c) => n + c.width, 0);
-    if (boxWidth <= 0 || sum <= 0) return naturalCells;
+    const space = boxWidth - 40 - (trailing?.width ?? 0) - 2;
+    if (boxWidth <= 0 || !naturalCells.length) return naturalCells;
     // Auto-fitted columns only grow to fill the width, never shrink (no truncation; the grid scrolls sideways).
-    const scale = autoFit ? Math.max(1, (boxWidth - fixed - 2) / sum) : (boxWidth - fixed - 2) / sum;
-    return naturalCells.map((c) => ({ ...c, width: Math.max(FIT_MIN, Math.floor(c.width * scale)) }));
-  }, [naturalCells, boxWidth, trailing?.width, autoFit]);
+    const floor = naturalCells.map((c) => {
+      if (autoFit) return c.width;
+      const f = c.field;
+      const m = measured.get(f.field);
+      const sorted = state.sort.some((s) => s.field === f.field) ? 14 : 0;
+      // A text column's render often shows more than its value (a vendor split, "+N" trunks), so it keeps TEXT_MIN
+      // unless it is set narrower and its values fit (a code).
+      const value = isAtomic(f, !!c.render) ? (m?.content ?? 0) : Math.min(TEXT_MIN, Math.max(c.width, m?.content ?? 0));
+      const min = Math.max(
+        FIT_MIN,
+        (m?.header ?? 0) + sorted,
+        value,
+        isChoice(f) && f.operators.length ? LIST_FILTER_MIN : 0,
+        columns[f.field]?.minWidth ?? 0,
+      );
+      // A column the user dragged narrower stays as narrow as they made it.
+      return Math.min(min, sizing[f.field] ?? Infinity);
+    });
+    const base = naturalCells.map((c, i) => Math.max(c.width, floor[i]!));
+    const sum = base.reduce((n, w) => n + w, 0);
+    let width = base;
+    if (sum < space) width = base.map((w) => w * (space / sum));
+    else
+      width = shareWidth(
+        space,
+        naturalCells.map((c, i) => ({
+          base: base[i]!,
+          floor: floor[i]!,
+          content: measured.get(c.field.field)?.content ?? 0,
+          atomic: isAtomic(c.field, !!c.render),
+        })),
+      );
+    return naturalCells.map((c, i) => ({ ...c, width: Math.floor(width[i]!) }));
+  }, [naturalCells, boxWidth, trailing?.width, autoFit, measured, state.sort, columns, sizing]);
   const totalWidth = 40 + cells.reduce((s, c) => s + c.width, 0) + (trailing?.width ?? 0);
   // Cards on a phone-sized window only (team trial round 6): a narrow pane on a desktop (Rate manager beside an open
-  // table) keeps the table and scrolls sideways.
-  const mobile = boxWidth > 0 && window.innerWidth < CARD_BELOW;
+  // table) keeps the table and scrolls sideways. The same width as the phone layout, so a large phone in landscape
+  // gets cards with the phone shell (design QA round 13).
+  const mobile = boxWidth > 0 && window.innerWidth <= CARD_MAX;
 
   const virtualizer = useVirtualizer({
     count: rows.length + (result.hasNextPage ? 1 : 0),
@@ -728,13 +820,15 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           {error && (
             <div className="grid-message error">
               <Icon name="alert" />{" "}
-              {error.status === 503 ? `${error.problem.title}. ${error.problem.detail ?? ""}` : error.message}
+              {error.status === 503
+                ? `${error.problem.title}. ${error.problem.detail ?? ""}`
+                : error.problem.errors?.length
+                  ? problemTitle(error.problem.title)
+                  : error.message}
               {error.problem.errors?.length ? (
                 <ul>
-                  {error.problem.errors.map((e, i) => (
-                    <li key={i}>
-                      {e.path}: {e.message}
-                    </li>
+                  {problemFields(error.problem).map((e, i) => (
+                    <li key={i}>{fieldLine(e)}</li>
                   ))}
                 </ul>
               ) : null}

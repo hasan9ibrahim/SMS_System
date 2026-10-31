@@ -22,7 +22,7 @@ export async function isMasked(enterpriseId: number): Promise<boolean> {
 export async function refuseMasked(reply: FastifyReply, enterpriseId: number): Promise<boolean> {
   if (!(await isMasked(enterpriseId))) return false;
   sendProblem(reply, 403, "This record belongs to another account manager", {
-    detail: "Your visibility policy masks it (§13.17), so it cannot be changed here.",
+    detail: "Your visibility policy masks it, so it cannot be changed here.",
   });
   return true;
 }
@@ -33,6 +33,14 @@ export async function contactsHidden(enterpriseId: number): Promise<boolean> {
   if (!v) return false;
   const s = v.policy.items.contacts;
   return (v.own.includes(enterpriseId) ? s.own : s.others) === "hide";
+}
+
+/** True when the viewer's policy withholds this client's sell rates (§13.17): no rate sheet goes out through them. */
+export async function sellRatesHidden(enterpriseId: number): Promise<boolean> {
+  const v = await restrictingViewer();
+  if (!v) return false;
+  const s = v.policy.items.sellRates;
+  return (v.own.includes(enterpriseId) ? s.own : s.others) !== "show";
 }
 
 export async function maskEnterpriseDetail<T extends Record<string, unknown>>(e: T): Promise<T> {

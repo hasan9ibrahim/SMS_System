@@ -353,6 +353,8 @@ export function RulesView() {
   return (
     <ListScreen<HlrRuleRow>
       list="hlr_rules"
+      listExport
+      bulkDelete={{ noun: "HLR rule", restore: true }}
       page={page}
       title="HLR · Rules"
       selectId={selectId}

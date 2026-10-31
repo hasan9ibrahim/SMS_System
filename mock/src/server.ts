@@ -10,15 +10,16 @@ import { contextOf, currentViewer, runWithVisibility, type VisibilityContext } f
 import { clearVisibilityCache, restricts } from "./visibility/policy.js";
 import { maskPayload } from "./visibility/walk.js";
 import { isPortalOperation } from "./api/portal.js";
-import { db } from "./db.js";
+import { db, inputProblem, isInputError } from "./db.js";
 import { DEFAULT_USER_ID, forwardedOperation, requestUser, runAsRequestUser } from "./auth/user.js";
 import { production } from "./mode.js";
 import { clearRoutingCostCache } from "./api/rateLookup.js";
 import { clearRouteMaps } from "./api/routeMap.js";
 import { invalidateLiveRoutes } from "./live/routing.js";
+import { CSP_REPORT_MAX_BYTES, registerCspReportParser } from "./api/cspReports.js";
 
 /** Calls that need no signed-in user (backend step 9, §13.28). */
-const PUBLIC_OPS = new Set([
+export const PUBLIC_OPS = new Set([
   "getHealth",
   "signIn",
   "signInCode",
@@ -27,15 +28,56 @@ const PUBLIC_OPS = new Set([
   // A set-password link is its own proof (team trial round 11).
   "checkPasswordSetup",
   "completePasswordSetup",
+  // Browsers post Content-Security-Policy reports on their own (§14); size- and rate-limited.
+  "reportCspViolation",
 ]);
 
 
 /**
  * Writes that can move routes, costs or rates (team trial round 12: Rate lookup, Route rules costs and Route map kept
- * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes.
+ * showing what was there before a rule, trunk or rate-table save for up to a minute). Reads are not writes. QA
+ * 2026-10-31: QBR vendor overrides (QBR routes), dial codes (the destination of a number), destinations and countries
+ * (names, all-networks codes, DLR targets) and product categories (vendor category limits) too.
  */
-const ROUTING_WRITES =
-  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr)/;
+export const ROUTING_WRITES =
+  /^(?!query|get|list|export|download|check|preview|simulate|test|record)[a-zA-Z]*(RouteRule|Trunk|RateTable|RateLine|Rate|Rating|Lcr|Enterprise|undo|redo|Migration|Import|Cleanup|Currency|Rn|RateNotification|NumberList|Translation|Hlr|Qbr|DialCode|Destination|Countr|ProductCategor)/;
+
+/**
+ * Values no handler can store (QA 2026-10-31): text with a NUL character (PostgreSQL refuses it) and whole numbers
+ * past 2^53 (JSON numbers lose their digits; an ID that large names nothing). The first one found, as a field error.
+ */
+export function unsafeInput(value: unknown, path: string): { path: string; message: string } | null {
+  const stack: [unknown, string][] = [[value, path]];
+  while (stack.length) {
+    const [v, at] = stack.pop()!;
+    if (typeof v === "string") {
+      if (v.includes("\u0000")) return { path: at || "/", message: "must not contain a NUL character" };
+    } else if (typeof v === "number") {
+      if (Number.isInteger(v) && !Number.isSafeInteger(v)) return { path: at || "/", message: "number too large" };
+    } else if (Array.isArray(v)) {
+      v.forEach((x, i) => stack.push([x, `${at}/${i}`]));
+    } else if (v && typeof v === "object") {
+      for (const [k, x] of Object.entries(v)) {
+        if (k.includes("\u0000")) return { path: at || "/", message: "must not contain a NUL character" };
+        stack.push([x, `${at}/${k}`]);
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * A record's name, alias or username of spaces only: every service trims them, and saved the record nameless
+ * (QA 2026-10-31). Empty text is the schema's to refuse (minLength); spaces only pass it.
+ */
+export function blankName(body: unknown): { path: string; message: string } | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  for (const key of ["name", "alias", "username"]) {
+    const v = (body as Record<string, unknown>)[key];
+    if (typeof v === "string" && v.length > 0 && v.trim() === "") return { path: `/${key}`, message: "required" };
+  }
+  return null;
+}
 
 const clearRouteCaches = () => {
   clearRoutingCostCache();
@@ -65,11 +107,13 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   });
   const handlers: Partial<Record<string, Handler>> = options.handlers ?? defaultHandlers;
   if (options.socket !== false) await registerSocket(app);
+  registerCspReportParser(app);
 
   // Every error answers as a problem with a title (R9): Fastify's own body has none, and over HTTP/2 (nginx with TLS)
   // the browser has no status text either, so the screens showed an empty message. Set before the routes, which
   // take the handler in force when they are registered.
   app.setErrorHandler((err: FastifyError, request, reply) => {
+    if (isInputError(err)) return inputProblem(reply, err);
     const status = err.statusCode && err.statusCode >= 400 ? err.statusCode : 500;
     if (status >= 500) {
       request.log.error({ err }, "request failed");
@@ -87,6 +131,8 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
           method: op.method,
           url: op.routePath,
           config: { op },
+          // The unauthenticated report endpoint takes 64 KB at most, whatever the content type (§14).
+          ...(op.operationId === "reportCspViolation" ? { bodyLimit: CSP_REPORT_MAX_BYTES } : {}),
           handler: async (request, reply) => {
             // Path parameters arrive as strings; numeric ones are checked as numbers.
             const params = (request.params ?? {}) as Record<string, unknown>;
@@ -125,7 +171,11 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
               }
               query[name] = value;
             }
-            if (op.validateBody && !op.validateBody(request.body ?? {})) {
+            // A missing or null body is an empty one, for the handler too (QA 2026-10-31: it got null and failed).
+            if (op.validateBody && request.body == null) request.body = {};
+            const unsafe = unsafeInput(request.body, "") ?? unsafeInput(query, "") ?? blankName(request.body);
+            if (unsafe) return sendProblem(reply, 400, "Check the highlighted fields", { errors: [unsafe] });
+            if (op.validateBody && !op.validateBody(request.body)) {
               return sendProblem(reply, 400, "Request body does not match the contract", {
                 errors: ajvErrors(op.validateBody.errors),
               });

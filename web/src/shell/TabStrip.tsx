@@ -92,8 +92,20 @@ function TabButton({
     if (from >= 0) move(dragged.id, from < target ? target - 1 : target);
     else useTabs.getState().dock(dragged, target); // dragged back from a pop-out window
   };
+  // A middle click closes the tab only when the button went down on this tab too: a middle press on a menu item
+  // that opens a page, released over the tab strip under the menu, closed whichever tab was beneath it — often the
+  // tab it had just opened (QA round 14).
+  const middlePressed = useRef(false);
+  const onMouseDown = (e: ReactMouseEvent) => {
+    if (e.button !== 1) return;
+    e.preventDefault(); // no Windows autoscroll
+    middlePressed.current = true;
+  };
   const onMouseUp = (e: ReactMouseEvent) => {
-    if (e.button === 1 && !isHome) {
+    if (e.button !== 1) return;
+    const pressedHere = middlePressed.current;
+    middlePressed.current = false;
+    if (pressedHere && !isHome) {
       e.preventDefault();
       void close(tab.id);
     }
@@ -140,7 +152,9 @@ function TabButton({
       onDragLeave={() => setDropSide(null)}
       onDrop={onDrop}
       onClick={() => activate(tab.id)}
+      onMouseDown={onMouseDown}
       onMouseUp={onMouseUp}
+      onMouseLeave={() => (middlePressed.current = false)}
       onContextMenu={(e) => {
         e.preventDefault();
         setMenuOpen(true);

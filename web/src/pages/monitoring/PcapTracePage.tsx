@@ -50,6 +50,7 @@ export function PcapTracePage() {
   return (
     <ListScreen<PcapTraceRow>
       list="pcap_traces"
+      noExport
       page={page}
       noSelection
       historyScope={null}
@@ -86,7 +87,7 @@ export function PcapTracePage() {
       rowActions={(r) => [{ label: "Download", icon: "download", main: true, onSelect: () => download(r) }]}
       trailing={{
         header: "Download",
-        width: 120,
+        width: 128,
         render: (r) => (
           <Button small icon="download" onClick={() => download(r)}>
             Download

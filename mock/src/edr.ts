@@ -16,9 +16,16 @@ const AUTH = `Basic ${Buffer.from(`${env.CLICKHOUSE_USER ?? "sms_dev"}:${env.CLI
  */
 export const edrNowSql = () => (production ? "now64(3)" : "(SELECT max(submit_time) FROM edr)");
 
+/**
+ * URL settings of a read a screen waits for (QA 2026-10-31): ClickHouse stops it at the caller's timeout, and when the
+ * caller gives up first (an aborted request otherwise kept running to its end).
+ */
+const readSettings = (timeoutMs: number) =>
+  `&max_execution_time=${Math.max(1, Math.ceil(timeoutMs / 1000))}&cancel_http_readonly_queries_on_client_close=1`;
+
 export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | null> {
   try {
-    const res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON`, {
+    const res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON${readSettings(timeoutMs)}`, {
       method: "POST",
       headers: { authorization: AUTH },
       body: sql,
@@ -31,33 +38,78 @@ export async function chRows<T>(sql: string, timeoutMs = 1500): Promise<T[] | nu
   }
 }
 
-/** Like chRows, but throws (with ClickHouse's message) instead of answering null; for screens that list EDRs. */
-export async function chQuery<T>(sql: string, timeoutMs = 30_000): Promise<T[]> {
+/**
+ * Like chRows, but throws (with ClickHouse's message) instead of answering null; for screens that list EDRs. `read`:
+ * a screen's read, stopped by ClickHouse at the timeout too (readSettings); a timeout either way is a ChTimeout.
+ */
+/**
+ * Every statement sends this (ClickHouse 010, S-7.3): an EDR insert ClickHouse drops as an identical block is dropped
+ * by the views too, so the hourly figures and long-term totals never count a row the EDR tables do not hold.
+ */
+const WRITE_SETTINGS = "&deduplicate_blocks_in_dependent_materialized_views=1";
+
+/**
+ * One row per bus key (ClickHouse 010, S-7.3), for reads that list single EDR rows: a row the switch wrote twice shows
+ * once until the nightly repair (jobs/edrRepair.ts) removes the copy. Rows without a key (written before 010, and the
+ * fake data's) are all kept. `t`: the table's alias in the query, if it needs one.
+ */
+export function onePerRowKey(t = ""): string {
+  const c = (col: string) => (t ? `${t}.${col}` : col);
+  return `LIMIT 1 BY ${c("row_key")}, if(${c("row_key")} = '', ${c("_part")}, ''), if(${c("row_key")} = '', ${c("_part_offset")}, 0)`;
+}
+
+export async function chQuery<T>(sql: string, timeoutMs = 30_000, opts: { read?: boolean } = {}): Promise<T[]> {
   let res: Response;
+  let text: string;
   try {
-    res = await fetch(`${CH_URL}/?database=${CH_DB}&default_format=JSON`, {
+    const url = `${CH_URL}/?database=${CH_DB}&default_format=JSON${opts.read ? readSettings(timeoutMs) : WRITE_SETTINGS}`;
+    res = await fetch(url, {
       method: "POST",
       headers: { authorization: AUTH },
       body: sql,
       signal: AbortSignal.timeout(timeoutMs),
     });
+    // The answer can still be on its way when the time is up (the headers come first).
+    text = await res.text();
   } catch (err) {
+    if ((err as Error).name === "TimeoutError") throw new ChTimeout(`no answer within ${timeoutMs / 1000} s`);
     throw new ChUnavailable(String((err as Error).message ?? err));
   }
   if (!res.ok) {
     // Errors come as JSON ({"exception": "..."}) when a format is set, else as plain text.
-    const text = await res.text();
     let message = text;
     try {
       message = (JSON.parse(text) as { exception?: string }).exception ?? text;
     } catch {
       /* plain text */
     }
+    // Past max_execution_time, or estimated to go past it.
+    if (/\b(TIMEOUT_EXCEEDED|TOO_SLOW)\b/.test(message)) throw new ChTimeout(message.trim());
     throw new ChError(message.trim());
   }
   // INSERT and ALTER answer with an empty body.
-  const text = await res.text();
   return text ? (JSON.parse(text) as { data: T[] }).data : [];
+}
+
+/** Runs a statement (an INSERT … SELECT) to its end and answers how many rows it wrote (ClickHouse's summary). */
+export async function chWrite(sql: string, timeoutMs = 120_000): Promise<number> {
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${CH_URL}/?database=${CH_DB}&wait_end_of_query=1${WRITE_SETTINGS}`, {
+      method: "POST",
+      headers: { authorization: AUTH },
+      body: sql,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    text = await res.text();
+  } catch (err) {
+    if ((err as Error).name === "TimeoutError") throw new ChTimeout(`no answer within ${timeoutMs / 1000} s`);
+    throw new ChUnavailable(String((err as Error).message ?? err));
+  }
+  if (!res.ok) throw new ChError(text.trim());
+  const summary = JSON.parse(res.headers.get("x-clickhouse-summary") ?? "{}") as { written_rows?: string };
+  return Number(summary.written_rows ?? 0);
 }
 
 /** Streams a query's output (e.g. FORMAT CSVWithNames) for exports. */
@@ -73,6 +125,8 @@ export async function chStream(sql: string, timeoutMs = 600_000): Promise<Readab
 }
 
 export class ChUnavailable extends Error {}
+/** The EDR store did not finish in time: answered 503 like ChUnavailable, with advice to narrow the query. */
+export class ChTimeout extends ChUnavailable {}
 export class ChError extends Error {}
 
 /** Revenue and cost are in the platform currency (converted per business company). */

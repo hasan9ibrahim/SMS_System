@@ -18,7 +18,7 @@ import type {
   ListQuery,
 } from "@sms/contract";
 import { db, withDb } from "../db.js";
-import { chQuery, chStream } from "../edr.js";
+import { chQuery, chStream, onePerRowKey } from "../edr.js";
 import { chOrder, chWhere, lit, namesOf, outcomeJoin, type ChListDef } from "../lists/chEngine.js";
 import { EDR_DOWNLOAD_FROM, EDR_DOWNLOAD_SELECT, edrDownloadList, mapEdrDownload } from "../lists/defs.js";
 import { runList, type ListDef } from "../lists/engine.js";
@@ -344,7 +344,9 @@ async function runExport(
   const sel = await exportSelect(pool, kind, def, raw.columns as string[], joined.expr, !xlsx);
   mkdirSync(DIR, { recursive: true });
   const path = join(DIR, `${kind}_${raw.id}.${xlsx ? "xls" : "csv"}`);
-  const sql = `SELECT ${sel.select} FROM ${joined.from} WHERE ${where} ORDER BY ${order} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}
+  // An attempt the switch wrote twice once (ClickHouse 010, S-7.3).
+  const once = def.rowKey ? ` ${onePerRowKey()}` : "";
+  const sql = `SELECT ${sel.select} FROM ${joined.from} WHERE ${where} ORDER BY ${order}${once} LIMIT ${xlsx ? MAX_XLSX_ROWS : MAX_ROWS}
     FORMAT ${xlsx ? "JSONCompactEachRow" : "CSVWithNames"}`;
   const body = Readable.fromWeb((await chStream(sql)) as unknown as WebStream<Uint8Array>, { signal });
   let rows = 0;

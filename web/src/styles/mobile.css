@@ -1,9 +1,38 @@
 /* Phones (team trial round 5): every page usable at phone width. Only applies below 760 px, so laptop and desktop
-   layouts are unchanged. Loaded last. */
+   layouts are unchanged; the one exception is the main menu, which moves to the drawer up to 1180 px. Loaded last. */
 
-/* Hidden on laptops; the drawer and card styles only matter on phones. */
+/* Hidden on laptops; the drawer and card styles only matter on phones and tablets. */
 .menu-burger {
   display: none;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+/* Tablets and small laptops (design QA round 13, §15.1): the full main menu needs about 1150 px beside the logo,
+   search and status, so up to 1180 px it sits in the drawer behind the menu button. Only the top bar changes; the
+   pages keep the desktop layout. */
+@media (max-width: 1180px) {
+  .menu-burger {
+    display: inline-flex;
+  }
+  .topbar .menu-bar {
+    display: none;
+  }
+}
+/* The menu's room goes to the search field and its label. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .topbar .jump {
+    width: 260px;
+  }
+  .topbar .jump > span {
+    display: inline;
+  }
 }
 .mnav-backdrop {
   position: fixed;
@@ -36,11 +65,11 @@
   width: 100%;
   padding: 12px 10px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-text);
   font: inherit;
-  font-size: 15px;
+  font-size: var(--text-base);
   font-weight: 500;
   text-align: left;
 }
@@ -58,19 +87,19 @@
   gap: 10px;
   padding: 10px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: none;
   color: var(--color-text-secondary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-base);
   text-align: left;
 }
 .mnav-page.current {
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   background: var(--accent-soft);
 }
 
-/* Grid cards (DataGrid below 640 px wide). */
+/* Grid cards (DataGrid in a window up to 760 px wide). */
 .grid.mobile .gh,
 .grid.mobile .gf,
 .grid.mobile .grid-selall {
@@ -105,19 +134,25 @@
   border-bottom: var(--border-width) solid var(--color-border);
   background: var(--color-panel);
   overflow: hidden;
+  /* A double-tap opens the card's row instead of zooming the page. */
+  touch-action: manipulation;
 }
 .gcard.active {
   background: var(--accent-soft);
 }
 .gcard.archived {
-  opacity: 0.6;
+  color: var(--color-text-secondary);
+}
+.gcard.archived .gcard-title {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }
 .gcard-title {
   /* Keeps its own height: a badge in the title (Incidents, Alert rules) was squeezed to 8 px and clipped. */
   flex: none;
   line-height: 22px;
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: var(--text-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -135,14 +170,14 @@
   min-width: 0;
 }
 .gcard-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .gcard-value {
-  font-size: 13.5px;
+  font-size: var(--text-md);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -171,24 +206,13 @@
   input,
   select,
   textarea {
-    font-size: 16px; /* no zoom-in on focus in mobile Safari */
+    font-size: var(--text-touch-input); /* no zoom-in on focus in mobile Safari */
   }
 
   /* ---------- top bar: menu button, logo mark, search, TPS, bell, avatar */
   .topbar-main {
     gap: 8px;
     padding: 0 10px;
-  }
-  .menu-burger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border: var(--border-width) solid var(--color-border);
-    border-radius: var(--radius);
-    background: var(--color-panel);
-    color: var(--color-text);
   }
   .menu-bar,
   .logo > .logo-full,
@@ -237,7 +261,7 @@
     row-gap: 8px;
   }
   .page-header h1 {
-    font-size: 17px;
+    font-size: var(--text-lg);
   }
   .page-header-top .page-actions,
   .page-actions {
@@ -476,7 +500,7 @@
   }
   .la-grid td.num,
   .la-grid td.la-name {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .la-body {
     flex-direction: column;
@@ -588,5 +612,153 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+}
+
+/* Design QA round 13, phones (§15.1). */
+@media (max-width: 760px) {
+  /* Segmented controls wrap onto a second row instead of scrolling their last options out of sight with no hint
+     ("Change log" was cut to "Cha / lo", Live analytics periods ended at "This mon"). */
+  .seg,
+  .segmented {
+    flex-wrap: wrap;
+  }
+  .seg {
+    overflow: visible;
+  }
+  .segmented {
+    overflow: hidden;
+  }
+  .seg > button,
+  .segmented button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* Touch targets at least 36 px to a finger. Buttons, segments, fields and the quick search get the height; small
+     icons keep their look and get an invisible hit area around them. */
+  .btn,
+  .page-actions .btn,
+  .tps-pill,
+  .seg > button,
+  .page-actions .seg > button,
+  .segmented button,
+  .record-tabs button,
+  .detail-nav button,
+  .help-link,
+  .toggle-inline,
+  .range-chip,
+  .record-picker > button,
+  .choice-cards label,
+  .choice-seg label,
+  .dash-topdest .chip,
+  .rp-row button.chip,
+  .lookup-btn,
+  .vt-head .vt-sort,
+  select,
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  .pill-search .pill-search-input {
+    min-height: 36px;
+  }
+  .choice-cards label,
+  .lookup-btn {
+    height: auto;
+  }
+  .team-controls .toggle-inline {
+    min-height: 36px;
+  }
+  /* Rate lookup: the filter row grows with its fields. */
+  .vt-filters {
+    height: 42px;
+  }
+  .choice-seg label {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Record actions sit edge to edge in their group, so each one gets the full size itself. */
+  .record-actions {
+    height: auto;
+  }
+  .ra-btn {
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+  }
+  /* The page's Help and Reload sat 2 px apart: they take the full size, the icons stay where they were. */
+  .page-header .page-title-row .icon-btn {
+    width: 36px;
+    height: 36px;
+    margin-left: -6px;
+  }
+  .icon-btn,
+  .logo,
+  .tabs-count,
+  .jump,
+  .bell,
+  .avatar,
+  .cell-edit,
+  .la-toggle,
+  .la-act,
+  .crumbs a,
+  button.link {
+    position: relative;
+  }
+  :is(.icon-btn, .logo, .tabs-count, .jump, .bell, .avatar, .cell-edit, .la-toggle, .la-act, .dash-grip, .crumbs a, button.link)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 36px);
+    height: max(100%, 36px);
+    transform: translate(-50%, -50%);
+  }
+  /* Tabs fill their strip from top to bottom, and the close button takes the tab's right end at full height (the
+     strip clips anything taller). */
+  .tabstrip {
+    height: 38px;
+  }
+  .tab::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -4px;
+    bottom: 0;
+  }
+  .tab-close::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    bottom: 0;
+    right: 0;
+    width: 36px;
+  }
+  /* Live analytics: sortable headers and the breakdown + get a row of their own height (cells clip anything
+     bigger). */
+  .la-grid thead th .la-sort {
+    padding-block: 11px;
+  }
+  .la-grid tbody td.la-name {
+    height: 36px;
+  }
+  .la-th-search .la-sort {
+    min-width: 36px;
+  }
+  /* A rate in a phone card: the edit button cuts its own text, so its hit area hangs off the value line instead,
+     and the second row of rates is no longer cut at its bottom edge. */
+  .gcard-fields:has(.cell-edit),
+  .gcard-value:has(> .cell-edit) {
+    overflow: visible;
+  }
+  .gcard-value:has(> .cell-edit) {
+    position: relative;
+  }
+  .gcard-value > .cell-edit {
+    position: static;
+  }
+  /* The rate table's subtitle wraps on a phone, so its trunk links are not cut and keep their hit area. */
+  .rate-title > div {
+    white-space: normal;
+    overflow: visible;
   }
 }

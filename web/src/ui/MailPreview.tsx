@@ -48,12 +48,12 @@ const VIEWS: { key: View; label: string; hint: string }[] = [
   {
     key: "system",
     label: "In the system",
-    hint: "As the system shows it in Email Logs, and as new Outlook, Outlook on the web, Outlook for Mac, Gmail and Apple Mail show it.",
+    hint: "As in Email Logs, new Outlook, Outlook on the web, Outlook for Mac, Gmail and Apple Mail.",
   },
   {
     key: "outlook",
     label: "Outlook for Windows",
-    hint: "An approximation of classic Outlook 2016–2021 / Microsoft 365 on Windows, which draws e-mails with Word: what it ignores is removed here. Send a test to see the real thing.",
+    hint: "Close to classic Outlook for Windows, which ignores some styles. Send a test to see the real thing.",
   },
   { key: "phone", label: "Phone", hint: "A 375 px wide screen (Outlook and Mail apps on a phone)." },
 ];

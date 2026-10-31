@@ -17,8 +17,8 @@ body {
   background: var(--color-page-bg);
   color: var(--color-text);
   font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  line-height: 1.4;
+  font-size: var(--text-base);
+  line-height: var(--leading-base);
 }
 
 /* Grids and figures use tabular numbers (§15.3). */
@@ -144,11 +144,11 @@ body {
   padding: 12px 14px;
 }
 .fx-card h2 {
-  font-size: 14px;
+  font-size: var(--text-base);
   margin: 0 0 6px;
 }
 .fx-card h3 {
-  font-size: 13px;
+  font-size: var(--text-md);
   margin: 14px 0 6px;
 }
 @media (max-width: 1100px) {
@@ -162,7 +162,7 @@ body {
   margin-top: 12px;
 }
 .tab-visibility h3 {
-  font-size: 13px;
+  font-size: var(--text-md);
   margin: 0 0 4px;
 }
 .tab-vis-grid {
@@ -179,7 +179,7 @@ body {
 }
 .tab-vis-grid legend {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--text-sm);
   padding: 0 4px;
 }
 .conn-cell {
@@ -192,14 +192,14 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .access-overrides .override-row select {
   max-width: 150px;
 }
 .access-overrides .override-tab {
   padding-left: 14px;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 .sender-keywords {
   display: block;

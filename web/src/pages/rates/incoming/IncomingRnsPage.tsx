@@ -28,6 +28,7 @@ import { pageForPath } from "../../../nav/registry";
 import { ListScreen } from "../../../page/ListScreen";
 import { ListLookup } from "../../../records/parts";
 import { usePageStatus, useTabNavigate, useTabTitle } from "../../../shell/tabContext";
+import { newTabOf, type OpenEvent } from "../../../shell/useOpener";
 import { ask, confirmDialog, toast } from "../../../ui/feedback";
 import { ChecklistChip } from "../../../ui/ChecklistChip";
 import { Icon } from "../../../ui/Icon";
@@ -354,7 +355,7 @@ function SettingsDialog({ done }: { done: (v: null) => void }) {
     >
       {s && (
         <>
-          <h3 className="part-title">Defaults (§13.32)</h3>
+          <h3 className="part-title">Defaults</h3>
           <div className="rn-form-grid">
             <label className="field">
               <span>Live traffic window</span>
@@ -557,10 +558,10 @@ function VendorSettings({ id }: { id: number }) {
 
 function useOpenRn() {
   const navigate = useTabNavigate();
-  return (id: number | null, newTab = false) =>
+  return (id: number | null, e?: OpenEvent) =>
     navigate(
       id === null ? "/rates/incoming" : `/rates/incoming?rn=${id}`,
-      newTab ? { forceNew: true, title: `RN ${id}` } : {},
+      newTabOf(e).forceNew ? { ...newTabOf(e), title: `RN ${id}` } : { replace: false },
     );
 }
 
@@ -676,6 +677,7 @@ function RnQueue() {
   return (
     <ListScreen<RnRow>
       list="rate_notifications"
+      listExport
       page={page}
       selection={{
         summary: (rows, ids) => {
@@ -783,7 +785,7 @@ function RnQueue() {
                 className="link strong"
                 onClick={(e) => {
                   e.stopPropagation();
-                  open(r.id, e.ctrlKey || e.metaKey);
+                  open(r.id, e);
                 }}
               >
                 {r.reference}
@@ -891,7 +893,7 @@ function RnQueue() {
       rowClass={(r) =>
         `rule-row ${r.flagged || r.errors || r.status === "failed" || r.status === "rejected" ? "sev-critical" : decidable(r.status) || r.status === "unmatched" ? "sev-warning" : "sev-good"}${decidable(r.status) || r.status === "unmatched" ? "" : " row-muted"}${r.dueSoon ? " has-open" : ""}`
       }
-      onOpen={(r, e) => open(r.id, e.ctrlKey || e.metaKey)}
+      onOpen={(r, e) => open(r.id, e)}
       detail={(r) => ({
         title: (
           <>
@@ -1169,7 +1171,7 @@ function RnReview({ id }: { id: number }) {
             </Button>
             <Button
               disabled={decide.isPending || !rn.affectedRateTableIds.length}
-              title="Accept, then re-price the affected customers in Bulk rating (§13.14)"
+              title="Accept, then re-price the affected customers in Bulk rating"
               onClick={() => void run("accept", [], updateCustomersUrl(rn))}
             >
               Accept + update customers

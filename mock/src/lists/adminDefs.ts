@@ -292,6 +292,7 @@ export const auditList: ListDef<AuditRow> = {
   },
   search: ["user", "action", "controller", "masterId"],
   idSql: "a.id",
+  snapshot: { max: "SELECT max(id) FROM audit_log" },
   select: "a.*, host(a.ip) AS ip_text, u.username",
   mapRow: (r) => ({
     id: Number(r.id),

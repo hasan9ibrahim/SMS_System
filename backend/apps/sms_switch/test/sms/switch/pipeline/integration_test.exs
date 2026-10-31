@@ -46,9 +46,60 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
             :route_index,
             :translation,
             :lists,
-            :fx
+            :fx,
+            :voice
           ],
           do: assert(Map.has_key?(snapshot, key))
+
+      # SMS to voice (§8, migrations 105, 106): rules, gateways, and a recording read by its hash.
+      assert %{rules: rules, gateways: gateways} = snapshot.voice
+      assert is_list(rules) and is_map(gateways)
+
+      # No rule has this recording.
+      assert Loader.prompt_wav(String.duplicate("0", 64)) == :none
+    end
+
+    test "SMS to voice rows as the screens save them load, the gateway password decrypted (§8)" do
+      sha = Base.encode16(:crypto.hash(:sha256, "RIFF fake"), case: :lower)
+
+      # mock/src/admin/passwords.ts encryptSecret("JBSWY3DPEHPK3PXP", 12 bytes of 7) with the development key.
+      enc = "enc:v1:BwcHBwcHBwcHBwcHnkM7Xlb17VZPnaHIB/iX7T0BVfUuZBm6ZPujfnvqb2k="
+
+      # Committed (the loader reads in its own transaction) and removed at the end.
+      %{rows: [[gw]]} =
+        Repo.query!(
+          """
+          INSERT INTO voice_gateways (name, host, username, password_enc, transport, codecs, priority)
+          VALUES ('Fake voice switch', 'voice-gw1.example.net', 'fake-user', $1, 'tcp', '{ulaw}', -1000)
+          RETURNING id
+          """,
+          [enc]
+        )
+
+      %{rows: [[rule]]} =
+        Repo.query!(
+          """
+          INSERT INTO sms_voice_rules (sender_id, prefix, repeat_count, gateway_id, prompt_wav, prompt_wav_name,
+                                       prompt_wav_sha256)
+          VALUES ('Fake%', '4915', 3, $1, $2, 'fake.wav', $3) RETURNING id
+          """,
+          [gw, "RIFF fake", sha]
+        )
+
+      try do
+        assert {:ok, snapshot} = Loader.load_snapshot("EUR")
+
+        assert %{password: "JBSWY3DPEHPK3PXP", transport: :tcp, codecs: ["ulaw"]} =
+                 snapshot.voice.gateways[gw]
+
+        assert %{gateway_id: ^gw, repeat: 3, prefix: "4915", prompt: ^sha} =
+                 Enum.find(snapshot.voice.rules, &(&1.id == rule))
+
+        assert Loader.prompt_wav(sha) == {:ok, "RIFF fake"}
+      after
+        Repo.query!("DELETE FROM sms_voice_rules WHERE id = $1", [rule])
+        Repo.query!("DELETE FROM voice_gateways WHERE id = $1", [gw])
+      end
     end
   end
 
@@ -170,6 +221,16 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
         # Opening 10 + the payment − 2 of traffic not invoiced yet.
         assert Ledger.to_micro(balance) == base - 2_000_000
 
+        # What the switch holds for messages in flight, for the balance screens (migration 103, decided 2026-10-31).
+        assert :ok = Postgres.persist_reservations([{account, 1_234_567}])
+        assert :ok = Postgres.persist_reservations([{account, 250_000}])
+        assert :ok = Postgres.persist_reservations([])
+
+        assert [[reserved]] =
+                 q.("SELECT reserved FROM credit_reservations WHERE enterprise_id = $1", [ent])
+
+        assert Ledger.to_micro(reserved) == 250_000
+
         Repo.rollback(:done)
       end)
     end
@@ -244,7 +305,8 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
 
       batch = fn data, type ->
         %Sms.Core.Bus.Event{
-          id: "x",
+          # A real event's id: the insert's de-duplication token comes from it on the local bus (ClickHouse 010).
+          id: Edr.new_id(),
           type: type,
           subject: "sms.#{type}",
           data: data,
@@ -382,6 +444,72 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
 
       assert delivered >= 1 and billable >= 1
       assert Decimal.compare(Decimal.new(revenue), Decimal.new("0.05")) != :lt
+    end
+
+    test "every key of a call's rows (§8 SMS to voice, ClickHouse 011) is a column" do
+      PipelineConfig.put()
+      start_supervised!({Config.Server, loader: PipelineConfig})
+      CustomerCase.assert_eventually(&Config.ready?/0)
+
+      now = System.os_time(:millisecond)
+
+      full = %{
+        msg()
+        | sell: Config.sell_rate(1, "26201", now),
+          destination: Config.destination("4915112345678")
+      }
+
+      call = %{
+        edr_id: Edr.new_id(),
+        no: 1,
+        final: true,
+        success: true,
+        command_status: 0,
+        submit_time: now,
+        resp_time: now,
+        msg_count: 1,
+        customer_billable: true
+      }
+
+      answered =
+        Edr.voice_row(full, call, %{
+          gateway_id: 3,
+          answered: true,
+          cause: "NORMAL_CLEARING",
+          duration_ms: 9_000,
+          answered_at: now,
+          dial: "4915112345678",
+          caller_id: "4930000000",
+          status: "DELIVRD",
+          error: "000"
+        })
+
+      expired =
+        Edr.voice_row(
+          full,
+          %{call | edr_id: Edr.new_id(), no: 0, success: false, customer_billable: false},
+          %{gateway_id: 3, customer_status: "EXPIRED"}
+        )
+
+      for row <- [answered, expired] do
+        assert MapSet.subset?(keys(row), columns("edr")),
+               inspect(MapSet.difference(keys(row), columns("edr")))
+
+        assert :ok = EdrWriter.write("edr", [Map.delete(row, "row_key")])
+        assert count("edr", row["edr_id"]) == 1
+      end
+
+      {:ok, %{rows: [[route_type, v_trunk, answered_flag, cause, duration]]}} =
+        ClickHouse.query(
+          """
+          SELECT route_type, v_trunk_id, voice_answered, voice_hangup_cause, voice_duration_ms FROM edr
+           WHERE edr_id = {id:UUID}
+          """,
+          %{"id" => answered["edr_id"]}
+        )
+
+      assert {route_type, v_trunk, answered_flag, cause, duration} ==
+               {"voice", 0, 1, "NORMAL_CLEARING", 9_000}
     end
 
     defp keys(row), do: row |> Map.delete("row_key") |> Map.keys() |> MapSet.new()
@@ -590,6 +718,143 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
         status: "UNDELIV",
         source: source
       })
+    end
+
+    # S-7.3, ClickHouse 010: rows of a trunk no other test uses (unique across runs: ClickHouse keeps earlier runs'
+    # rows), removed with what the views took from them when the test ends.
+    defp own_trunk do
+      trunk = 3_000_000_000 + :rand.uniform(1_000_000_000)
+      base = msg()
+      {trunk, %{base | trunk: %{base.trunk | id: trunk, enterprise_id: trunk}}}
+    end
+
+    defp remove_trunk(trunk) do
+      for t <- ~w(edr edr_receipt edr_hourly edr_totals edr_sender_daily) do
+        {:ok, _} =
+          ClickHouse.query(
+            "ALTER TABLE #{t} DELETE WHERE c_trunk_id = {t:UInt32}",
+            %{"t" => trunk},
+            settings: [mutations_sync: 1]
+          )
+      end
+    end
+
+    # Bus events as the NATS batcher hands them over: JSON data and the stream sequence number.
+    defp events(rows) do
+      for {type, row, seq} <- rows do
+        %Sms.Core.Bus.Event{
+          id: Edr.new_id(),
+          type: type,
+          subject: "sms.#{type}",
+          data: row |> Jason.encode!() |> Jason.decode!(),
+          occurred_at: nil,
+          version: 1,
+          seq: seq
+        }
+      end
+    end
+
+    defp stored(trunk) do
+      {:ok, %{rows: [row]}} =
+        ClickHouse.query(
+          """
+          SELECT (SELECT count() FROM edr WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT count() FROM edr_receipt WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(attempts)) FROM edr_hourly WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(rows)) FROM edr_totals WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(rows)) FROM edr_sender_daily WHERE c_trunk_id = {t:UInt32})
+          """,
+          %{"t" => trunk}
+        )
+
+      Enum.zip([:attempts, :receipts, :hourly, :totals, :sender_daily], row) |> Map.new()
+    end
+
+    test "a batch delivered again writes nothing new, in the EDRs or the totals their views feed (S-7.3)" do
+      {trunk, m} = own_trunk()
+      seq = :rand.uniform(1_000_000_000_000)
+
+      attempt = fn id ->
+        Edr.attempt_row(m, %{edr_id: id, no: 1, final: true, success: true, command_status: 0})
+      end
+
+      first = Edr.new_id()
+
+      receipt =
+        Edr.receipt_row(%{
+          edr_id: first,
+          kind: "vendor",
+          at: m.received_at + 900,
+          msg: m,
+          part: 1,
+          status: "DELIVRD"
+        })
+
+      batch = events([{"edr.attempt", attempt.(first), seq}, {"edr.receipt", receipt, seq + 1}])
+
+      try do
+        assert :ok = EdrWriter.handle_batch(batch)
+        once = %{attempts: 1, receipts: 1, hourly: 1, totals: 1, sender_daily: 1}
+        assert stored(trunk) == once
+
+        # The bus hands the batch out again (its ack wait passed while the insert was slow).
+        assert :ok = EdrWriter.handle_batch(batch)
+        assert stored(trunk) == once
+
+        # Part of it again with a new row: the stored rows are left out by their keys, the new one is written.
+        second = Edr.new_id()
+
+        again =
+          events([
+            {"edr.attempt", attempt.(first), seq},
+            {"edr.attempt", attempt.(second), seq + 2}
+          ])
+
+        assert :ok = EdrWriter.handle_batch(again)
+        assert stored(trunk) == %{once | attempts: 2, hourly: 2, totals: 2, sender_daily: 2}
+        assert count("edr", first) == 1 and count("edr", second) == 1
+
+        # Every row keeps its key.
+        {:ok, %{rows: keys}} =
+          ClickHouse.query(
+            "SELECT row_key FROM edr WHERE c_trunk_id = {t:UInt32} ORDER BY row_key",
+            %{"t" => trunk}
+          )
+
+        assert Enum.sort(keys) == Enum.sort([[first <> ":1"], [second <> ":1"]])
+      after
+        remove_trunk(trunk)
+      end
+    end
+
+    test "ClickHouse drops a batch delivered again while its first insert is still running: same token (S-7.3)" do
+      {trunk, m} = own_trunk()
+      seq = :rand.uniform(1_000_000_000_000)
+
+      attempt = fn id ->
+        Edr.attempt_row(m, %{edr_id: id, no: 1, final: true, success: true, command_status: 0})
+      end
+
+      first = Edr.new_id()
+
+      try do
+        assert :ok = EdrWriter.handle_batch(events([{"edr.attempt", attempt.(first), seq}]))
+        assert stored(trunk).attempts == 1
+
+        # The same bus message as the first insert (same sequence number) that the key lookup cannot see yet, as when
+        # both inserts run at once: ClickHouse drops it by the token, and the views take nothing from it.
+        unseen = Edr.new_id()
+        assert :ok = EdrWriter.handle_batch(events([{"edr.attempt", attempt.(unseen), seq}]))
+        assert count("edr", unseen) == 0
+        assert %{attempts: 1, hourly: 1, totals: 1, sender_daily: 1} = stored(trunk)
+
+        # Rows written directly carry no token: a new row is written.
+        assert :ok = EdrWriter.write("edr", [Map.delete(attempt.(unseen), "row_key")])
+        assert count("edr", unseen) == 1
+        assert %{attempts: 2, hourly: 2, totals: 2} = stored(trunk)
+      after
+        remove_trunk(trunk)
+      end
     end
 
     test "a schema problem is retried, never dropped" do

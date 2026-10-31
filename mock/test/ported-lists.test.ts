@@ -12,15 +12,15 @@ type ListQuery = Partial<FullQuery>;
 import { buildServer, API_PREFIX } from "../src/server.js";
 import { operations } from "../src/contract.js";
 import { closeDb, db, dbReady } from "../src/db.js";
-import { totpCode } from "../src/admin/passwords.js";
-import { DEMO_TOTP_SECRET, SEED_PASSWORD } from "../src/generator/admin.js";
+import { SEED_PASSWORD } from "../src/generator/admin.js";
 import { API_URL, injector, remoteSession } from "./remote.js";
+import { withFreshTotp } from "./totp.js";
 
 const app = await buildServer({ socket: false });
 const ready = await dbReady();
 const skip = ready ? false : "seeded database not available";
 const admin = ready ? ((await db().query("SELECT username FROM users WHERE id = 1")).rows[0]?.username as string) : "";
-const session = () => remoteSession(admin, SEED_PASSWORD, () => totpCode(DEMO_TOTP_SECRET));
+const session = () => remoteSession(admin, SEED_PASSWORD, (use) => withFreshTotp(1, use));
 const remote = injector(app, session);
 
 // Signed in before the first query: the sign-in's own audit rows must not land between the two answers.

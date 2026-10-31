@@ -698,6 +698,17 @@
  },
  {
   "method": "POST",
+  "path": "/csp-reports",
+  "operationId": "reportCspViolation",
+  "tag": "system",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
   "path": "/currencies",
   "operationId": "createCurrency",
   "tag": "finance",
@@ -2866,6 +2877,39 @@
   "module": "lcr",
   "action": null,
   "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lists/{list}/bulk-delete",
+  "operationId": "bulkDeleteRecords",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lists/{list}/bulk-restore",
+  "operationId": "bulkRestoreRecords",
+  "tag": "history",
+  "module": null,
+  "action": null,
+  "readChecked": false,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/lists/{list}/export",
+  "operationId": "exportList",
+  "tag": "meta",
+  "module": null,
+  "action": null,
+  "readChecked": false,
   "admin": false,
   "alsoOn": []
  },
@@ -5384,6 +5428,17 @@
   "alsoOn": []
  },
  {
+  "method": "GET",
+  "path": "/sms-voice-rules/{id}/recording",
+  "operationId": "downloadSmsVoiceRecording",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
   "method": "POST",
   "path": "/sms-voice-rules/{id}/restore",
   "operationId": "restoreSmsVoiceRule",
@@ -5398,6 +5453,17 @@
   "method": "POST",
   "path": "/sms-voice-rules/query",
   "operationId": "querySmsVoiceRules",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/sms-voice-rules/recording-preview",
+  "operationId": "previewSmsVoiceRecording",
   "tag": "switch",
   "module": "sms-to-voice",
   "action": null,
@@ -6551,6 +6617,83 @@
   "action": null,
   "readChecked": true,
   "admin": true,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways",
+  "operationId": "createVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "add",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/voice-gateways/{id}",
+  "operationId": "getVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "PUT",
+  "path": "/voice-gateways/{id}",
+  "operationId": "updateVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/{id}/archive",
+  "operationId": "archiveVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "delete",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "GET",
+  "path": "/voice-gateways/{id}/dependencies",
+  "operationId": "getVoiceGatewayDependencies",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/{id}/restore",
+  "operationId": "restoreVoiceGateway",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": "edit",
+  "readChecked": true,
+  "admin": false,
+  "alsoOn": []
+ },
+ {
+  "method": "POST",
+  "path": "/voice-gateways/query",
+  "operationId": "queryVoiceGateways",
+  "tag": "switch",
+  "module": "sms-to-voice",
+  "action": null,
+  "readChecked": true,
+  "admin": false,
   "alsoOn": []
  }
 ]

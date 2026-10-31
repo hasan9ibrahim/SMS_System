@@ -11,6 +11,7 @@ import { db } from "../db.js";
 import { chQuery, chRows } from "../edr.js";
 import { PLATFORM_PER_EUR, sysToPlatformFactor } from "../currency.js";
 import { liveRoute } from "./routing.js";
+import { decideVoice, loadVoiceConfig, simulateCall, type VoiceGateway, type VoiceRule } from "../routing/smsVoice.js";
 import type { Simulator, SimTrunk } from "./simulator.js";
 
 /** How often the sent messages are written. */
@@ -46,6 +47,36 @@ interface Template {
   vendorEnterpriseId: number;
   ok: boolean;
   status: string;
+  /** For SMS to voice (§8): the message as sent, and whether the stored attempt was a call. */
+  sender: string;
+  receiver: string;
+  text: string;
+  /** One unit at the customer's rate, base currency: what an answered call is billed. */
+  unitRev: number;
+  voice: boolean;
+}
+
+/** A call the copy is instead of an SMS (SMS to voice, §8): gateway, answered, cause, duration, caller ID. */
+interface CallCopy {
+  gatewayId: number;
+  answered: boolean;
+  cause: string;
+  durationMs: number;
+  callerId: string;
+}
+
+/** The SMS-to-voice rules and gateways, read again every VOICE_RELOAD_MS so a change on the screens shows soon. */
+const VOICE_RELOAD_MS = 15_000;
+let voiceConfig: { at: number; rules: VoiceRule[]; gateways: VoiceGateway[] } | null = null;
+async function voiceRules() {
+  if (!voiceConfig || Date.now() - voiceConfig.at > VOICE_RELOAD_MS) {
+    try {
+      voiceConfig = { at: Date.now(), ...(await loadVoiceConfig(db())) };
+    } catch {
+      voiceConfig = { at: Date.now(), rules: [], gateways: [] };
+    }
+  }
+  return voiceConfig;
 }
 
 interface WriterState {
@@ -71,6 +102,7 @@ async function prepare(): Promise<WriterState | null> {
     await chQuery(`CREATE TABLE ${TEMPLATES} AS edr ENGINE = MergeTree ORDER BY edr_id`);
     // Two light steps (team trial round 2): pick the templates on a few narrow columns, then copy those rows
     // whole. Sorting a week of whole rows (about 100 columns) passed the trial server's ClickHouse memory limit.
+    // A row stored twice (ClickHouse 010, S-7.3) makes one template, not two copies of each message written.
     const since = `(SELECT max(submit_time) FROM edr) - INTERVAL 7 DAY`;
     await chQuery(
       `INSERT INTO ${TEMPLATES} SELECT * FROM edr
@@ -78,6 +110,7 @@ async function prepare(): Promise<WriterState | null> {
           SELECT edr_id FROM edr
            WHERE submit_time > ${since} AND is_final_attempt = 1 AND attempt_no = 1
            ORDER BY submit_time DESC LIMIT ${PER_OUTCOME} BY c_trunk_id, ${OUTCOME})
+        LIMIT 1 BY edr_id
         SETTINGS max_bytes_before_external_sort = 500000000, max_bytes_before_external_group_by = 500000000`,
       180_000,
     );
@@ -97,11 +130,17 @@ async function prepare(): Promise<WriterState | null> {
         ve: number;
         ok: number;
         st: string;
+        src: string;
+        dst: string;
+        txt: string;
+        unit: number;
+        rt: string;
       }>(
         `SELECT toString(edr_id) AS id, c_trunk_id AS t, c_enterprise_id AS e, ${OUTCOME} AS o, business_company_id AS bc,
                 toString(c_mccmnc) AS mccmnc, toString(c_mcc) AS mcc, msg_count AS n, toFloat64(revenue_sys) AS rev,
                 toFloat64(cost_sys) AS cost, v_trunk_id AS vt, v_enterprise_id AS ve, is_submit_success AS ok,
-                toString(msg_status) AS st
+                toString(msg_status) AS st, src_addr AS src, dst_addr AS dst, message_text AS txt,
+                toFloat64(c_sys_rate) AS unit, toString(route_type) AS rt
            FROM ${TEMPLATES}`,
         60_000,
       )) ?? [];
@@ -130,6 +169,11 @@ async function prepare(): Promise<WriterState | null> {
         vendorEnterpriseId: Number(r.ve),
         ok: Number(r.ok) === 1,
         status: r.st,
+        sender: r.src,
+        receiver: r.dst,
+        text: r.txt,
+        unitRev: Number(r.unit),
+        voice: r.rt === "voice",
       };
       add(s.byTrunk, `${r.t}:${r.o}`, tpl);
       add(s.byEnterprise, `${r.e}:${r.o}`, tpl);
@@ -164,6 +208,8 @@ interface Copy {
   /** Platform currency. */
   revenue: number;
   cost: number;
+  /** SMS to voice (§8): the simulated call this message is instead of a vendor attempt. */
+  call?: CallCopy;
 }
 
 /**
@@ -188,6 +234,7 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
   const s = state;
   const copies: Copy[] = [];
   let budget = MAX_PER_ROUND;
+  const voice = await voiceRules();
   for (const t of sim.trunks) {
     const pending = t.pending;
     if (!pending) continue;
@@ -201,8 +248,43 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
       pending[o]! -= n;
       budget -= n;
       for (let k = 0; k < n; k++) {
-        const tpl = tpls[Math.floor(Math.random() * tpls.length)]!;
+        let tpl = tpls[Math.floor(Math.random() * tpls.length)]!;
         const f = s.factor.get(tpl.bc) ?? 1;
+        // SMS to voice (§8): before routing, a message an active rule takes (with a code) is a simulated call through
+        // the rule's gateway, answered about 80 % of the time; never a vendor attempt. Not for a message refused
+        // before routing (outcome 3).
+        const decision =
+          o < 3 && voice.rules.length
+            ? decideVoice(voice.rules, voice.gateways, {
+                sender: tpl.sender,
+                receiver: tpl.receiver,
+                text: tpl.text,
+                mccmnc: tpl.mccmnc,
+              })
+            : null;
+        if (decision?.call) {
+          const placed = simulateCall();
+          copies.push({
+            tpl,
+            trunk: t,
+            outcome: placed.answered ? 0 : 1,
+            route: undefined,
+            bills: false,
+            revenue: placed.answered ? tpl.unitRev * f : 0,
+            cost: 0,
+            call: {
+              gatewayId: decision.call.gatewayId,
+              answered: placed.answered,
+              cause: placed.hangupCause,
+              durationMs: placed.durationMs,
+              callerId: decision.call.callerId ?? "",
+            },
+          });
+          continue;
+        }
+        // A stored call whose rule no longer applies is not copied as an SMS: another of the trunk's templates is.
+        for (let tries = 0; tpl.voice && tries < 5; tries++) tpl = tpls[Math.floor(Math.random() * tpls.length)]!;
+        if (tpl.voice) continue;
         // Not sent to a vendor (outcome 3): nothing to route.
         const route = o < 3 ? liveRoute(t.id, tpl.mccmnc, tpl.mcc) : undefined;
         const bills = route ? vendorBills(route.vendorBillingType, tpl) : tpl.cost > 0;
@@ -224,9 +306,86 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
     const fx = await sysToPlatformFactor();
     const cur = [...s.currency];
     const currencyOf = `transform(business_company_id, [${cur.map(([id]) => id).join(",")}], [${cur.map(([, c]) => `'${c}'`).join(",")}], v_currency)`;
+    // SMS to voice (§8): the calls, as the switch writes them (route type voice, no vendor, cost 0; answered =
+    // DELIVRD billed as one SMS at the customer's rate, else UNDELIV error 001 after the retry, not charged).
+    // (template, trunk, enterprise, copy number, gateway, answered, hangup cause, duration ms, caller ID).
+    const insertCalls = (chunk: Copy[]) => {
+      if (!chunk.length) return Promise.resolve("");
+      const quote = (v: string) => `'${v.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+      const tuples = chunk.map((c) => {
+        const k = c.call!;
+        return `('${c.tpl.id}',${c.trunk.id},${c.trunk.enterpriseId},${seq++},${k.gatewayId},${k.answered ? 1 : 0},${quote(k.cause)},${k.durationMs},${quote(k.callerId)})`;
+      });
+      const shift = `dateDiff('millisecond', submit_time, now64(3)) - toInt64(cityHash64(m_seq, toUnixTimestamp64Milli(now64(3))) % ${WRITE_EVERY_MS})`;
+      // Ringing until answered (or until the call ended, unanswered), then the call itself.
+      const ring = `toInt64(4000 + cityHash64(m_seq) % 9000)`;
+      const status = `if(m_ans = 1, 'DELIVRD', 'UNDELIV')`;
+      const error = `if(m_ans = 1, '000', '001')`;
+      return chQuery(
+        `INSERT INTO edr SELECT * EXCEPT (m_id, m_trunk, m_ent, m_seq, m_gw, m_ans, m_cause, m_dur, m_caller) REPLACE (
+          generateUUIDv4(m_seq) AS edr_id,
+          '' AS row_key,
+          toUInt32(m_trunk) AS c_trunk_id,
+          toUInt32(m_ent) AS c_enterprise_id,
+          addMilliseconds(start_time, ${shift}) AS start_time,
+          addMilliseconds(submit_time, ${shift}) AS submit_time,
+          addMilliseconds(submit_time, ${shift} + ${ring}) AS submit_resp_time,
+          addMilliseconds(submit_time, ${shift} + ${ring} + m_dur) AS delivery_time,
+          lower(hex(randomString(8))) AS c_message_id,
+          '' AS v_message_id,
+          toUInt32(0) AS v_trunk_id,
+          toUInt32(0) AS v_enterprise_id,
+          toUInt32(0) AS v_am_user_id,
+          toUInt16(0) AS v_port,
+          toIPv4('0.0.0.0') AS v_ip,
+          '' AS v_billing_type,
+          toUInt32(0) AS v_rate_table_id,
+          toUInt64(0) AS v_rate_line_id,
+          CAST(0 AS Decimal(12, 6)) AS v_rate,
+          '' AS v_currency,
+          CAST(0 AS Decimal(18, 8)) AS v_ex_rate,
+          CAST(0 AS Decimal(12, 6)) AS v_sys_rate,
+          CAST([] AS Array(UInt32)) AS v_translation_rule_ids,
+          toUInt32(0) AS route_rule_id,
+          'voice' AS route_type,
+          toUInt8(0) AS route_level,
+          '' AS route_decided_by,
+          toUInt8(0) AS dlr_reroute,
+          toUInt8(1) AS attempt_no,
+          toUInt8(1) AS is_final_attempt,
+          toUInt8(1) AS is_submit_success,
+          toInt16(0) AS command_status,
+          ${status} AS msg_status,
+          ${error} AS delivery_error,
+          ${status} AS c_msg_status,
+          ${error} AS c_delivery_error,
+          toUInt32(${ring} + m_dur) AS delivery_delay_ms,
+          toUInt8(m_ans) AS is_customer_billable,
+          toUInt8(0) AS is_vendor_billable,
+          CAST(if(m_ans = 1, toFloat64(c_rate), 0) AS Decimal(14, 6)) AS revenue,
+          CAST(0 AS Decimal(14, 6)) AS cost,
+          CAST(if(m_ans = 1, toFloat64(c_sys_rate), 0) AS Decimal(14, 6)) AS revenue_sys,
+          CAST(0 AS Decimal(14, 6)) AS cost_sys,
+          toString(m_caller) AS v_src_addr,
+          toUInt32(m_gw) AS voice_gateway_id,
+          toUInt8(m_ans) AS voice_answered,
+          toString(m_cause) AS voice_hangup_cause,
+          toUInt32(m_dur) AS voice_duration_ms)
+        FROM ${TEMPLATES} AS t
+        INNER JOIN (
+          SELECT toUUID(x.1) AS m_id, x.2 AS m_trunk, x.3 AS m_ent, x.4 AS m_seq, x.5 AS m_gw, x.6 AS m_ans,
+                 x.7 AS m_cause, toInt64(x.8) AS m_dur, x.9 AS m_caller
+            FROM (SELECT arrayJoin([${tuples.join(",")}]) AS x)
+        ) AS m ON t.edr_id = m.m_id`,
+        30_000,
+      );
+    };
     // (template, trunk, enterprise, copy number, vendor trunk, vendor enterprise, platform cost per message,
     //  vendor bills it, vendor billing type, rule, route type, decided by); vendor trunk 0 = keep the stored one.
-    const insert = (chunk: Copy[]) => {
+    const insert = async (all: Copy[]) => {
+      await insertCalls(all.filter((c) => c.call));
+      const chunk = all.filter((c) => !c.call);
+      if (!chunk.length) return "";
       const tuples = chunk.map((c) => {
         const r = c.route;
         return `('${c.tpl.id}',${c.trunk.id},${c.trunk.enterpriseId},${seq++},${r?.vendorTrunkId ?? 0},${r?.vendorEnterpriseId ?? 0},${(r?.cost ?? 0).toFixed(6)},${c.bills ? 1 : 0},'${r?.vendorBillingType ?? ""}',${r?.ruleId ?? 0},'${r?.routeType ?? ""}','${r?.decidedBy ?? ""}')`;
@@ -239,6 +398,7 @@ export async function writeLiveEdrs(sim: Simulator): Promise<number> {
       return chQuery(
         `INSERT INTO edr SELECT * EXCEPT (m_id, m_trunk, m_ent, m_seq, m_vt, m_ve, m_cost, m_bills, m_vbt, m_rule, m_rtype, m_by) REPLACE (
           generateUUIDv4(m_seq) AS edr_id,
+          '' AS row_key,
           toUInt32(m_trunk) AS c_trunk_id,
           toUInt32(m_ent) AS c_enterprise_id,
           addMilliseconds(start_time, ${shift}) AS start_time,
@@ -317,7 +477,8 @@ function handBack(sim: Simulator, copies: Copy[]) {
       client.money += c.revenue;
       client.margin += c.revenue - c.cost;
     }
-    if (c.outcome === 3) continue;
+    // Not sent to a vendor: refused before routing, or an SMS-to-voice call (§8).
+    if (c.outcome === 3 || c.call) continue;
     const vendorId = c.route?.vendorTrunkId ?? c.tpl.vendorTrunkId;
     const v = vendors.get(vendorId);
     if (!v) continue;

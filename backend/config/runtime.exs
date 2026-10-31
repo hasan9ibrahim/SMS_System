@@ -243,6 +243,28 @@ config :sms_api, Sms.Api.Secret,
 
 config :sms_api, Sms.Api.Sessions, secure_cookie: System.get_env("COOKIE_SECURE") == "1"
 
+# The same key decrypts what the switch reads encrypted (voice gateway passwords, §8 SMS to voice).
+config :sms_core, Sms.Core.Secret,
+  key: System.get_env("MOCK_SECRET_KEY", "dev-only-not-a-real-key")
+
+# SMS to voice (§8, docs/SMS_TO_VOICE.md): each server's own Asterisk, through AMI (127.0.0.1:5038 on the servers,
+# installed by the Ansible role asterisk). Voice is off while SMS_ASTERISK_AMI_HOST is unset: a matching message then
+# goes as an SMS. The switch writes the gateways to SMS_ASTERISK_PJSIP_FILE and the rules' recordings under
+# SMS_ASTERISK_SOUNDS_DIR/en/custom.
+ami_host = System.get_env("SMS_ASTERISK_AMI_HOST", "")
+
+config :sms_switch, Sms.Switch.Voice,
+  ami_host: ami_host,
+  ami_port: int.("SMS_ASTERISK_AMI_PORT", "5038"),
+  ami_user: env.("SMS_ASTERISK_AMI_USER", "sms_switch"),
+  ami_secret:
+    if(ami_host != "",
+      do: required.("SMS_ASTERISK_AMI_SECRET", "dev-only-ami-secret"),
+      else: System.get_env("SMS_ASTERISK_AMI_SECRET", "")
+    ),
+  pjsip_file: env.("SMS_ASTERISK_PJSIP_FILE", "/etc/asterisk/pjsip_sms_voice.conf"),
+  sounds_dir: env.("SMS_ASTERISK_SOUNDS_DIR", "/usr/share/asterisk/sounds")
+
 # Production (backend step 11): sign-in codes are queued for the TypeScript service's e-mail job (SMTP).
 config :sms_api, Sms.Api.SignIn,
   email_status: if(System.get_env("SMS_MODE") == "production", do: "queued", else: "sent")

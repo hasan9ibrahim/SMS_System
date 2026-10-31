@@ -1,5 +1,5 @@
 {
-  "$comment": "What each contract operation needs from the user's GUI Access Group (§1, §11). Product owner 2026-10-25 (backend step 10): every call is checked on the server, reads too: a read needs the page's View, a change the action. A page the user may not open is not reached from another page either; other pages pick its records by name through /lookups (lookups: which pages may use each kind). Admin pages (admin) are for administrators only, unless the user's access group (or the user's own override) names that page itself; the group's Every page grant never covers them. An operation's page comes from its path's first segment (segments) unless operations names it; its action comes from its method and operationId (scripts/generate.mjs) unless operations names it. open: no check beyond being signed in (the user's own session, preferences, saved views, own undo; the portal has its own sign-in). An action the page does not offer (pages: each page's actions, kept equal to the Admin › Access Groups catalogue by mock/test/access.test.ts) falls back to edit, else view. contract/generated/operations.json is the result.",
+  "$comment": "What each contract operation needs from the user's GUI Access Group (§1, §11). Product owner 2026-10-25 (backend step 10): every call is checked on the server, reads too: a read needs the page's View, a change the action. A page the user may not open is not reached from another page either; other pages pick its records by name through /lookups (lookups: which pages may use each kind). Admin pages (admin) are for administrators only, unless the user's access group (or the user's own override) names that page itself; the group's Every page grant never covers them. An operation's page comes from its path's first segment (segments) unless operations names it; its action comes from its method and operationId (scripts/generate.mjs) unless operations names it. open: no check beyond being signed in (the user's own session, preferences, saved views, own undo; the portal has its own sign-in). The generic list calls under /lists/{list} (export, bulk delete and restore, §13.22, §13.29) are open here because their page is the list's: the API and the mock check them by the list, against the list's own POST /{list}/query page (with its Export action) and its own POST /{list}/{id}/archive and /restore operations. An action the page does not offer (pages: each page's actions, kept equal to the Admin › Access Groups catalogue by mock/test/access.test.ts) falls back to edit, else view. contract/generated/operations.json is the result.",
   "open": [
     "health",
     "session",
@@ -12,7 +12,9 @@
     "changes",
     "portal",
     "lookups",
-    "password-setup"
+    "lists",
+    "password-setup",
+    "csp-reports"
   ],
   "admin": [
     "change-history",
@@ -543,7 +545,8 @@
     "vendor-trunks": "vendor-trunks",
     "visibility-assignments": "visibility",
     "visibility-grants": "visibility",
-    "visibility-policies": "visibility"
+    "visibility-policies": "visibility",
+    "voice-gateways": "sms-to-voice"
   },
   "operations": {
     "handOverEnterprise": {

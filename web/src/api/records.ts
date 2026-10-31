@@ -63,6 +63,7 @@ export type RecordKind =
   | "firewall_rule"
   | "traffic_alert"
   | "sms_voice_rule"
+  | "voice_gateway"
   | "edr_template"
   | "scheduled_report"
   | "daily_traffic_alert"
@@ -316,6 +317,8 @@ export function fetchDependencies(kind: RecordKind, id: number): Promise<Depende
   if (kind === "hlr_rule") return unwrap(api.GET("/hlr-rules/{id}/dependencies", params));
   if (kind === "hlr_provider") return unwrap(api.GET("/hlr-providers/{id}/dependencies", params));
   if (kind === "hlr_policy") return unwrap(api.GET("/hlr-policies/{id}/dependencies", params));
+  // A voice gateway is blocked while an SMS to voice rule names it (§8, §13.29).
+  if (kind === "voice_gateway") return unwrap(api.GET("/voice-gateways/{id}/dependencies", params));
   if (kind === "transaction") return Promise.resolve({ blocked: false, items: [] });
   if (kind === "billing_cycle") return unwrap(api.GET("/billing-cycles/{id}/dependencies", params));
   if (kind === "invoice") return unwrap(api.GET("/invoices/{id}/dependencies", params));
@@ -371,6 +374,7 @@ export function useArchive(kind: RecordKind) {
       if (kind === "firewall_rule") return unwrap(api.POST("/firewall-rules/{id}/archive", req));
       if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/archive", req));
       if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/archive", req));
+      if (kind === "voice_gateway") return unwrap(api.POST("/voice-gateways/{id}/archive", req));
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/archive", req));
       if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/archive", req));
       if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/archive", req));
@@ -413,6 +417,7 @@ export function useRestore(kind: RecordKind) {
       if (kind === "firewall_rule") return unwrap(api.POST("/firewall-rules/{id}/restore", req));
       if (kind === "traffic_alert") return unwrap(api.POST("/traffic-alerts/{id}/restore", req));
       if (kind === "sms_voice_rule") return unwrap(api.POST("/sms-voice-rules/{id}/restore", req));
+      if (kind === "voice_gateway") return unwrap(api.POST("/voice-gateways/{id}/restore", req));
       if (kind === "edr_template") return unwrap(api.POST("/edr-templates/{id}/restore", req));
       if (kind === "scheduled_report") return unwrap(api.POST("/scheduled-reports/{id}/restore", req));
       if (kind === "daily_traffic_alert") return unwrap(api.POST("/daily-traffic-alerts/{id}/restore", req));

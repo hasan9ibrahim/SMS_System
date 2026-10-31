@@ -1,0 +1,141 @@
+# SMS to voice (docs/SMS_TO_VOICE.md "Switch ⇄ Asterisk", §8, §14): a local Asterisk on each server calls the
+# receiver through the operator's voice switch over SIP when the switch asks it to (AMI Originate on 127.0.0.1). Only
+# with sms_voice_enabled; otherwise nothing here runs and the switch has no Asterisk settings (such messages go as SMS).
+# Turning it off later leaves Asterisk installed but unused (the firewall closes SIP; apt purge asterisk removes it).
+- name: SMS to voice
+  when: voice_enabled | bool
+  block:
+    - name: The settings are complete
+      ansible.builtin.assert:
+        that:
+          - voice_cidrs | length > 0
+          - vault_asterisk_ami_secret is defined and (vault_asterisk_ami_secret | string | length) >= 16
+          - voice_rtp_start | int < voice_rtp_end | int
+        fail_msg: >-
+          sms_voice_enabled needs voice_switch_cidrs (the voice switch's addresses) in the inventory and
+          vault_asterisk_ami_secret (openssl rand -hex 24) in the secrets (README.md "SMS to voice (Asterisk)").
+
+    # asterisk-core-sounds-en points sounds/en at the English prompts (Allison) the -wav package brings.
+    - name: Packages
+      ansible.builtin.apt:
+        name: [asterisk, asterisk-core-sounds-en, asterisk-core-sounds-en-wav, flite, sox]
+        update_cache: true
+        cache_valid_time: 3600
+
+    # ------------------------------------------------------------------------------------------------ the prompts
+
+    # The switch writes the rules' own recordings here (sms-voice-rule-<sha256>.wav, 0640) and removes those no rule
+    # uses; the setgid bit gives them the asterisk group so Asterisk can read them. The default phrase is ours.
+    - name: Recordings folder (written by the switch, read by Asterisk)
+      ansible.builtin.file:
+        path: "{{ asterisk_sounds_dir }}/en/custom"
+        state: directory
+        owner: "{{ switch_user }}"
+        group: asterisk
+        mode: "2750"
+
+    - name: The default phrase as recorded
+      ansible.builtin.stat: {path: /var/lib/asterisk/sms-voice-code.phrase}
+      register: phrase_recorded
+
+    - name: The default phrase's recording
+      ansible.builtin.stat: {path: "{{ asterisk_sounds_dir }}/en/custom/sms-voice-code.wav"}
+      register: phrase_wav
+
+    # flite speaks at 16 kHz; Asterisk's own prompts and the calls are 8 kHz mono 16-bit (slin).
+    - name: Record the default phrase (only when missing or the phrase changed)
+      ansible.builtin.shell: |
+        set -eu
+        tmp=$(mktemp -d)
+        trap 'rm -rf "$tmp"' EXIT
+        flite -t "$PHRASE" -o "$tmp/phrase.wav"
+        sox "$tmp/phrase.wav" -r 8000 -c 1 -b 16 "$tmp/sms-voice-code.wav"
+        install -o root -g asterisk -m 0640 "$tmp/sms-voice-code.wav" "$DEST"
+      environment:
+        PHRASE: "{{ asterisk_prompt_phrase }}"
+        DEST: "{{ asterisk_sounds_dir }}/en/custom/sms-voice-code.wav"
+      when: >-
+        not phrase_wav.stat.exists or not phrase_recorded.stat.exists
+        or phrase_recorded.stat.checksum != ((asterisk_prompt_phrase ~ '\n') | hash('sha1'))
+
+    # Written after the recording, so a failed recording is tried again on the next run.
+    - name: Remember the phrase recorded
+      ansible.builtin.copy:
+        dest: /var/lib/asterisk/sms-voice-code.phrase
+        content: "{{ asterisk_prompt_phrase }}\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    # ------------------------------------------------------------------------------------------------ the settings
+
+    # The voice gateways' endpoints: the switch writes this file in place (it keeps this owner, group and mode) and
+    # reloads res_pjsip. Created empty once; never written by Ansible afterwards.
+    - name: Gateways file (the switch's)
+      ansible.builtin.copy:
+        dest: "{{ asterisk_pjsip_include }}"
+        content: ""
+        force: false
+        owner: "{{ switch_user }}"
+        group: asterisk
+        mode: "0640"
+
+    - name: Gateways file owner and mode (content left alone)
+      ansible.builtin.file:
+        path: "{{ asterisk_pjsip_include }}"
+        state: file
+        owner: "{{ switch_user }}"
+        group: asterisk
+        mode: "0640"
+
+    - name: SIP over TLS, the certificate is on the server
+      when: asterisk_tls_certfile | length > 0
+      block:
+        - name: The certificate and key
+          ansible.builtin.stat: {path: "{{ item }}"}
+          loop: ["{{ asterisk_tls_certfile }}", "{{ asterisk_tls_keyfile }}"]
+          register: asterisk_tls
+
+        - name: Stop without them (Asterisk would start without SIP)
+          ansible.builtin.fail:
+            msg: "{{ item.item }} is missing: put it there first, or set asterisk_tls_certfile: '' for SIP over UDP and TCP only."
+          loop: "{{ asterisk_tls.results }}"
+          when: not item.stat.exists
+
+        - name: Keys folder
+          ansible.builtin.file: {path: /etc/asterisk/keys, state: directory, owner: root, group: asterisk, mode: "0750"}
+
+        # Asterisk runs as its own user and cannot read the switch's key, so it gets a copy.
+        - name: Asterisk's copy
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "/etc/asterisk/keys/{{ item.dest }}"
+            remote_src: true
+            owner: root
+            group: asterisk
+            mode: "0640"
+          loop:
+            - {src: "{{ asterisk_tls_certfile }}", dest: sms-voice.crt}
+            - {src: "{{ asterisk_tls_keyfile }}", dest: sms-voice.key}
+          notify: asterisk restart
+
+    # Ubuntu's sample configuration starts other channel drivers, dialplan engines and demo contexts: these replace it
+    # so the only way in is the switch's AMI connection, and the only way out the voice gateways.
+    - name: Modules and SIP transports (read at start)
+      ansible.builtin.template: {src: "{{ item }}.j2", dest: "/etc/asterisk/{{ item }}", owner: root, group: asterisk, mode: "0640"}
+      loop: [modules.conf, pjsip.conf]
+      notify: asterisk restart
+
+    - name: Manager interface, RTP ports and the dialplan
+      ansible.builtin.template: {src: "{{ item }}.j2", dest: "/etc/asterisk/{{ item }}", owner: root, group: asterisk, mode: "0640"}
+      loop: [manager.conf, rtp.conf, extensions.conf, extensions_sms_voice.conf]
+      notify: asterisk reload
+
+    - name: Running
+      ansible.builtin.systemd_service: {name: asterisk, enabled: true, state: started}
+
+    - name: Settings applied
+      ansible.builtin.meta: flush_handlers
+
+    - name: The manager interface answers on 127.0.0.1 (the switch connects there)
+      ansible.builtin.wait_for: {host: 127.0.0.1, port: "{{ ports.asterisk_ami }}", timeout: 60}

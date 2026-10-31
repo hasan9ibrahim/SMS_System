@@ -176,10 +176,6 @@ export const topics: HelpTopic[] = [
               "**From vendors**: vendors send us their own RNs. They arrive in [[incoming-rns|Incoming RNs]], where they are checked against live traffic and accepted or rejected.",
             ],
           },
-          {
-            kind: "tip",
-            text: "In the trial, e-mails are written to the e-mail log and not really sent.",
-          },
         ],
       },
       {
@@ -1100,7 +1096,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "tip",
-            text: "In the trial, replies are written to the e-mail log and not really sent, and the rates mailbox is simulated with **Simulate an e-mail**.",
+            text: "The rates mailbox is read every 2 minutes when it has an **IMAP Host** on its [[business-companies|business company]]. On the test system no mailbox is read: use **Add RN** › **Simulate an e-mail** instead.",
           },
         ],
       },

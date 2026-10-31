@@ -134,3 +134,13 @@ etcd without a leader blocks PostgreSQL failover (not the running primary). **Ch
 **Check:** `curl 127.0.0.1:8222/healthz?js-enabled-only=true`, `nats server ls`, `nats stream info SMS`. **Do:** a
 server whose JetStream turned off (full disk, see DiskFilling): free space, `systemctl restart nats`. Leaders held by
 the witness are handed back to a server every minute (`sms-nats-leaders` timer).
+
+## AsteriskDown
+
+Asterisk is not running on a server with SMS to voice on (`sms_voice_enabled`, `deploy/ansible/README.md` "SMS to
+voice (Asterisk)"): the switch on that server cannot place calls, so messages for SMS-to-voice rules there end as not
+answered. **Check:** `systemctl status asterisk`, `journalctl -u asterisk -n 100`, `/var/log/asterisk/messages.log`;
+a configuration error usually names the file (`/etc/asterisk/pjsip_sms_voice.conf` is the switch's, the rest is
+Ansible's). **Do:** `systemctl restart asterisk`; then `asterisk -rx "manager show connected"` lists the switch's
+login (`sms_switch`) and `asterisk -rx "pjsip show endpoints"` the voice gateways. If the gateways file is broken,
+save any gateway on the Voice gateways page: the switch writes it again.

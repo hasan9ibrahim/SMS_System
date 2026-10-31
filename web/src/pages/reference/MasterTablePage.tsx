@@ -44,6 +44,7 @@ function ProfileDialog({ row, done }: { row: DialCodeProfile | null; done: (id: 
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Rename ${row.name}` : "Add dial-code profile"}
       saveLabel={row ? "Save" : "Add profile"}
       saving={save.isPending}
@@ -93,6 +94,7 @@ function DialCodeDialog({ profile, row, done }: { profile: DialCodeProfile; row:
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit dial code ${row.prefix}` : `Add dial code to ${profile.name}`}
       saveLabel={row ? "Save" : "Add dial code"}
       saving={save.isPending}
@@ -157,6 +159,8 @@ function ProfileList({ open }: { open: (id: number) => void }) {
   return (
     <ListScreen<DialCodeProfile>
       list="dial_code_profiles"
+      listExport
+      bulkDelete={{ noun: "profile", restore: true }}
       page={page}
       historyScope={{ entityTypes: ["dial_code_profile", "dial_code"] }}
       primary={{ label: "Add profile", icon: "plus", onClick: () => void addProfile() }}

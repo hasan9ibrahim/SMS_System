@@ -51,7 +51,11 @@ import { customerPrice, priced } from "./linePrice.js";
 import { getCurrentUser } from "./session.js";
 import { inTransaction } from "./views.js";
 import { csvText } from "../csvSafe.js";
-import { runTrunkRules } from "./translationRules.js";
+import { runTrunkTranslation } from "./translationRules.js";
+import { withTonNpiMode, type TonNpiMode } from "../routing/tonNpi.js";
+import type { CapabilityInput } from "./egress.js";
+import { compilePattern } from "../routing/pattern.js";
+import { natural, textCoding, type MessageForm } from "../routing/coding.js";
 
 type Db = pg.Pool | pg.PoolClient;
 const notFound = (reply: FastifyReply, id: number) => sendProblem(reply, 404, `Route rule ${id} not found`);
@@ -384,15 +388,8 @@ function complete(input: RouteRuleInput, base: RuleCore | null): RuleCore {
   return out as RuleCore;
 }
 
-const regexOk = (p: string | null) => {
-  if (!p) return true;
-  try {
-    new RegExp(p);
-    return true;
-  } catch {
-    return false;
-  }
-};
+/** Valid for the switch too (PCRE; routing/pattern.ts). */
+const regexOk = (p: string | null) => !p || compilePattern(p) !== null;
 
 async function checkRule(db: Db, r: RuleCore): Promise<FieldError[]> {
   const errors: FieldError[] = [];
@@ -638,7 +635,7 @@ export function getRouteRule(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
-  const input = request.body as RouteRuleInput;
+  const { draft, ...input } = request.body as RouteRuleInput;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const rule = complete(input, null);
@@ -647,6 +644,8 @@ export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
     if (errors.length) return badInput(reply, errors);
     const { id, change } = await inTransaction(pool, async (c) => {
       const id = await insertRule(c, rule, me.id);
+      // The New rule window's rule: a draft until its Save (§6.3, §13.10; jobs/routeRuleDrafts.ts sweeps those left).
+      if (draft) await c.query("UPDATE route_rules SET draft = true WHERE id = $1", [id]);
       const change = await recordChange(c, {
         entityType: "route_rule",
         entityIds: [id],
@@ -663,7 +662,10 @@ export function createRouteRule(request: FastifyRequest, reply: FastifyReply) {
 
 export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
   const { id } = request.params as { id: number };
-  const input = request.body as RouteRuleInput;
+  const { draft, ...input } = request.body as RouteRuleInput;
+  // The New rule window's Save keeps its draft (§6.3, §13.10), also when no field changed; a kept rule stays kept.
+  const keep = (c: Db) =>
+    draft === false ? c.query("UPDATE route_rules SET draft = false WHERE id = $1 AND draft", [id]) : null;
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const before = await loadRule(pool, id, { resets: false });
@@ -675,8 +677,12 @@ export function updateRouteRule(request: FastifyRequest, reply: FastifyReply) {
       errors.push(adminOnly(after.priority));
     if (errors.length) return badInput(reply, errors);
     const diff = diffPaths(id, before, after, FIELD_PATHS);
-    if (diff.length === 0) return { record: before, change: null };
+    if (diff.length === 0) {
+      await keep(pool);
+      return { record: before, change: null };
+    }
     const change = await inTransaction(pool, async (c) => {
+      await keep(c);
       for (const d of diff) await applyRouteRuleField(c, id, d.field, d.after, me.id);
       await c.query("UPDATE route_rules SET updated_by_id = $2, updated_at = now() WHERE id = $1", [id, me.id]);
       const onlyStatus = diff.length === 1 && diff[0]!.field === "status";
@@ -725,7 +731,7 @@ export function cloneRouteRule(request: FastifyRequest, reply: FastifyReply) {
 
 // ---------------------------------------------------------------- safe delete (§13.29)
 
-async function ruleDependencies(db: Db, id: number) {
+export async function ruleDependencies(db: Db, id: number) {
   const traffic = await chRows<{ n: string }>(
     `SELECT count() AS n FROM edr WHERE route_rule_id = ${Number(id)} AND submit_time > now() - INTERVAL 30 DAY`,
   );
@@ -783,6 +789,39 @@ export function archiveRouteRule(request: FastifyRequest, reply: FastifyReply) {
 }
 
 /**
+ * Whether rule `id` (a qualified SQL expression, e.g. `r.id`: inside, a bare `id` would be the change's) was ever
+ * turned on: an enable, or the status set to active, in its change history. Such a rule is never discarded, by its
+ * author or by the draft sweep (jobs/routeRuleDrafts.ts).
+ */
+export const everTurnedOnSql = (id: string) =>
+  `EXISTS (SELECT 1 FROM changes WHERE entity_type = 'route_rule' AND entity_ids && ARRAY[${id}]::bigint[]
+             AND (change_type = 'enable' OR diff @> '[{"field": "status", "after": "active"}]'::jsonb))`;
+
+/**
+ * Attempts the rules ever carried, by rule id: the long-term totals outlive the detailed EDRs (docs/BACKEND_PLAN.md
+ * §3.7). Null when the EDR store does not answer.
+ */
+export async function ruleAttempts(ids: number[]): Promise<Map<number, number> | null> {
+  if (!ids.length) return new Map();
+  const rows = await chRows<{ id: string; n: string }>(
+    `SELECT route_rule_id AS id, sum(rows) AS n FROM edr_totals
+      WHERE route_rule_id IN (${ids.map(Number).join(",")}) AND kind = 'attempt' GROUP BY route_rule_id`,
+  );
+  return rows && new Map(rows.map((r) => [Number(r.id), Number(r.n)]));
+}
+
+/**
+ * Removes a rule as if it was never added (§6.3, §13.10): its vendors, whitelists, traffic rows and change history,
+ * then the rule. A discarded draft leaves no history (discard, the draft sweep).
+ */
+export async function removeNeverAdded(c: pg.PoolClient, id: number) {
+  for (const t of ["route_rule_vendors", "route_rule_whitelists", "route_rule_traffic"])
+    await c.query(`DELETE FROM ${t} WHERE route_rule_id = $1`, [id]);
+  await c.query("DELETE FROM changes WHERE entity_type = 'route_rule' AND entity_ids = ARRAY[$1]::bigint[]", [id]);
+  await c.query("DELETE FROM route_rules WHERE id = $1", [id]);
+}
+
+/**
  * Discards a draft from New rule (team trial round 3): the rule, its vendors, whitelists, traffic rows and change
  * history go, as if it was never added. Only its author, within 24 hours, never turned on, no traffic.
  */
@@ -791,38 +830,26 @@ export function discardRouteRule(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const me = await getCurrentUser();
     const { rows } = await pool.query(
-      "SELECT created_by_id, inserted_at > now() - interval '24 hours' AS recent FROM route_rules WHERE id = $1",
+      `SELECT r.created_by_id, r.status, r.inserted_at > now() - interval '24 hours' AS recent,
+              ${everTurnedOnSql("r.id")} AS on
+         FROM route_rules r WHERE r.id = $1`,
       [id],
     );
     if (!rows[0]) return notFound(reply, id);
-    const { rows: on } = await pool.query(
-      `SELECT 1 FROM changes WHERE entity_type = 'route_rule' AND entity_ids && ARRAY[$1]::bigint[]
-          AND (change_type = 'enable' OR diff @> '[{"field": "status", "after": "active"}]'::jsonb) LIMIT 1`,
-      [id],
-    );
-    const { rows: now } = await pool.query("SELECT status FROM route_rules WHERE id = $1", [id]);
-    // Ever: the long-term totals outlive the detailed EDRs (docs/BACKEND_PLAN.md §3.7).
-    const traffic = await chRows<{ n: string }>(
-      `SELECT sum(rows) AS n FROM edr_totals WHERE route_rule_id = ${Number(id)} AND kind = 'attempt'`,
-    );
+    const traffic = await ruleAttempts([Number(id)]);
     if (
       Number(rows[0].created_by_id) !== me.id ||
       !rows[0].recent ||
-      on[0] ||
-      now[0].status === "active" ||
-      Number(traffic?.[0]?.n ?? 0) > 0
+      rows[0].on ||
+      rows[0].status === "active" ||
+      (traffic?.get(Number(id)) ?? 0) > 0
     )
       return sendProblem(
         reply,
         409,
         "Only a new rule you added today that was never turned on can be discarded; use Delete",
       );
-    await inTransaction(pool, async (c) => {
-      for (const t of ["route_rule_vendors", "route_rule_whitelists", "route_rule_traffic"])
-        await c.query(`DELETE FROM ${t} WHERE route_rule_id = $1`, [id]);
-      await c.query("DELETE FROM changes WHERE entity_type = 'route_rule' AND entity_ids = ARRAY[$1]::bigint[]", [id]);
-      await c.query("DELETE FROM route_rules WHERE id = $1", [id]);
-    });
+    await inTransaction(pool, (c) => removeNeverAdded(c, id));
     return reply.code(204).send();
   });
 }
@@ -1140,22 +1167,45 @@ async function checkTestInput(db: Db, input: RouteTestRequest): Promise<FieldErr
 /**
  * The customer trunk's ingress translation, run first as the switch does (intake: translation, HLR, rate, route): the
  * route rules see the translated sender, receiver and content (team trial round 12: a content change by an ingress
- * rule did not show in the simulator).
+ * rule did not show in the simulator). A trunk set to auto TON / NPI then fixes them (S-4.7): the Test form has none,
+ * so with auto the vendors' capability filter checks the values auto sets (`tonNpi`).
  */
 async function ingressOf(
   pool: pg.Pool,
   input: RouteTestRequest,
-): Promise<{ input: RouteTestRequest; ingress: TranslationTestResult | null }> {
-  if (!input.customerTrunkId) return { input, ingress: null };
-  const r = await runTrunkRules(pool, "customer", input.customerTrunkId, {
-    sender: input.sender ?? "",
-    receiver: input.receiver,
-    text: input.content ?? "",
-  });
-  if (!r || !r.steps.length) return { input, ingress: null };
-  const ingress: TranslationTestResult = { before: r.before, after: r.after, blocked: r.blocked, steps: r.steps };
-  const receiver = /^[0-9]{5,15}$/.test(r.after.receiver) ? r.after.receiver : input.receiver;
-  return { input: { ...input, sender: r.after.sender, receiver, content: r.after.text }, ingress };
+): Promise<{
+  input: RouteTestRequest;
+  ingress: TranslationTestResult | null;
+  tonNpi: Omit<CapabilityInput, "form">;
+}> {
+  if (!input.customerTrunkId) return { input, ingress: null, tonNpi: {} };
+  const [t, { rows }] = await Promise.all([
+    runTrunkTranslation(pool, "customer", input.customerTrunkId, {
+      sender: input.sender ?? "",
+      receiver: input.receiver,
+      text: input.content ?? "",
+    }),
+    pool.query("SELECT ton_npi_mode FROM customer_trunks WHERE id = $1", [input.customerTrunkId]),
+  ]);
+  const mode = (rows[0]?.ton_npi_mode ?? "as_sent") as TonNpiMode;
+  if (!t || (!t.result.steps.length && mode !== "auto")) return { input, ingress: null, tonNpi: {} };
+  const r = t.result;
+  const ingress: TranslationTestResult | null = r.steps.length
+    ? { before: r.before, after: r.after, blocked: r.blocked, steps: r.steps }
+    : null;
+  const sent = withTonNpiMode(mode, r.after, t.pinned);
+  const receiver = /^[0-9]{5,15}$/.test(sent.receiver) ? sent.receiver : input.receiver;
+  return {
+    input: { ...input, sender: sent.sender, receiver, content: r.after.text },
+    ingress,
+    tonNpi: {
+      senderTon: sent.senderTon,
+      senderNpi: sent.senderNpi,
+      destTon: sent.destTon,
+      destNpi: sent.destNpi,
+      pinned: t.pinned,
+    },
+  };
 }
 
 export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
@@ -1166,7 +1216,7 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     if (!rule) return notFound(reply, id);
     const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
-    const { input, ingress } = await ingressOf(pool, raw);
+    const { input, ingress, tonNpi } = await ingressOf(pool, raw);
     const m = await messageContext(pool, input, listIdsOf([rule]));
     const dynamic = rule.routeType === "dynamic" || (rule.routeType === "qbr" && rule.vendors.length === 0);
     const ids = dynamic
@@ -1175,13 +1225,17 @@ export function testRouteRule(request: FastifyRequest, reply: FastifyReply) {
     const profiles = rule.lcrProfileId ? await loadLcrProfiles(pool) : null;
     const options = await vendorOptions(pool, m.mccmnc, ids);
     const withProfile = { ...rule, lcrProfile: profiles?.get(rule.lcrProfileId!) ?? null };
-    // A vendor whose own egress rules block the message is skipped for the next one (decided 2026-10-18).
+    const form = testForm(raw);
+    m.parts = natural(form)?.parts || 1;
+    // A vendor whose own egress rules block the message, or that cannot take it, is skipped for the next one (decided
+    // 2026-10-18; §5.5).
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
-      testMessage(input),
+      testMessage(input, tonNpi),
       (mm) => decide(withProfile, mm, options),
       (d) => d.vendor,
+      { form, ...tonNpi },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
@@ -1268,26 +1322,41 @@ export function simulateRoute(request: FastifyRequest, reply: FastifyReply) {
   return withDb(reply, async (pool) => {
     const errors = await checkTestInput(pool, raw);
     if (errors.length) return badInput(reply, errors);
-    const { input, ingress } = await ingressOf(pool, raw);
+    const { input, ingress, tonNpi } = await ingressOf(pool, raw);
     const rules = await loadRulesInOrder(pool);
     const m = await messageContext(pool, input, listIdsOf(rules));
     const options = await vendorOptions(pool, m.mccmnc, null);
+    const form = testForm(raw);
+    m.parts = natural(form)?.parts || 1;
     const { result, skipped } = await skipEgressBlocked(
       pool,
       m,
-      testMessage(input),
+      testMessage(input, tonNpi),
       (mm) => routeThrough(rules, mm, options),
       (r) => r.decision?.vendor,
+      { form, ...tonNpi },
     );
     return { ...result, egressSkipped: skipped, ingress };
   });
 }
 
-/** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form). */
-const testMessage = (input: RouteTestRequest) => ({
+/**
+ * The message as the customer sent it, for Deny Multipart and the vendors' capability filter (§6.3, §5.5): the Test
+ * form has no coding or TON / NPI, so the text goes in the coding it needs (GSM, else UCS-2) and TON / NPI are checked
+ * only as a translation rule or auto TON / NPI sets them (S-4.7).
+ */
+const testForm = (raw: RouteTestRequest): MessageForm => ({
+  text: raw.content ?? "",
+  dataCoding: textCoding(raw.content ?? ""),
+});
+
+/** The message a vendor's egress rules see in a Test or Simulate (no TON / NPI in that form, unless auto set them). */
+const testMessage = (input: RouteTestRequest, tonNpi: Omit<CapabilityInput, "form"> = {}) => ({
   sender: input.sender ?? "",
   receiver: input.receiver ?? "",
   text: input.content ?? "",
+  senderTon: tonNpi.senderTon ?? null,
+  senderNpi: tonNpi.senderNpi ?? null,
 });
 
 /**

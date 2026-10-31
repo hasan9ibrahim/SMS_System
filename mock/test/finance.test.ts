@@ -291,6 +291,55 @@ describe("balances and charges (§7)", { skip }, () => {
     for (let i = 1; i < sorted.rows.length; i++) assert.ok(sorted.rows[i - 1].netBalance >= sorted.rows[i].netBalance);
   });
 
+  test("Reserved shows the credit the switch holds for messages in flight; filter and sort on it (§7, v0.131.0)", async () => {
+    const f = await customerWithInvoice();
+    const one = () =>
+      ok(
+        "queryEnterpriseBalances",
+        call("POST", "/enterprise-balances/query", {
+          limit: 1,
+          filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: f.enterpriseId }] },
+        }),
+      ).then((p) => p.rows[0]);
+    const { rows: had } = await db().query("SELECT reserved FROM credit_reservations WHERE enterprise_id = $1", [
+      f.enterpriseId,
+    ]);
+    try {
+      // As the switch's ledger sync writes it.
+      await db().query(
+        `INSERT INTO credit_reservations (enterprise_id, reserved) VALUES ($1, 12.345678)
+         ON CONFLICT (enterprise_id) DO UPDATE SET reserved = EXCLUDED.reserved`,
+        [f.enterpriseId],
+      );
+      const row = await one();
+      assert.equal(row.customerReserved, 12.3457);
+      const filtered = await ok(
+        "queryEnterpriseBalances",
+        call("POST", "/enterprise-balances/query", {
+          limit: 50,
+          filter: { logic: "and", conditions: [{ field: "customerReserved", op: "gte", value: 12 }] },
+          sort: [{ field: "customerReserved", dir: "desc" }],
+        }),
+      );
+      assert.ok(filtered.rows.some((r: { id: number }) => r.id === f.enterpriseId));
+      assert.ok(filtered.rows.every((r: { customerReserved: number }) => r.customerReserved >= 12));
+      const csv = await call("POST", "/enterprise-balances/export", {
+        filter: { logic: "and", conditions: [{ field: "id", op: "eq", value: f.enterpriseId }] },
+      });
+      assert.match(csv.body.split("\n")[0]!, /customer_reserved/);
+      assert.match(csv.body, /12\.3457/);
+    } finally {
+      if (had.length)
+        await db().query("UPDATE credit_reservations SET reserved = $2 WHERE enterprise_id = $1", [
+          f.enterpriseId,
+          had[0].reserved,
+        ]);
+      else await db().query("DELETE FROM credit_reservations WHERE enterprise_id = $1", [f.enterpriseId]);
+    }
+    // Nothing written by the switch: 0 for a customer side.
+    if (!had.length) assert.equal((await one()).customerReserved, 0);
+  });
+
   test("charges calculator for one enterprise and for all", async () => {
     const all = await ok(
       "calculateCharges",

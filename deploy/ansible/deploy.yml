@@ -11,6 +11,7 @@
 # version too (spec §14.1).
 - name: Upload the release to every machine
   hosts: all
+  roles: [settings]
   vars:
     release_dir: "{{ switch_root }}/releases/{{ release }}"
   tasks:
@@ -38,6 +39,7 @@
 
 - name: Upload the TypeScript service and the screens to the servers
   hosts: servers
+  roles: [settings]
   tasks:
     - name: Already on the server?
       ansible.builtin.stat: {path: "{{ item.dir }}/{{ release }}/{{ item.check }}"}
@@ -62,6 +64,7 @@
 
 - name: Migrate the databases (once, from the first server)
   hosts: "{{ groups['servers'][0] }}"
+  roles: [settings]
   tasks:
     - name: Migrations
       ansible.builtin.shell: |
@@ -77,6 +80,7 @@
 
 - name: Which machines run the switch now
   hosts: servers:witness
+  roles: [settings]
   tasks:
     - name: Running?
       ansible.builtin.command: systemctl is-active sms-switch
@@ -89,6 +93,7 @@
 
 - name: Roll out, one server at a time, then the witness
   hosts: servers:witness
+  roles: [settings]
   serial: 1
   order: inventory
   vars:
@@ -136,6 +141,7 @@
 
 - name: The TypeScript service and the screens, one server at a time
   hosts: servers
+  roles: [settings]
   serial: 1
   order: inventory
   tasks:
@@ -179,6 +185,7 @@
 
 - name: Keep the last five releases
   hosts: all
+  roles: [settings]
   tasks:
     - name: Release folders
       ansible.builtin.set_fact:

@@ -6,9 +6,13 @@ defmodule Sms.Api.Lists.Engine do
 
     * Per field type: numbers and times compare as such (integer fields as bigint, so ID filters use their indexes);
       text compares case-insensitively; `like` takes `%` and `_` as typed; `regex` is a case-insensitive POSIX regex.
-    * Quick search: plain text matches anywhere (or the start of a value on lists of named records); `%` and `_` as
-      typed; a neutral id ("#123") anywhere.
+      A time is shown to the millisecond and stored to the microsecond: a time in a filter is its whole millisecond.
+    * Quick search: plain text matches anywhere (or the start of a value on lists of named records); text with `%` or
+      `_` is the start of a value unless it ends in `%`; a neutral id ("#123") anywhere.
     * Sort: the query's keys or the list's default, nulls last, then the list's id so pages never repeat or skip.
+      Text sorts case-insensitively.
+    * Values the database refuses (a regex PostgreSQL cannot read, a NUL character, a number out of range) are field
+      errors (400), not server errors.
     * Paging: `limit` rows (100 by default) from the opaque cursor's position; one row more tells if there is a next
       page. `withTotal: false` skips the count.
 
@@ -35,13 +39,27 @@ defmodule Sms.Api.Lists.Engine do
           optional(:search_prefix) => boolean()
         }
 
-  @doc "Runs a query on a list: `{:ok, page}`, or `{:error, errors}` when the query does not fit the catalogue."
+  # PostgreSQL's data exceptions caused by a value in the query (QA 2026-10-31): the mock answers 400 for these.
+  @refused %{
+    "2201B" => "invalid regular expression",
+    "22021" => "a value holds a character the database cannot store (e.g. a NUL character)",
+    "22003" => "a number is out of range",
+    "22P02" => "a value does not read as its field's type",
+    "22007" => "a date or time does not read as one",
+    "22008" => "a date or time is out of range",
+    "22025" => "a pattern cannot end with a single \\; write \\\\ for a backslash"
+  }
+
+  @doc """
+  Runs a query on a list: `{:ok, page}`, or `{:error, errors}` when the query does not fit the catalogue or holds a
+  value the database refuses.
+  """
   @spec run(definition(), map()) :: {:ok, map()} | {:error, [Query.error()]}
   def run(def, query) do
     catalog = Catalog.fields(def.list)
 
     case Query.errors(query, catalog) do
-      [] -> {:ok, page(def, catalog, query)}
+      [] -> page(def, catalog, query)
       errors -> {:error, errors}
     end
   end
@@ -51,8 +69,22 @@ defmodule Sms.Api.Lists.Engine do
     # The count runs beside the page, on another connection.
     count =
       if query["withTotal"] != false,
-        do: Task.async(fn -> Repo.query!(q.count_sql, q.count_values) end)
+        do: Task.async(fn -> Repo.query(q.count_sql, q.count_values) end)
 
+    try do
+      {:ok, rows_page(def, q, count)}
+    rescue
+      e in Postgrex.Error ->
+        _ = if count, do: Task.shutdown(count, :brutal_kill)
+
+        case @refused[e.postgres[:pg_code]] do
+          nil -> reraise e, __STACKTRACE__
+          message -> {:error, [%{path: "/filter", message: message}]}
+        end
+    end
+  end
+
+  defp rows_page(def, q, count) do
     %{columns: cols, rows: rows} = Repo.query!(q.sql, q.values)
     more = length(rows) > q.limit
 
@@ -67,8 +99,10 @@ defmodule Sms.Api.Lists.Engine do
           {q.offset + length(mapped) + if(more, do: 1, else: 0), true}
 
         task ->
-          %{rows: [[n]]} = Task.await(task, 60_000)
-          {n, false}
+          case Task.await(task, 60_000) do
+            {:ok, %{rows: [[n]]}} -> {n, false}
+            {:error, e} -> raise e
+          end
       end
 
     %{
@@ -90,7 +124,9 @@ defmodule Sms.Api.Lists.Engine do
     first_dir = sort |> List.first(%{}) |> Map.get("dir")
 
     order =
-      Enum.map(sort, fn s -> "#{def.columns[s["field"]]} #{dir(s["dir"])} NULLS LAST" end) ++
+      Enum.map(sort, fn s ->
+        "#{sort_sql(def, by_name, s["field"])} #{dir(s["dir"])} NULLS LAST"
+      end) ++
         ["#{def.id_sql} #{dir(first_dir)}"]
 
     limit = query["limit"] || 100
@@ -112,6 +148,13 @@ defmodule Sms.Api.Lists.Engine do
 
   defp dir("desc"), do: "DESC"
   defp dir(_), do: "ASC"
+
+  # Text sorts case-insensitively (QA 2026-10-31): "acme" next to "ACME", not after every capital. Other types keep
+  # their plain order, and their indexes.
+  defp sort_sql(def, by_name, field) do
+    x = def.columns[field]
+    if by_name[field]["type"] == "text", do: "lower((#{x})::text)", else: x
+  end
 
   defp where(def, by_name, query) do
     filter = query["filter"]
@@ -145,11 +188,15 @@ defmodule Sms.Api.Lists.Engine do
   end
 
   @doc false
-  # `%` / `_` as typed; plain text "contains", or "starts with" on prefix lists; "#123" anywhere.
+  # `%` / `_` as typed, from the start of a value unless the text ends in `%` (QA 2026-10-31: "ALDEX_C" finds
+  # "ALDEX_CUST"); plain text "contains", or "starts with" on prefix lists; "#123" anywhere. A backslash at the very
+  # end is itself (PostgreSQL refuses a pattern ending in the escape).
   @spec pattern(String.t(), boolean()) :: String.t()
   def pattern(text, prefix) do
+    text = if text =~ ~r/(^|[^\\])(\\\\)*\\$/, do: text <> "\\", else: text
+
     cond do
-      text =~ ~r/[%_]/ -> text
+      text =~ ~r/[%_]/ -> if text =~ ~r/(^|[^\\])(\\\\)*%$/, do: text, else: text <> "%"
       prefix and not String.starts_with?(text, "#") -> text <> "%"
       true -> "%" <> text <> "%"
     end
@@ -187,6 +234,10 @@ defmodule Sms.Api.Lists.Engine do
 
   # Params are kept newest first; a parameter's placeholder is its position.
   defp param(params, value), do: {"$#{length(params) + 1}", [value | params]}
+
+  defp condition_sql(%{"op" => op} = c, %{"type" => "datetime"}, x, params)
+       when op in ~w(eq neq between lte gt),
+       do: datetime_sql(op, c, x, params)
 
   defp condition_sql(c, field, x, params) do
     type = field["type"]
@@ -252,6 +303,31 @@ defmodule Sms.Api.Lists.Engine do
     {p, params} = param(params, to_text(c["value"]))
     {"(#{x})::text ~* #{p}", params}
   end
+
+  # A time is shown to the millisecond and stored to the microsecond (QA 2026-10-31): a time in a filter is its whole
+  # millisecond, so equals and the upper bounds take in the row that shows it.
+  defp datetime_sql("between", %{"values" => [a, b]}, x, params) do
+    {pa, params} = param(params, to_text(a))
+    {pb, params} = param(params, to_text(b))
+    {"(#{x} >= #{pa}::text::timestamptz AND #{x} < #{next_ms(pb)})", params}
+  end
+
+  defp datetime_sql(op, c, x, params) do
+    {p, params} = param(params, to_text(c["value"]))
+    within = "(#{x} >= #{p}::text::timestamptz AND #{x} < #{next_ms(p)})"
+
+    sql =
+      case op do
+        "eq" -> within
+        "neq" -> "(#{x} IS NULL OR NOT #{within})"
+        "lte" -> "#{x} < #{next_ms(p)}"
+        "gt" -> "#{x} >= #{next_ms(p)}"
+      end
+
+    {sql, params}
+  end
+
+  defp next_ms(p), do: "(#{p}::text::timestamptz + interval '1 millisecond')"
 
   defp cast_of("integer"), do: "::bigint"
   defp cast_of(type) when type in @numeric, do: "::numeric"
