@@ -77,6 +77,9 @@ export interface ChListDef<Row> {
 
 export type NameMaps = Map<string, Map<number, string>>;
 
+/** How long a list query may run in ClickHouse (it stops it then too); longer answers 503. */
+const LIST_TIMEOUT_MS = 30_000;
+
 const NUMERIC = new Set(["integer", "decimal", "money", "percent"]);
 const NEGATED: Partial<Record<FilterOperator, FilterOperator>> = { neq: "eq", not_like: "like", not_in: "in" };
 
@@ -410,10 +413,14 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
          FROM ${def.table} WHERE ${whereSql}${keyed ? ` AND ${afterKeys(terms, keys)}` : ""}
         ORDER BY ${terms.map((t, i) => `_k${i} ${t.desc ? "DESC" : "ASC"}`).join(", ")}
         LIMIT ${limit + 1}${keyed ? "" : ` OFFSET ${offset}`}`,
+      LIST_TIMEOUT_MS,
+      { read: true },
     ),
     query.withTotal === false
       ? null
-      : chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${whereSql}`),
+      : chQuery<{ n: string }>(`SELECT count() AS n FROM ${def.table} WHERE ${whereSql}`, LIST_TIMEOUT_MS, {
+          read: true,
+        }),
   ]);
   const more = ids.length > limit;
   const pageIds = ids.slice(0, limit);
@@ -428,6 +435,8 @@ export async function runChList<Row>(pool: pg.Pool, def: ChListDef<Row>, query: 
       `SELECT ${chSelect(d)}, toString(${def.idSql}) AS _id FROM ${def.table}
         PREWHERE ${def.idSql} IN (${pageIds.map((r) => lit(r.id)).join(",")})
         WHERE start_time BETWEEN ${lit(times[0]!)} AND ${lit(times[times.length - 1]!)}`,
+      LIST_TIMEOUT_MS,
+      { read: true },
     );
     const byId = new Map(full.map((r) => [String(r._id), r]));
     rows = pageIds.map((r) => byId.get(r.id)).filter((r): r is Record<string, unknown> => !!r);
@@ -467,6 +476,8 @@ export async function withOutcomes(
       PREWHERE edr_id IN (${rows.map((r) => lit(String(r._id ?? r.id))).join(",")})
       WHERE kind = 'outcome' AND start_time BETWEEN ${lit(from)} AND ${lit(to)}
       GROUP BY edr_id`,
+    LIST_TIMEOUT_MS,
+    { read: true },
   );
   const byId = new Map(out.map((r) => [String(r._id), r]));
   for (const r of rows) {

@@ -9022,6 +9022,11 @@ paths:
         filters take comma-separated lists (`in`). `numberOrMsgId` (filter only, `eq` / `in`) matches each value as the
         start of the receiver number (DNID, `+`, spaces and dashes ignored), the sender ID, the Customer Msg ID or any part's Vendor Msg ID
         (team trial round 2). Totals over very large windows may be estimates.
+
+        The filter must hold a Start Time period at its top level (`startTime` `between`, or a `gt`/`gte` with an
+        `lt`/`lte`); without one the answer is 400 "Choose a period". A query the EDR store cannot finish in time
+        answers 503 (narrow the period or the filters). `nextCursor` carries the last row's sort values, so EDRs
+        written while paging neither repeat nor push rows off the next page (QA 2026-10-31, §13.25).
       requestBody:
         required: true
         content:
@@ -9453,7 +9458,8 @@ paths:
       summary: "List failed EDRs (server-side filter, sort and paging)"
       description: |
         Failed EDR Search (§9.2): messages rejected before routing (no vendor leg): time, customer enterprise and trunk,
-        Customer IP, Customer Msg ID, sender, DNID, destination, Error Code.
+        Customer IP, Customer Msg ID, sender, DNID, destination, Error Code. A Start Time period is required, paging and
+        503 as on `/edrs/query`.
       requestBody:
         required: true
         content:

@@ -524,7 +524,11 @@ const openDownload = (state: GridState) =>
 
 // ---------------------------------------------------------------- detail
 
+/** The days around an attempt its message's other attempts fall in: EDR lists need a period (§9.1). */
+const ATTEMPTS_WINDOW_MS = 3 * 86_400_000;
+
 function Attempts({ row }: { row: EdrGridRow }) {
+  const at = Date.parse(row.startTime);
   const q = useQuery({
     queryKey: ["list", "edr-attempts", row.customerMsgId, row.customerTrunkId],
     queryFn: () =>
@@ -532,6 +536,11 @@ function Attempts({ row }: { row: EdrGridRow }) {
         filter: {
           logic: "and",
           conditions: [
+            {
+              field: "startTime",
+              op: "between",
+              values: [new Date(at - ATTEMPTS_WINDOW_MS).toISOString(), new Date(at + ATTEMPTS_WINDOW_MS).toISOString()],
+            },
             { field: "customerMsgId", op: "eq", value: row.customerMsgId },
             { field: "customerTrunkId", op: "eq", value: row.customerTrunkId },
           ],
