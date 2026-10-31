@@ -1476,7 +1476,7 @@ a.btn {
   margin: 0 0 10px;
   background: var(--color-border);
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 .incident-facts > div {

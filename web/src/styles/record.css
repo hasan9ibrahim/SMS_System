@@ -413,10 +413,16 @@
   margin-top: -4px;
   font-size: var(--text-sm);
 }
-.sr-only {
+/* Visually hidden, still read out. ".ff input" (width 100 %) used to win over it, so each hidden radio of a choice
+   field was as wide as the window and the whole page scrolled sideways on record pages (§15). */
+.sr-only,
+.ff input.sr-only {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
