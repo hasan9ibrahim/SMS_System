@@ -53,4 +53,70 @@ defmodule Sms.Switch.Message.Address do
       do: nil,
       else: :esme_rinvsrcadr
   end
+
+  @typedoc "A message's addresses and their TON / NPI (nil: not set)."
+  @type addresses :: %{
+          required(:sender) => String.t(),
+          required(:receiver) => String.t(),
+          required(:sender_ton) => non_neg_integer() | nil,
+          required(:sender_npi) => non_neg_integer() | nil,
+          required(:dest_ton) => non_neg_integer() | nil,
+          required(:dest_npi) => non_neg_integer() | nil,
+          optional(atom()) => term()
+        }
+
+  @typedoc "A TON / NPI field a translation rule can set."
+  @type ton_npi_field :: :sender_ton | :sender_npi | :dest_ton | :dest_npi
+
+  @doc """
+  The addresses as a trunk set to automatic TON / NPI sends them (S-4.7, contract `TonNpiMode`), from the addresses
+  as they stand after its translation (ingress on a customer trunk, egress on a vendor trunk):
+
+    * source: `+` then digits → the `+` taken off, TON 1 / NPI 1; 9 or more digits → TON 1 / NPI 1; 3–8 digits (a
+      short code) → TON 3 / NPI 0; anything else but 1–2 digits (alphanumeric) → TON 5 / NPI 0. A length or
+      characters cannot be fixed: `source_problem/3` still refuses an alphanumeric sender over 11 characters;
+    * destination: a full international number (8–15 digits, an optional leading `+` taken off) → TON 1 / NPI 1;
+      anything else as it is.
+
+  `pinned`: the fields a translation rule set; they win over auto, and the `+` stays on an address whose TON a rule
+  set. Mirrored by `mock/src/routing/tonNpi.ts` for the Route Simulator.
+  """
+  @spec auto(addresses(), Enumerable.t(ton_npi_field())) :: addresses()
+  def auto(addresses, pinned \\ []) do
+    pinned = MapSet.new(pinned)
+
+    addresses
+    |> fix(fix_source(addresses.sender), {:sender, :sender_ton, :sender_npi}, pinned)
+    |> fix(fix_destination(addresses.receiver), {:receiver, :dest_ton, :dest_npi}, pinned)
+  end
+
+  defp fix(a, nil, _fields, _pinned), do: a
+
+  defp fix(a, {address, ton, npi}, {address_key, ton_key, npi_key}, pinned) do
+    a = if ton_key in pinned, do: a, else: %{a | address_key => address, ton_key => ton}
+    if npi_key in pinned, do: a, else: %{a | npi_key => npi}
+  end
+
+  defp fix_source("+" <> digits = sender) do
+    if Regex.match?(~r/\A[0-9]+\z/, digits), do: {digits, 1, 1}, else: {sender, 5, 0}
+  end
+
+  defp fix_source(sender) when is_binary(sender) and sender != "" do
+    cond do
+      not Regex.match?(~r/\A[0-9]+\z/, sender) -> {sender, 5, 0}
+      byte_size(sender) >= 9 -> {sender, 1, 1}
+      byte_size(sender) >= 3 -> {sender, 3, 0}
+      true -> nil
+    end
+  end
+
+  defp fix_source(_sender), do: nil
+
+  defp fix_destination(receiver) when is_binary(receiver) do
+    if Regex.match?(~r/\A\+?[0-9]{8,15}\z/, receiver),
+      do: {String.trim_leading(receiver, "+"), 1, 1},
+      else: nil
+  end
+
+  defp fix_destination(_receiver), do: nil
 end

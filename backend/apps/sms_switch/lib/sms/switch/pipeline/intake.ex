@@ -438,7 +438,8 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # S-2.10: a receiver must be a number (an optional + then digits) with a TON and NPI SMPP defines; a sender must be
   # there, with a TON and NPI SMPP defines, a numeric one at most 20 digits and an alphanumeric one (or TON 5) at most
-  # 11 characters (`Sms.Switch.Message.Address`). Then the flags (`flags/1`).
+  # 11 characters (`Sms.Switch.Message.Address`); on a customer trunk set to auto TON / NPI, with the TON / NPI auto
+  # gives it (S-4.7). Then the flags (`flags/1`).
   defp addresses(msg) do
     f = msg.fields
     dest = Map.get(f, :destination_addr, "")
@@ -453,13 +454,30 @@ defmodule Sms.Switch.Pipeline.Intake do
       not Address.npi?(f[:dest_addr_npi] || 0) ->
         {:reject, :esme_rinvdstnpi, :invalid_destination_npi, msg}
 
-      status = Address.source_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi]) ->
+      status = source_problem(msg.trunk, f) ->
         {:reject, status, :invalid_source, msg}
 
       true ->
         flags(msg)
     end
   end
+
+  defp source_problem(%{ton_npi_mode: :auto}, f) do
+    a =
+      Address.auto(%{
+        sender: f[:source_addr],
+        receiver: "",
+        sender_ton: f[:source_addr_ton],
+        sender_npi: f[:source_addr_npi],
+        dest_ton: nil,
+        dest_npi: nil
+      })
+
+    Address.source_problem(a.sender, a.sender_ton, a.sender_npi)
+  end
+
+  defp source_problem(_trunk, f),
+    do: Address.source_problem(f[:source_addr], f[:source_addr_ton], f[:source_addr_npi])
 
   # SMPP 3.4 §5.2.12–§5.2.17: priority_flag 0–3; registered_delivery without its reserved bits (7–5) or the reserved
   # receipt value 3; esm_class with a message type a submit can have (default, delivery or manual / user
@@ -501,13 +519,15 @@ defmodule Sms.Switch.Pipeline.Intake do
     end
   end
 
-  # Ingress translation (§6.4, S-4.8).
+  # Ingress translation (§6.4, S-4.8); a customer trunk set to auto TON / NPI then fixes them from the addresses as the
+  # translation left them (S-4.7), except a field a translation rule set.
   defp run_ingress(msg) do
     f = msg.fields
+    rules = Config.translation_rules(:customer, msg.trunk.id)
 
     result =
       Translation.run(
-        Config.translation_rules(:customer, msg.trunk.id),
+        rules,
         %{
           sender: Map.get(f, :source_addr, ""),
           receiver: Map.get(f, :destination_addr, ""),
@@ -518,7 +538,8 @@ defmodule Sms.Switch.Pipeline.Intake do
         Router.translation_context()
       )
 
-    after_ = result.after
+    pinned = Translation.ton_npi_set(rules, result)
+    after_ = ton_npi(msg.trunk, result.after, pinned)
     fired = for s <- result.steps, s.fired, do: s.rule_id
     # Binary messages have no text to change.
     text_changed = msg.text != nil and after_.text != msg.text
@@ -536,7 +557,9 @@ defmodule Sms.Switch.Pipeline.Intake do
       dest_npi: after_.dest_npi,
       registered_delivery: after_.registered_delivery,
       billing_type: after_.billing_type,
-      fired: fired
+      fired: fired,
+      # The TON / NPI fields an ingress rule set: a vendor's auto TON / NPI leaves them too (S-4.7).
+      ton_npi_set: pinned
     }
 
     msg = %{msg | ingress: ingress}
@@ -546,7 +569,7 @@ defmodule Sms.Switch.Pipeline.Intake do
         {:reject, :esme_rsubmitfail, :blocked_by_translation, msg}
 
       # S-4.7: a translation that leaves the sender unfit to send (too long, a TON or NPI SMPP does not define) fails
-      # the message here, never at the vendor. (No trunk setting asks for TON / NPI to be fixed automatically yet.)
+      # the message here, never at the vendor; on an auto trunk, with the TON / NPI auto set (it cannot fix a length).
       status = Address.source_problem(ingress.sender, ingress.sender_ton, ingress.sender_npi) ->
         {:reject, status, :invalid_sender_after_translation, msg}
 
@@ -554,6 +577,9 @@ defmodule Sms.Switch.Pipeline.Intake do
         {:ok, msg}
     end
   end
+
+  defp ton_npi(%{ton_npi_mode: :auto}, after_, pinned), do: Address.auto(after_, pinned)
+  defp ton_npi(_trunk, after_, _pinned), do: after_
 
   defp digits(receiver, original) do
     case String.replace(receiver, ~r/\D/, "") do
@@ -659,7 +685,9 @@ defmodule Sms.Switch.Pipeline.Intake do
       parts: msg.parts,
       message: Map.take(msg, [:body, :alphabet, :data_coding, :text]),
       dest_ton: first_set([msg.ingress[:dest_ton], f[:dest_addr_ton]]),
-      dest_npi: first_set([msg.ingress[:dest_npi], f[:dest_addr_npi]])
+      dest_npi: first_set([msg.ingress[:dest_npi], f[:dest_addr_npi]]),
+      # The TON / NPI fields an ingress rule set, which a vendor's auto TON / NPI leaves (S-4.7).
+      ton_npi_set: msg.ingress[:ton_npi_set] || []
     }
   end
 

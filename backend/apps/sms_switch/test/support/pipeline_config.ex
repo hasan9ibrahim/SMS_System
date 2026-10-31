@@ -119,6 +119,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         reassembly_timeout_s: 120,
         duplicate_window_s: 0,
         allow_empty_messages: false,
+        ton_npi_mode: "as_sent",
         rate_table_ids: [100]
       },
       Map.new(fields)
@@ -186,6 +187,7 @@ defmodule Sms.Switch.Test.PipelineConfig do
         allowed_src_npi: nil,
         allowed_dst_ton: nil,
         allowed_dst_npi: nil,
+        ton_npi_mode: "as_sent",
         rate_table_ids: [200]
       },
       Map.new(fields)

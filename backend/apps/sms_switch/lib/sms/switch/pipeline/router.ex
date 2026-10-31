@@ -17,6 +17,9 @@ defmodule Sms.Switch.Pipeline.Router do
        does not support multipart, or longer than its Max Msg Len; or a sender its egress translation left unfit to
        send (S-4.7, `Sms.Switch.Message.Address`).
 
+  A vendor trunk set to auto TON / NPI gets them fixed after its egress translation (S-4.7, `egress/2`): its price,
+  its capability filter and the PDU it is sent all use the fixed values.
+
   A rule with Deny Multipart never matches a message of more than one part (§6.3, S-3.9).
 
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
@@ -36,6 +39,7 @@ defmodule Sms.Switch.Pipeline.Router do
           optional(:message) => Coding.message() | nil,
           optional(:dest_ton) => non_neg_integer() | nil,
           optional(:dest_npi) => non_neg_integer() | nil,
+          optional(:ton_npi_set) => [Address.ton_npi_field()],
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -301,21 +305,50 @@ defmodule Sms.Switch.Pipeline.Router do
     end
   end
 
-  @doc "The vendor trunk's egress translation of the message after ingress (S-4.8)."
+  @doc """
+  The vendor trunk's egress translation of the message after ingress (S-4.8). On a vendor trunk set to auto TON / NPI
+  (S-4.7), `after` then holds the addresses and TON / NPI auto sets from what the translation left (`Address.auto/2`):
+  a TON / NPI the translation does not set is the message's after ingress; a field an ingress or egress rule set
+  stays.
+  """
   @spec egress(integer(), map()) :: Translation.result()
   def egress(vendor_trunk_id, input) do
-    Translation.run(
-      Config.translation_rules(:vendor, vendor_trunk_id),
-      %{
-        sender: input.sender,
-        receiver: input.receiver,
-        text: input.text,
-        sender_ton: input.sender_ton,
-        sender_npi: input.sender_npi
-      },
-      translation_context()
-    )
+    rules = Config.translation_rules(:vendor, vendor_trunk_id)
+
+    result =
+      Translation.run(
+        rules,
+        %{
+          sender: input.sender,
+          receiver: input.receiver,
+          text: input.text,
+          sender_ton: input.sender_ton,
+          sender_npi: input.sender_npi
+        },
+        translation_context()
+      )
+
+    case Config.vendor_trunk(vendor_trunk_id) do
+      %{ton_npi_mode: :auto} -> auto_ton_npi(result, rules, input)
+      _as_sent -> result
+    end
   end
+
+  defp auto_ton_npi(result, rules, input) do
+    after_ = result.after
+
+    as_sent = %{
+      after_
+      | dest_ton: dest(after_.dest_ton, input[:dest_ton]),
+        dest_npi: dest(after_.dest_npi, input[:dest_npi])
+    }
+
+    pinned = (input[:ton_npi_set] || []) ++ Translation.ton_npi_set(rules, result)
+    %{result | after: Address.auto(as_sent, pinned)}
+  end
+
+  defp dest(nil, as_sent), do: as_sent
+  defp dest(set, _as_sent), do: set
 
   @doc "What the translation engine needs from the configuration."
   @spec translation_context() :: Translation.Context.t()

@@ -1653,6 +1653,196 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "automatic TON / NPI after translation (S-4.7)" do
+    test "a customer trunk on auto: an alphanumeric sender sent with TON 1 goes as TON 5 / NPI 0" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          short_message: "alpha"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 5, 0}
+      # The EDR keeps what the customer sent and what the vendor was sent.
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"c_src_ton" => 1, "c_src_npi" => 1, "v_src_ton" => 5, "v_src_npi" => 0}] =
+               edr("edr.attempt")
+    end
+
+    test "a customer trunk on auto: +44… sent with TON 5 goes without the + as TON 1 / NPI 1" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "+447700900123",
+          source_addr_ton: 5,
+          source_addr_npi: 0,
+          short_message: "intl"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"447700900123", 1, 1}
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"src_addr" => "+447700900123", "v_src_addr" => "447700900123", "v_src_ton" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "as sent (the default): TON / NPI go as they came; +44… with TON 5 is still refused 0x0A" do
+      %{client: client, conns: [conn]} = start_all()
+
+      {client, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          dest_addr_ton: 0,
+          short_message: "as sent"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 1, 1}
+      assert sent.fields.dest_addr_ton == 0
+
+      {_, resp} =
+        submit(
+          client,
+          %{source_addr: "+447700900123", source_addr_ton: 5, short_message: "plus"},
+          3
+        )
+
+      assert resp.status == 0x0A
+    end
+
+    test "a customer trunk on auto cannot fix a length: a 14-character sender is still refused 0x0A" do
+      config = [customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, resp} =
+        submit(client, %{source_addr: "ABCDEFGHIJKLMN", source_addr_ton: 1, short_message: "long"})
+
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a customer trunk on auto: an ingress translation leaving 14 characters is refused 0x0A" do
+      config = [
+        customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")],
+        translation_rules: [
+          %{id: 32, sender_conversion: "append", sender_conversion_value: "Promos"}
+        ],
+        translation_targets: [PipelineConfig.target(32, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{source_addr: "FakeBank", short_message: "longer"})
+      assert resp.status == 0x0A
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+      assert [%{"attempt_no" => 0, "command_status" => 0x0A}] = edr("edr.attempt")
+    end
+
+    test "a TON / NPI a translation rule sets wins over auto" do
+      config = [
+        customer_trunks: [PipelineConfig.customer_trunk(ton_npi_mode: "auto")],
+        translation_rules: [%{id: 30, sender_ton: 2}],
+        translation_targets: [PipelineConfig.target(30, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{
+          source_addr: "FakeBank",
+          source_addr_ton: 1,
+          source_addr_npi: 1,
+          short_message: "rule"
+        })
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 2, 0}
+    end
+
+    test "a vendor on auto that allows destination TON 1 only takes a destination sent with TON 0" do
+      # As sent, this vendor cannot take it (0x45, the capability filter test above).
+      config = [
+        vendor_trunks: [PipelineConfig.vendor_trunk(allowed_dst_ton: [1], ton_npi_mode: "auto")]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{short_message: "unknown TON", dest_addr_ton: 0, dest_addr_npi: 0})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+
+      assert {sent.fields.destination_addr, sent.fields.dest_addr_ton, sent.fields.dest_addr_npi} ==
+               {@dest, 1, 1}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 1 end)
+
+      assert [%{"c_dst_ton" => 0, "c_dst_npi" => 0, "v_dst_ton" => 1, "v_dst_npi" => 1}] =
+               edr("edr.attempt")
+    end
+
+    test "a vendor on auto gets +… without the + as TON 1 / NPI 1, after its egress translation" do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(ton_npi_mode: "auto")]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      # 11 characters: fit to send as the customer's alphanumeric sender (TON 5).
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "+4477009001", source_addr_ton: 5, short_message: "plus"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"4477009001", 1, 1}
+    end
+
+    test "a vendor on auto keeps a TON an ingress rule set" do
+      config = [
+        vendor_trunks: [PipelineConfig.vendor_trunk(ton_npi_mode: "auto")],
+        translation_rules: [%{id: 33, sender_ton: 2}],
+        translation_targets: [PipelineConfig.target(33, "customer", 1)]
+      ]
+
+      %{client: client, conns: [conn]} = start_all(config: config)
+
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "FakeBank", source_addr_npi: 1, short_message: "kept"})
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 2, 0}
+    end
+
+    test "a vendor on auto cannot fix a length: an egress translation leaving 14 characters passes it over" do
+      config =
+        two_vendors(
+          vendor_trunks: [
+            PipelineConfig.vendor_trunk(id: 1, ton_npi_mode: "auto"),
+            PipelineConfig.vendor_trunk(id: 2, rate_table_ids: [201])
+          ],
+          translation_rules: [
+            %{id: 31, sender_conversion: "append", sender_conversion_value: "Promos"}
+          ],
+          translation_targets: [PipelineConfig.target(31, "vendor", 1)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {_, %{status: 0}} = submit(client, %{short_message: "not via 1"})
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert source(sent) == {"FakeBank", 5, 0}
+      refute_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 200
+    end
+  end
+
+  defp source(%Pdu{fields: f}), do: {f.source_addr, f.source_addr_ton, f.source_addr_npi}
+
   # Two vendors at levels 1 and 2; vendor 1's trunk fields as given.
   defp vendors_v1(v1_fields) do
     [

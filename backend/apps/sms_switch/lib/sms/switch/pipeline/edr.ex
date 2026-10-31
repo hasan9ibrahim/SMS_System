@@ -162,7 +162,8 @@ defmodule Sms.Switch.Pipeline.Edr do
     }
   end
 
-  # What the vendor was sent: the egress translation's result, else the ingress one, else the customer's.
+  # What the vendor was sent: the egress translation's result (with the vendor's auto TON / NPI, S-4.7), else the
+  # ingress one (with the customer trunk's), else the customer's; TON / NPI as the PDU took them (`Sender.fields/3`).
   defp vendor_addresses(msg, vendor, egress) do
     ingress = msg.ingress
     f = msg.fields
@@ -172,15 +173,16 @@ defmodule Sms.Switch.Pipeline.Edr do
       "v_src_addr" => Map.get(egress, :sender, ingress[:sender] || ""),
       "message_text" => msg.text || hex(msg.body),
       "v_message_text" => Map.get(egress, :text) || msg.text || hex(msg.body),
-      "v_src_ton" => egress_or(egress, :sender_ton, f, :source_addr_ton),
-      "v_src_npi" => egress_or(egress, :sender_npi, f, :source_addr_npi),
-      "v_dst_ton" => egress_or(egress, :dest_ton, f, :dest_addr_ton),
-      "v_dst_npi" => egress_or(egress, :dest_npi, f, :dest_addr_npi),
+      "v_src_ton" => sent(egress, ingress, :sender_ton, f[:source_addr_ton]),
+      "v_src_npi" => sent(egress, ingress, :sender_npi, f[:source_addr_npi]),
+      "v_dst_ton" => sent(egress, ingress, :dest_ton, f[:dest_addr_ton]),
+      "v_dst_npi" => sent(egress, ingress, :dest_npi, f[:dest_addr_npi]),
       "v_coding" => (vendor && vendor[:data_coding]) || msg.data_coding
     }
   end
 
-  defp egress_or(egress, key, f, field), do: Map.get(egress, key) || f[field] || 0
+  defp sent(egress, ingress, key, as_sent),
+    do: Map.get(egress, key) || ingress[key] || as_sent || 0
 
   defp destination(nil),
     do: %{"c_mccmnc" => "", "c_mcc" => "", "c_mnc" => "", "c_country_iso" => ""}
