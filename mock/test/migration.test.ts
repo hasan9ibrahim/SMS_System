@@ -422,6 +422,19 @@ describe("migration center", { skip }, () => {
     );
     assert.equal(e[0].username, `legacy.am.${run}`);
     assert.equal(Number(e[0].sides), 2);
+    // The AM history holds the imported AM (QA 2026-10-31, §13.30): reports attribute by it, and the record keeps it.
+    const { rows: hist } = await db().query(
+      `SELECT u.username, h.ends_at FROM enterprise_am_history h JOIN users u ON u.id = h.user_id
+        WHERE h.enterprise_id = $1`,
+      [e[0].id],
+    );
+    assert.deepEqual(
+      hist.map((h) => [h.username, h.ends_at]),
+      [[`legacy.am.${run}`, null]],
+    );
+    // (Not checked against the contract: an imported record may lack what the form requires, e.g. contacts.)
+    const record = (await call("GET", `/enterprises/${e[0].id}`)).json();
+    assert.equal(record.accountManagerName, "Legacy Manager", "a load keeps the imported AM");
     const { rows: lines } = await db().query(
       `SELECT l.mccmnc, l.rate, l.valid_to FROM rate_lines l JOIN rate_tables t ON t.id = l.rate_table_id
         WHERE t.name = $1 ORDER BY l.mccmnc, l.valid_from`,

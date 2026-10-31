@@ -1420,6 +1420,36 @@ export interface Entry {
   after: unknown;
 }
 
+/** Two IDs as the database and the plan carry them (bigint text or number), or both none. */
+export const sameId = (a: unknown, b: unknown) => String(a ?? "") === String(b ?? "");
+
+/**
+ * The enterprise's account manager from now on in its AM history (QA 2026-10-31, §13.30): reports attribute traffic by
+ * that history, and a load re-applies the history's current AM over enterprises.account_manager_id, so an AM the import
+ * sets without a history row was flipped back. Ends the current assignment now and drops a scheduled one, as a
+ * handover does; `userId` null leaves the enterprise without one.
+ */
+export async function setAmFromNow(
+  c: pg.PoolClient,
+  enterpriseId: number,
+  userId: number | null,
+  note: string,
+  byId: number,
+): Promise<void> {
+  await c.query("DELETE FROM enterprise_am_history WHERE enterprise_id = $1 AND starts_at > now()", [enterpriseId]);
+  await c.query(
+    `UPDATE enterprise_am_history SET ends_at = now()
+      WHERE enterprise_id = $1 AND starts_at <= now() AND (ends_at IS NULL OR ends_at > now())`,
+    [enterpriseId],
+  );
+  if (userId !== null)
+    await c.query(
+      `INSERT INTO enterprise_am_history (enterprise_id, user_id, starts_at, note, created_by_id)
+       VALUES ($1, $2, now(), $3, $4)`,
+      [enterpriseId, userId, note, byId],
+    );
+}
+
 /** Runs the plan inside the caller's transaction; returns the History entries and created trunk IDs. */
 export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, userId: number) {
   await c.query("SET LOCAL statement_timeout = 0");
@@ -1551,6 +1581,18 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
           [r.existingId, ...cols.map((k) => after[k])],
         );
         entries.push({ table, entity_id: r.existingId, field: "row", before: r.before, after });
+        if (
+          e === "enterprises" &&
+          "account_manager_id" in after &&
+          !sameId(after.account_manager_id, r.before.account_manager_id)
+        )
+          await setAmFromNow(
+            c,
+            r.existingId,
+            after.account_manager_id == null ? null : Number(after.account_manager_id),
+            `Imported from ${plan.sourceSystem}`,
+            userId,
+          );
         if (r.externalId) refs.push({ entity: e, ext: r.externalId, id: r.existingId });
         continue;
       }
@@ -1571,6 +1613,8 @@ export async function applyPlan(c: pg.PoolClient, plan: Plan, importId: number, 
           break;
         case "enterprises": {
           id = await insert("enterprises", { ...v, created_by_id: userId, updated_by_id: userId });
+          const am = resolve(v.account_manager_id ?? null);
+          if (am != null) await setAmFromNow(c, id, Number(am), `Imported from ${plan.sourceSystem}`, userId);
           const sides = v.type === "reciprocal" ? ["customer", "vendor"] : [String(v.type)];
           for (const side of sides)
             await c.query(
