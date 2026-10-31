@@ -452,7 +452,9 @@ defmodule Sms.Switch.Pipeline.Sender do
 
   defp header_octets(:udh8), do: 6
   defp header_octets(:udh16), do: 7
-  defp header_octets(:sar), do: 0
+
+  # SAR parts carry their link in TLVs, but the vendor's SMSC puts a concatenation header on air: the same room is left.
+  defp header_octets(:sar), do: 6
 
   # A new reference for every message, so open messages on a connection do not share one (S-3.10).
   defp reference(:udh8), do: :rand.uniform(256) - 1
@@ -478,13 +480,20 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
-  # Whether a changed text needs more parts than the customer sent (D3).
+  # Whether a changed text needs more parts than the customer sent (D3), counted like with like: the text as it goes
+  # and as it came, both at 153 / 67 / 134 a part, or the parts the customer sent when it used more (a client's SAR
+  # parts of 160 characters are counted again, never compared with the 153 we split at).
   defp grows_parts?(%{text: nil}, _text), do: false
+  # No translation changed the text: it goes as the customer sent it.
+  defp grows_parts?(msg, text) when text == msg.text or is_nil(text), do: false
 
   defp grows_parts?(msg, text) do
     case encoding(msg, text) do
-      {:error, _, _} -> false
-      {bytes, alphabet, _} -> Text.part_count(bytes, alphabet) > msg.parts
+      {:error, _, _} ->
+        false
+
+      {bytes, alphabet, _} ->
+        Text.part_count(bytes, alphabet) > max(Text.part_count(msg.body, msg.alphabet), msg.parts)
     end
   end
 

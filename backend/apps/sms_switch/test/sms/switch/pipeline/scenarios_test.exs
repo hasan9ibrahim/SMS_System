@@ -230,7 +230,8 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       assert {_, %Pdu{} = dlr} = recv_until(client, &(&1.command == :deliver_sm), 1_500)
       assert receipted(dlr) == {:receipted_message_id, "bound-ip"}
       Task.await(run)
-      assert held_ids(1) == ["other-ip"]
+      # (The bind's own drain may be the run that sent it.)
+      assert_eventually(fn -> held_ids(1) == ["other-ip"] end)
     end
 
     test "a receipt the customer refuses for now (0x58) is held and sent again later, once" do
@@ -322,6 +323,53 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       assert_eventually(fn -> held_ids(2) == [] end)
       Process.sleep(2_000)
       assert Enum.sort(held_ids(1)) == ["slow-1", "slow-2", "slow-3"]
+    end
+  end
+
+  # The vendor's submits for one message, until none comes for 300 ms.
+  defp vendor_parts(conn, acc \\ []) do
+    receive do
+      {:smsc, ^conn, %Pdu{command: :submit_sm} = pdu} -> vendor_parts(conn, [pdu | acc])
+    after
+      300 -> Enum.reverse(acc)
+    end
+  end
+
+  defp sar(ref, n), do: [sar_msg_ref_num: ref, sar_total_segments: 2, sar_segment_seqnum: n]
+
+  describe "part counts (S-3.1, S-3.10, S-4.1, D3)" do
+    test "a client's 160-character SAR parts with no translation go to the vendor, never 'translation grows'" do
+      %{client: client, conn: conn} = start_all()
+      a = String.duplicate("a", 160)
+      b = String.duplicate("b", 160)
+      send_submit(client, %{short_message: a, registered_delivery: 1}, sar(77, 1), 2)
+      send_submit(client, %{short_message: b, registered_delivery: 1}, sar(77, 2), 3)
+      {statuses, _client} = resps(client, 2)
+      assert statuses == [0, 0]
+
+      # Split again at 153 for the vendor: 320 characters are 3 parts.
+      parts = vendor_parts(conn)
+      assert length(parts) == 3
+
+      assert Enum.map_join(
+               parts,
+               &binary_part(&1.fields.short_message, 6, byte_size(&1.fields.short_message) - 6)
+             ) == a <> b
+
+      refute Enum.any?(edr("edr.attempt"), &(&1["command_status"] == 0x45))
+    end
+
+    test "UCS-2 SAR parts of 70 characters go too, as parts of 67" do
+      %{client: client, conn: conn} = start_all()
+      one = :binary.copy(<<0x04, 0x10>>, 70)
+      two = :binary.copy(<<0x04, 0x11>>, 70)
+      send_submit(client, %{data_coding: 8, short_message: one}, sar(5, 1), 2)
+      send_submit(client, %{data_coding: 8, short_message: two}, sar(5, 2), 3)
+      {[0, 0], _client} = resps(client, 2)
+      parts = vendor_parts(conn)
+      assert length(parts) == 3
+      assert Enum.all?(parts, &(&1.fields.data_coding == 8))
+      assert Enum.map(parts, &(byte_size(&1.fields.short_message) - 6)) == [134, 134, 12]
     end
   end
 end

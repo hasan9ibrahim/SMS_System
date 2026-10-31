@@ -1351,10 +1351,10 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
       assert byte_size(body) == 152
     end
 
-    test "SAR: the parts in TLVs, 160 characters a part" do
+    test "SAR: the parts in TLVs, 153 characters a part (the vendor's SMSC adds the header on air)" do
       first = long_to_vendor("sar")
       assert first.fields.esm_class == 0
-      assert byte_size(first.fields.short_message) == 160
+      assert byte_size(first.fields.short_message) == 153
       assert {:sar_total_segments, 2} in first.tlvs and {:sar_segment_seqnum, 1} in first.tlvs
     end
 

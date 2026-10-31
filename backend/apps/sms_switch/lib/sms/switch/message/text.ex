@@ -311,8 +311,9 @@ defmodule Sms.Switch.Message.Text do
   @doc """
   The bytes of each part, without the concatenation header: one part when the message fits in a single SMS, else
   parts that leave room for a header of `header_octets` in the 140-octet user data (6: UDH with an 8-bit reference,
-  153 septets / 67 units / 134 bytes; 7: a 16-bit reference, 152 / 66 / 133; 0: SAR, the header is in TLVs, 160 /
-  70 / 140), never cutting an escape sequence or a surrogate pair (S-3.1, S-3.10).
+  153 septets / 67 units / 134 bytes, also SAR, whose header the vendor's SMSC adds on air; 7: a 16-bit reference,
+  152 / 66 / 133; 0: no header, 160 / 70 / 140), never cutting an escape sequence or a surrogate pair (S-3.1,
+  S-3.10).
   """
   @spec split(binary(), alphabet(), 0..7) :: [binary()]
   def split(bytes, alphabet, header_octets \\ 6) do
