@@ -202,14 +202,13 @@ defmodule Sms.Switch.Pipeline.EdrWriter do
     lookup(parts, deadline)
   end
 
-  # A row the lookup can find: a key, and the columns that bound the search as the writer's rows carry them.
-  defp lookup?(%{
-         "row_key" => key,
-         "start_time" => <<_day::binary-10, _::binary>>,
-         "c_trunk_id" => trunk
-       })
-       when key != "" and is_integer(trunk) and trunk >= 0,
-       do: true
+  # A row the lookup can find: a key, and the columns that bound the search as `Edr` writes them. Any other row is
+  # written without the lookup, so a value ClickHouse cannot read fails its insert (and is dropped), not the lookup.
+  @start_time ~r/\A\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,3})?\z/
+
+  defp lookup?(%{"row_key" => key, "start_time" => time, "c_trunk_id" => trunk})
+       when key != "" and is_binary(time) and is_integer(trunk) and trunk in 0..4_294_967_295,
+       do: Regex.match?(@start_time, time)
 
   defp lookup?(_row), do: false
 
@@ -227,6 +226,14 @@ defmodule Sms.Switch.Pipeline.EdrWriter do
          Map.update(acc, table, MapSet.new([key]), &MapSet.put(&1, key))
        end)}
     else
+      # A value of a row the lookup cannot read (457 BAD_QUERY_PARAMETER): written without it, still under the token.
+      {:error, %Ch.Error{code: code}} when code in @row_errors or code == 457 ->
+        Logger.warning(
+          "EDR key lookup refused a row's value (code #{code}), batch written without it"
+        )
+
+        {:ok, %{}}
+
       {:error, reason} = error ->
         Logger.warning("EDR rows not written yet, retried: key lookup failed: #{inspect(reason)}")
         error
