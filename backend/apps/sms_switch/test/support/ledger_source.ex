@@ -11,12 +11,16 @@ defmodule Sms.Switch.Test.LedgerSource do
       accounts: Enum.map(accounts, &account/1),
       charges: charges,
       persisted: [],
+      reservations: %{},
       fail: Keyword.get(opts, :fail, false)
     })
   end
 
   @doc "The rows written so far."
   def persisted, do: state().persisted
+
+  @doc "The credit held per account as last written (`persist_reservations/1`)."
+  def reservations, do: state().reservations
 
   @doc "An account: enterprise 1's customer side, postpaid, EUR, base 0, no limit, no invoice unless given."
   def account(fields) do
@@ -60,6 +64,19 @@ defmodule Sms.Switch.Test.LedgerSource do
       {:error, :down}
     else
       :persistent_term.put(@key, %{s | persisted: s.persisted ++ rows})
+      :ok
+    end
+  end
+
+  @impl true
+  def persist_reservations(rows) do
+    s = state()
+
+    if s.fail do
+      {:error, :down}
+    else
+      held = Map.merge(s.reservations, Map.new(rows, fn {a, micro} -> {a.key, micro} end))
+      :persistent_term.put(@key, %{s | reservations: held})
       :ok
     end
   end

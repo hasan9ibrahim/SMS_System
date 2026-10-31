@@ -20,7 +20,10 @@ defmodule Sms.Switch.Pipeline.Store do
       (S-3.10);
     * `h:<customer trunk>`: customer receipts held while no session of the trunk can take them (§13.1), a sorted set
       of their keys (message id and status) by arrival, `hd:<customer trunk>` each one's entry; `hs` the trunks that
-      have any, `hl:<customer trunk>` the lock of the node sending them.
+      have any, `hl:<customer trunk>` the lock of the node sending them;
+    * `chh:<account>`: the credit held for each customer message in flight (message id → micro-units, §7, S-6.3),
+      `chht:<account>` their total, `hx` when each hold expires (`<account>|<message id>` by Unix ms); read with the
+      ledger's `cht:<account>` (`Sms.Switch.Pipeline.Ledger`).
 
   A finished message (every part's final receipt in, the customer's receipt queued) is forgotten at once; one still
   waiting expires after its vendor trunk's DLR timeout plus an hour, so Redis holds only messages waiting for a
@@ -591,6 +594,248 @@ defmodule Sms.Switch.Pipeline.Store do
     end
   end
 
+  # ---------------------------------------------------------------- credit holds (§7, Q24, S-6.3)
+
+  # The credit check and the hold of a message's cost in one step, so two messages near the limit never both pass
+  # (`Sms.Switch.Pipeline.Ledger.reserve/1`). KEYS: the account's uninvoiced total (`cht:`), its holds by message id
+  # (`chh:`), their total (`chht:`) and the expiry list (`hx`); ARGV: message id, cost, base + credit limit, expiry
+  # (Unix ms) and the expiry list's member. Answers {1 held | 2 held already | 0 refused, used, held}.
+  @reserve_credit """
+  local used = tonumber(redis.call('GET', KEYS[1]) or '0')
+  local held = tonumber(redis.call('GET', KEYS[3]) or '0')
+  if redis.call('HEXISTS', KEYS[2], ARGV[1]) == 1 then return {2, used, held} end
+  local cost = tonumber(ARGV[2])
+  if cost > tonumber(ARGV[3]) - used - held then return {0, used, held} end
+  redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+  redis.call('INCRBY', KEYS[3], ARGV[2])
+  redis.call('ZADD', KEYS[4], ARGV[4], ARGV[5])
+  return {1, used, held + cost}
+  """
+
+  # Releases a message's hold, once (a second release finds none). KEYS: `chh:`, `chht:`, `hx`; ARGV: message id, the
+  # expiry list's member and, for the expiry sweep, the time the hold must have expired by ('' otherwise: a hold
+  # extended since it was listed stays). Answers the amount released.
+  @release_credit """
+  if ARGV[3] ~= '' then
+    local at = redis.call('ZSCORE', KEYS[3], ARGV[2])
+    if at and tonumber(at) > tonumber(ARGV[3]) then return 0 end
+  end
+  redis.call('ZREM', KEYS[3], ARGV[2])
+  local amount = redis.call('HGET', KEYS[1], ARGV[1])
+  if not amount then return 0 end
+  redis.call('HDEL', KEYS[1], ARGV[1])
+  if redis.call('DECRBY', KEYS[2], amount) < 0 then redis.call('SET', KEYS[2], 0) end
+  return tonumber(amount)
+  """
+
+  @doc false
+  # Checks a message's cost against `available` (base + credit limit) less what is charged and held, and holds it in the
+  # same step (`Sms.Switch.Pipeline.Ledger`). Holding the same message again changes nothing.
+  @spec reserve_credit(String.t(), String.t(), integer(), integer(), integer()) ::
+          {:ok, :held | :already | :refused, integer(), integer()} | {:error, term()}
+  def reserve_credit(account, id, cost, available, expires_ms) do
+    keys = ["cht:#{account}", "chh:#{account}", "chht:#{account}", "hx"]
+    args = [id, cost, available, expires_ms, hold_member(account, id)]
+
+    result =
+      case backend() do
+        :redis -> Redis.command(["EVAL", @reserve_credit, 4 | keys ++ args], @timeout)
+        :local -> local_one(["RESERVE" | keys ++ args])
+      end
+
+    case result do
+      {:ok, [code, used, held]} -> {:ok, Enum.at([:refused, :held, :already], code), used, held}
+      {:error, _} = error -> error
+    end
+  end
+
+  @doc false
+  # The command releasing a message's hold, for a transaction (the charge that replaces it, `Ledger.apply_charge/1`).
+  @spec release_credit_command(String.t(), String.t(), integer() | nil) :: list()
+  def release_credit_command(account, id, due_ms \\ nil) do
+    keys = ["chh:#{account}", "chht:#{account}", "hx"]
+    args = [id, hold_member(account, id), if(due_ms, do: due_ms, else: "")]
+
+    case backend() do
+      :redis -> ["EVAL", @release_credit, 3 | keys ++ args]
+      :local -> ["UNHOLD" | keys ++ args]
+    end
+  end
+
+  @doc false
+  # Releases a message's hold: the amount released (0 when there was none). With `due_ms`, only a hold whose expiry
+  # passed by then (the expiry sweep).
+  @spec release_credit(String.t(), String.t(), integer() | nil) ::
+          {:ok, integer()} | {:error, term()}
+  def release_credit(account, id, due_ms \\ nil),
+    do: run(release_credit_command(account, id, due_ms))
+
+  @doc false
+  # Moves a hold's expiry (the message was sent: its receipt timeout counts from now); a hold released already stays
+  # released.
+  @spec extend_credit_hold(String.t(), String.t(), integer()) :: :ok | {:error, term()}
+  def extend_credit_hold(account, id, expires_ms),
+    do: ok(run(["ZADD", "hx", "XX", expires_ms, hold_member(account, id)]))
+
+  @doc false
+  # Up to `limit` holds whose expiry passed by `now_ms`, as {account, message id}.
+  @spec due_credit_holds(integer(), pos_integer()) ::
+          {:ok, [{String.t(), String.t()}]} | {:error, term()}
+  def due_credit_holds(now_ms, limit) do
+    case run(["ZRANGEBYSCORE", "hx", "-inf", now_ms, "LIMIT", 0, limit]) do
+      {:ok, members} ->
+        {:ok,
+         for(m <- members, [account, id] = String.split(m, "|", parts: 2), do: {account, id})}
+
+      error ->
+        error
+    end
+  end
+
+  @doc false
+  # What is held on each account (micro-units), in one round trip.
+  @spec credit_held([String.t()]) :: {:ok, %{String.t() => integer()}} | {:error, term()}
+  def credit_held([]), do: {:ok, %{}}
+
+  def credit_held(accounts) do
+    case run(["MGET" | Enum.map(accounts, &"chht:#{&1}")]) do
+      {:ok, values} -> {:ok, accounts |> Enum.zip(Enum.map(values, &int_or_zero/1)) |> Map.new()}
+      error -> error
+    end
+  end
+
+  defp hold_member(account, id), do: "#{account}|#{id}"
+
+  # ---------------------------------------------------------------- scheduled messages (S-2.12)
+
+  # Moves a member from one sorted set to another (or the same) when its score is due: one server takes each.
+  # KEYS: from, to; ARGV: member, now (Unix ms), the new score.
+  @move_due """
+  local at = redis.call('ZSCORE', KEYS[1], ARGV[1])
+  if at and tonumber(at) <= tonumber(ARGV[2]) then
+    redis.call('ZREM', KEYS[1], ARGV[1])
+    redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+    return 1
+  end
+  return 0
+  """
+
+  @doc false
+  # Holds a scheduled message until `at_ms` (`Sms.Switch.Pipeline.Scheduled`): `sch:<id>` its data, enterprise and
+  # customer message ids, `sp:<enterprise>:<customer id>` the way query_sm and cancel_sm find it, `sch` the sorted set
+  # by its time. Kept `ttl_s` at most.
+  @spec schedule(String.t(), integer(), [String.t()], binary(), integer(), pos_integer()) ::
+          :ok | {:error, term()}
+  def schedule(id, enterprise_id, ids, blob, at_ms, ttl_s) do
+    key = "sch:#{id}"
+
+    commands =
+      [
+        ["HSET", key, "m", blob, "e", Integer.to_string(enterprise_id), "i", Enum.join(ids, ",")],
+        ["EXPIRE", key, ttl_s]
+      ] ++
+        Enum.map(ids, &["SET", "sp:#{enterprise_id}:#{&1}", id, "EX", ttl_s]) ++
+        [["ZADD", "sch", at_ms, id]]
+
+    ok(transaction(commands))
+  end
+
+  @doc false
+  # Up to `limit` scheduled messages due by `now_ms` (`:waiting`), or being released with a lease that ran out by then
+  # (`:leased`: the server releasing them stopped).
+  @spec due_scheduled(:waiting | :leased, integer(), pos_integer()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def due_scheduled(set, now_ms, limit),
+    do: run(["ZRANGEBYSCORE", scheduled_set(set), "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc false
+  # Takes a due scheduled message to release it: true for the one server that gets it. It stays leased until
+  # `lease_until_ms` (`finish_scheduled/3` ends the lease), so a server stopping mid-release never loses it.
+  @spec claim_scheduled(:waiting | :leased, String.t(), integer(), integer()) :: boolean()
+  def claim_scheduled(set, id, now_ms, lease_until_ms) do
+    keys = [scheduled_set(set), "schl"]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @move_due, 2 | keys ++ [id, now_ms, lease_until_ms]]
+        :local -> ["ZMOVE" | keys ++ [id, now_ms, lease_until_ms]]
+      end
+
+    match?({:ok, 1}, run(command))
+  end
+
+  defp scheduled_set(:waiting), do: "sch"
+  defp scheduled_set(:leased), do: "schl"
+
+  @doc false
+  # A scheduled message's data, enterprise and customer message ids.
+  @spec scheduled(String.t()) ::
+          {:ok, %{blob: binary(), enterprise_id: integer(), ids: [String.t()]}}
+          | :none
+          | {:error, term()}
+  def scheduled(id) do
+    case run(["HGETALL", "sch:#{id}"]) do
+      {:ok, []} ->
+        :none
+
+      {:ok, flat} ->
+        f = flat |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, v} end)
+        {:ok, %{blob: f["m"], enterprise_id: int(f["e"]), ids: String.split(f["i"] || id, ",")}}
+
+      error ->
+        error
+    end
+  end
+
+  @doc false
+  # Forgets a scheduled message that was released (or is gone): its data, its query keys and its lease.
+  @spec finish_scheduled(String.t(), integer() | nil, [String.t()]) :: :ok | {:error, term()}
+  def finish_scheduled(id, enterprise_id, ids) do
+    commands =
+      [["DEL", "sch:#{id}"], ["ZREM", "schl", id]] ++
+        Enum.map(ids, &["DEL", "sp:#{enterprise_id}:#{&1}"])
+
+    ok(transaction(commands))
+  end
+
+  @doc false
+  # The scheduled message a customer message id of the enterprise belongs to, while it is held.
+  @spec scheduled_id(integer(), String.t()) :: {:ok, String.t() | nil} | {:error, term()}
+  def scheduled_id(enterprise_id, customer_id),
+    do: run(["GET", "sp:#{enterprise_id}:#{customer_id}"])
+
+  @doc false
+  # Takes a scheduled message out before its release (cancel_sm): its data, or `:none` when a server is releasing it
+  # already or it is gone.
+  @spec take_scheduled(String.t()) ::
+          {:ok, %{blob: binary(), enterprise_id: integer(), ids: [String.t()]}}
+          | :none
+          | {:error, term()}
+  def take_scheduled(id) do
+    case run(["ZREM", "sch", id]) do
+      {:ok, 1} ->
+        with {:ok, held} <- scheduled(id) do
+          _ = finish_scheduled(id, held.enterprise_id, held.ids)
+          {:ok, held}
+        end
+
+      {:ok, 0} ->
+        :none
+
+      error ->
+        error
+    end
+  end
+
+  @doc false
+  # Marks a message's ids cancelled for query_sm (DELETED), for `keep_s`.
+  @spec mark_cancelled(integer(), [String.t()], pos_integer()) :: :ok | {:error, term()}
+  def mark_cancelled(enterprise_id, ids, keep_s),
+    do: ok(transaction(Enum.map(ids, &["SET", "q:#{enterprise_id}:#{&1}", "x", "EX", keep_s])))
+
+  defp int_or_zero(nil), do: 0
+  defp int_or_zero(v), do: int(v)
+
   @doc false
   # A plain counter (`Sms.Switch.Pipeline.Warmup`): its value, 0 when missing.
   @spec counter(String.t()) :: {:ok, integer()} | {:error, term()}
@@ -789,6 +1034,71 @@ defmodule Sms.Switch.Pipeline.Store do
     sum
   end
 
+  # The credit hold scripts (`@reserve_credit`, `@release_credit`), run as one step under the table's process.
+  defp exec([
+         "RESERVE",
+         total,
+         holds,
+         held_total,
+         expiries,
+         id,
+         cost,
+         available,
+         expires_ms,
+         member
+       ]) do
+    used = int_or_zero(lookup(total))
+    held = int_or_zero(lookup(held_total))
+
+    cond do
+      Map.has_key?(get_hash(holds), id) ->
+        [2, used, held]
+
+      cost > available - used - held ->
+        [0, used, held]
+
+      true ->
+        exec(["HSET", holds, id, Integer.to_string(cost)])
+        exec(["INCRBY", held_total, cost])
+        exec(["ZADD", expiries, expires_ms, member])
+        [1, used, held + cost]
+    end
+  end
+
+  defp exec(["UNHOLD", holds, held_total, expiries, id, member, due]) do
+    at = Map.get(lookup(expiries) || %{}, member)
+
+    if due != "" and at != nil and at > due do
+      0
+    else
+      exec(["ZREM", expiries, member])
+      unhold(holds, held_total, Map.get(get_hash(holds), id), id)
+    end
+  end
+
+  # `@move_due`.
+  defp exec(["ZMOVE", from, to, member, now, score]) do
+    case Map.get(lookup(from) || %{}, member) do
+      at when is_integer(at) and at <= now ->
+        exec(["ZREM", from, member])
+        exec(["ZADD", to, score, member])
+        1
+
+      _ ->
+        0
+    end
+  end
+
+  defp exec(["ZADD", key, "XX", score, member]) do
+    zset = lookup(key) || %{}
+
+    if Map.has_key?(zset, member) do
+      put(key, Map.put(zset, member, score), System.monotonic_time(:second) + @far)
+    end
+
+    0
+  end
+
   defp exec(["DEL", key]) do
     found = if lookup(key), do: 1, else: 0
     :ets.delete(@table, key)
@@ -844,6 +1154,15 @@ defmodule Sms.Switch.Pipeline.Store do
     value = lookup(key)
     :ets.delete(@table, key)
     value
+  end
+
+  # The local `UNHOLD`: a message's hold out of the hash and the total.
+  defp unhold(_holds, _held_total, nil, _id), do: 0
+
+  defp unhold(holds, held_total, amount, id) do
+    exec(["HDEL", holds, id])
+    if exec(["INCRBY", held_total, -int(amount)]) < 0, do: exec(["SET", held_total, "0"])
+    int(amount)
   end
 
   defp int(v) when is_integer(v), do: v

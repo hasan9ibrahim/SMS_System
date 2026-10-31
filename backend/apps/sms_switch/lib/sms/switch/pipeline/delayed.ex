@@ -12,7 +12,8 @@ defmodule Sms.Switch.Pipeline.Delayed do
   waiting process living for ever if the bus stalls; the client has timed out long before.
 
   The waiting intake joins a cluster-wide `:pg` group named after the message, so the sender finds it on either
-  server. A message put together from its parts is not waited for: each part was answered when it came (S-3.2).
+  server. A message put together from its parts is not waited for: each part was answered when it came (S-3.2); nor
+  is a scheduled message: it is answered at once and goes at its time (S-2.12).
   """
   alias Sms.Switch.Smpp.Status
 
@@ -25,7 +26,9 @@ defmodule Sms.Switch.Pipeline.Delayed do
   @doc "Whether the message's resp waits for its vendor."
   @spec delayed?(map()) :: boolean()
   def delayed?(msg),
-    do: msg.trunk[:delayed_submit] == true and not Map.get(msg, :reassembled, false)
+    do:
+      msg.trunk[:delayed_submit] == true and not Map.get(msg, :reassembled, false) and
+        not Map.get(msg, :scheduled, false)
 
   @doc "Starts waiting for message `id`: call before the message is stored, so an outcome is never missed."
   @spec join(String.t()) :: :ok

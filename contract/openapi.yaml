@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: SMS Aggregation Platform API
-  version: 0.127.0
+  version: 0.131.0
   summary: The single contract between the GUI and the backend.
   description: |
     The GUI talks to the backend only through this contract (CLAUDE.md rule 2).
@@ -18241,8 +18241,6 @@ components:
           type: boolean
         serviceTypeRouting:
           type: boolean
-        partWiseRouting:
-          type: boolean
         hostIps:
           type: array
           minItems: 1
@@ -24159,7 +24157,7 @@ components:
 
     EnterpriseBalanceRow:
       type: object
-      required: [id, enterprise, enterpriseType, customerBalance, customerCurrency, vendorBalance, vendorCurrency, netBalance, accountManager, billingType, creditLimit, creditUsedPct, billingCycle, currency]
+      required: [id, enterprise, enterpriseType, customerBalance, customerReserved, customerCurrency, vendorBalance, vendorCurrency, netBalance, accountManager, billingType, creditLimit, creditUsedPct, billingCycle, currency]
       properties:
         id:
           $ref: "#/components/schemas/Id"
@@ -24171,6 +24169,14 @@ components:
         customerBalance:
           type: [number, "null"]
           description: Customer balance in the customer billing currency; positive = the client's credit, negative = what the client owes us; null = no customer billing.
+        customerReserved:
+          type: [number, "null"]
+          minimum: 0
+          description: >-
+            Credit reserved for the customer's messages in flight, in the customer billing currency (§7, decided
+            2026-10-31, v0.131.0): the switch holds each accepted message's full cost until it is charged (its Billing
+            Type) or ends unbilled, so the credit check counts balance + credit limit − reserved. Not part of the
+            balance. Written by the switch every few seconds; 0 when nothing is in flight; null = no customer billing.
         customerCurrency:
           type: [string, "null"]
         vendorBalance:
@@ -30549,7 +30555,9 @@ components:
           type: [number, "null"]
         availableCredit:
           type: [number, "null"]
-          description: Balance plus credit limit.
+          description: >-
+            Balance plus credit limit, less the credit reserved for messages in flight (§7, v0.131.0): what the switch
+            lets the customer send now.
         today:
           $ref: '#/components/schemas/PortalTotals'
         thisMonth:

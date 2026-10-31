@@ -1661,6 +1661,10 @@ export const topics: HelpTopic[] = [
                 what: "The customer side's balance in its billing currency. Positive = in credit; negative = owes us (amber). Hover for the words.",
               },
               {
+                name: "Reserved",
+                what: "Credit the switch holds for the customer's messages in flight: accepted, not yet charged (they wait for a receipt, a queue or a vendor). Each message's full cost is held when it is accepted and goes when it is charged or ends unbilled. It is not part of the balance, but a message is accepted only while balance + credit limit − reserved covers it. Updated every few seconds.",
+              },
+              {
                 name: "Vendor Balance",
                 what: "The vendor side's balance in its billing currency. Negative = we owe the vendor (amber).",
               },
@@ -1688,7 +1692,7 @@ export const topics: HelpTopic[] = [
             kind: "list",
             title: "Detail panel",
             items: [
-              "Each side's balance in words, the credit limit and how much is used, the net balance (with a note when the vendor side was converted), the account manager and billing cycle.",
+              "Each side's balance in words, what is reserved for messages in flight, the credit limit and how much is used, the net balance (with a note when the vendor side was converted), the account manager and billing cycle.",
               "**Send SOA**: opens the [[soa|SOA]] page for this partner.",
               "**Billing settings**: opens the enterprise's Billing tab (double-click or Enter does the same).",
               "**Transactions**: opens [[transactions|Transactions]]; filter **Name** there for this partner.",

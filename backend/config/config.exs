@@ -30,13 +30,17 @@ config :sms_core, Sms.Core.Bus,
 # The message pipeline (build step 4, Sms.Switch.Pipeline): routing configuration in memory, the vendor leg,
 # receipts and EDRs. `node_id` (SWITCH_NODE_ID) makes each server's message ids unique; `vendor_wait_ms` is how long
 # a message waits for a vendor's TPS slot or window before trying the next vendor; `credit` checks the customer's
-# credit before the message is accepted (balances come with build step 6).
+# credit before the message is accepted (balances come with build step 6). `credit_hold_s` is how long a message's credit
+# hold lasts when no vendor trunk gives its receipt timeout (48 h + 1 h, §7); `max_schedule_s` how far ahead a message
+# may be scheduled (7 days, S-2.12; further is refused 0x61).
 config :sms_switch, Sms.Switch.Pipeline,
   enabled: true,
   node_id: 0,
   platform_currency: "EUR",
   vendor_wait_ms: 10_000,
-  credit: Sms.Switch.Pipeline.Ledger
+  credit: Sms.Switch.Pipeline.Ledger,
+  credit_hold_s: 176_400,
+  max_schedule_s: 604_800
 
 # What the pipeline keeps about messages in flight is shared by both servers through Redis (§13.1).
 config :sms_switch, Sms.Switch.Pipeline.Store, backend: :redis

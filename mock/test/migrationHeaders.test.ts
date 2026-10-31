@@ -8,6 +8,7 @@ import type { MigrationImportEntity } from "@sms/contract";
 import { BUILT_IN_MAPPINGS, IMPORT_ENTITIES } from "../src/migration/entities.js";
 import { choiceOf, looseKey, mapRows } from "../src/migration/importer.js";
 import { toCsv } from "../src/migration/csv.js";
+import { packageFiles } from "../src/migration/fromPackage.js";
 
 const file = (entity: MigrationImportEntity, rows: string[][]) => ({
   entity,
@@ -109,4 +110,38 @@ test("every template downloaded from the system imports back unchanged, with or 
           if (!f.allowed.length) assert.equal(rows[0]![f.field], `v-${header[i]}`, `${entity}.${f.field}`);
       }
   }
+});
+
+test("a trunk file or package that still has Part Wise Routing imports with the column ignored (S-3.8)", () => {
+  // Part Wise Routing was removed (product owner 2026-10-31); old exports still carry the column.
+  const { rows, missing } = mapRows(
+    file("customer_trunks", [
+      ["Enterprise", "Trunk name", "TPS", "Part Wise Routing", "Billing type"],
+      ["Test Enterprise", "TEST_TRUNK", "50", "Yes", "Submit"],
+    ]),
+    null,
+  );
+  assert.deepEqual(missing, []);
+  assert.deepEqual(Object.keys(rows[0]!).sort(), IMPORT_ENTITIES.find((e) => e.entity === "customer_trunks")!.fields
+    .map((f) => f.field)
+    .sort());
+  assert.equal(rows[0]!.name, "TEST_TRUNK");
+  assert.equal(rows[0]!.billingType, "submit");
+  assert.ok(!Object.values(rows[0]!).includes("Yes"));
+
+  const pkg = packageFiles(
+    new Map([
+      ["enterprises.csv", toCsv([["id", "name", "type"], ["7", "Test Enterprise", "customer"]])],
+      [
+        "customer_trunks.csv",
+        toCsv([
+          ["id", "enterprise_id", "name", "tps", "billing_type", "part_wise_routing"],
+          ["70", "7", "TEST_TRUNK", "50", "submit", "t"],
+        ]),
+      ],
+    ]),
+  );
+  const trunks = pkg.files.find((f) => f.entity === "customer_trunks")!;
+  assert.ok(trunks.content.includes("TEST_TRUNK"));
+  assert.ok(!/part.?wise/i.test(trunks.content));
 });

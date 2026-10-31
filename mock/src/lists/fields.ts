@@ -2536,6 +2536,8 @@ export const listFields: Record<ListId, ListFields> = {
       field({ field: "enterprise", label: "Enterprise Name", type: "text", defaultOperator: "like" }),
       field({ field: "enterpriseType", label: "Type", type: "text", defaultOperator: "eq", hidden: true }),
       field({ field: "customerBalance", label: "Customer Balance", type: "decimal", defaultOperator: "gte" }),
+      // Held for messages in flight (§7, decided 2026-10-31).
+      field({ field: "customerReserved", label: "Reserved", type: "decimal", defaultOperator: "gte" }),
       field({
         field: "customerCurrency",
         label: "Customer Currency",

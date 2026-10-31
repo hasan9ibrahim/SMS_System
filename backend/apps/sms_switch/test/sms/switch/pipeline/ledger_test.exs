@@ -164,6 +164,134 @@ defmodule Sms.Switch.Pipeline.LedgerTest do
     assert :ok = Ledger.Alerts.check([account])
   end
 
+  describe "credit holds (S-6.3, S-6.4, decision 2026-10-31)" do
+    defp held_msg(ent, id, parts \\ 1), do: Map.put(msg(ent, parts), :id, id)
+
+    defp exposure(key) do
+      {:ok, used} = Ledger.used(key)
+      {used, Ledger.held(key)}
+    end
+
+    test "two messages near the limit sent at once: one passes, the other is refused 0x45" do
+      start([
+        [enterprise_id: 51, prepaid: true, base: "0.1"],
+        [enterprise_id: 52, base: "0.05", limit: "0.1"]
+      ])
+
+      results =
+        ["a", "b"]
+        |> Enum.map(fn id -> Task.async(fn -> Ledger.reserve(held_msg(51, id, 2)) end) end)
+        |> Enum.map(&Task.await/1)
+
+      assert Enum.sort(results) == [:ok, {:error, :esme_rsubmitfail}]
+      assert exposure("c51") == {0, 100_000}
+
+      # Ten at once on balance + credit limit for three: three pass.
+      results =
+        1..10
+        |> Enum.map(fn n -> Task.async(fn -> Ledger.reserve(held_msg(52, "m#{n}")) end) end)
+        |> Enum.map(&Task.await/1)
+
+      assert Enum.count(results, &(&1 == :ok)) == 3
+      assert exposure("c52") == {0, 150_000}
+    end
+
+    test "the check without a hold counts what is held; holding the same message twice holds it once" do
+      start([[enterprise_id: 53, prepaid: true, base: "0.1"]])
+      assert :ok = Ledger.reserve(held_msg(53, "m1"))
+      assert :ok = Ledger.reserve(held_msg(53, "m1"))
+      assert exposure("c53") == {0, 50_000}
+      assert :ok = Ledger.check(msg(53, 1))
+      assert {:error, :esme_rsubmitfail} = Ledger.check(msg(53, 2))
+      # A message without an id (nothing to hold it by) is only checked.
+      assert :ok = Ledger.reserve(msg(53, 1))
+      assert exposure("c53") == {0, 50_000}
+    end
+
+    test "a message's charge replaces its hold: counted once, also when the charge comes twice" do
+      start([[enterprise_id: 54, prepaid: true, base: "0.1"]])
+      assert :ok = Ledger.reserve(held_msg(54, "m1", 2))
+      assert exposure("c54") == {0, 100_000}
+      assert {:error, :esme_rsubmitfail} = Ledger.reserve(held_msg(54, "m2"))
+
+      assert :ok = Ledger.charge(:customer, 54, "m1", @eur, 2)
+      assert exposure("c54") == {100_000, 0}
+      assert :ok = Ledger.charge(:customer, 54, "m1", @eur, 2)
+      assert exposure("c54") == {100_000, 0}
+      assert Ledger.balance("c54") == 0
+    end
+
+    test "a message that ends unbilled releases its hold, once" do
+      start([[enterprise_id: 55, prepaid: true, base: "0.1"]])
+      assert :ok = Ledger.reserve(held_msg(55, "m1", 2))
+      assert {:error, :esme_rsubmitfail} = Ledger.reserve(held_msg(55, "m2"))
+
+      # The balance screens see what is held (credit_reservations), written as it changes.
+      assert :ok = Sync.sync()
+      assert LedgerSource.reservations() == %{"c55" => 100_000}
+
+      assert :ok = Ledger.release(55, "m1")
+      assert exposure("c55") == {0, 0}
+      assert :ok = Sync.sync()
+      assert LedgerSource.reservations() == %{"c55" => 0}
+      assert :ok = Ledger.release(55, "m1")
+      assert exposure("c55") == {0, 0}
+      assert :ok = Ledger.reserve(held_msg(55, "m2"))
+      # No billing, no enterprise: nothing to release.
+      assert :ok = Ledger.release(99, "m1")
+      assert :ok = Ledger.release(nil, "m1")
+    end
+
+    test "a hold expires on its own and the sweep releases it; one moved on when its message was sent stays" do
+      start([[enterprise_id: 56, prepaid: true, base: "1"]])
+      assert :ok = Ledger.reserve(held_msg(56, "lost"))
+      assert :ok = Ledger.reserve(held_msg(56, "sent"))
+      past = System.os_time(:millisecond) - 1_000
+      :ok = Store.extend_credit_hold("c56", "lost", past)
+      :ok = Store.extend_credit_hold("c56", "sent", past)
+      # Sent after all: its receipt timeout counts from now.
+      :ok = Ledger.extend_hold(56, "sent", 60)
+
+      assert :ok = Ledger.sweep_holds()
+      assert exposure("c56") == {0, 50_000}
+      assert {:ok, []} = Store.due_credit_holds(System.os_time(:millisecond), 10)
+
+      assert {:ok, [{"c56", "sent"}]} =
+               Store.due_credit_holds(System.os_time(:millisecond) + 3_661_000, 10)
+    end
+
+    test "without a vendor trunk a hold lasts the configured default" do
+      assert Ledger.hold_s(%{}) == 176_400
+      env = Application.get_env(:sms_switch, Sms.Switch.Pipeline, [])
+      Application.put_env(:sms_switch, Sms.Switch.Pipeline, Keyword.put(env, :credit_hold_s, 90))
+      on_exit(fn -> Application.put_env(:sms_switch, Sms.Switch.Pipeline, env) end)
+      assert Ledger.hold_s(%{route: %{vendor_trunk_id: 1}}) == 90
+    end
+
+    test "a message not stored after all gives its hold back at once" do
+      start([[enterprise_id: 57, prepaid: true, base: "0.05"]])
+      assert :ok = Ledger.reserve(held_msg(57, "m1"))
+      assert :ok = Ledger.unreserve(held_msg(57, "m1"))
+      assert exposure("c57") == {0, 0}
+    end
+
+    test "Redis unavailable: checked on the last totals, holds included, nothing held (Q24)" do
+      start([[enterprise_id: 58, prepaid: true, base: "0.1"]])
+      assert :ok = Ledger.reserve(held_msg(58, "m1"))
+
+      previous = Application.get_env(:sms_switch, Store)
+      Application.put_env(:sms_switch, Store, backend: :redis)
+      on_exit(fn -> Application.put_env(:sms_switch, Store, previous) end)
+
+      # 0.05 held of 0.1: one more of 0.05 passes, two do not.
+      assert :ok = Ledger.reserve(held_msg(58, "m2"))
+      assert {:error, :esme_rsubmitfail} = Ledger.reserve(held_msg(58, "m3", 2))
+      assert {:error, :esme_rsubmitfail} = Ledger.check(msg(58, 2))
+      :ets.insert(Ledger.seen_table(), {"c58", 0, System.monotonic_time(:millisecond) - 61_000})
+      assert {:error, :esme_rsubmitfail} = Ledger.reserve(held_msg(58, "m4"))
+    end
+  end
+
   test "amounts" do
     assert Ledger.to_micro(nil) == 0
     assert Ledger.to_micro(2) == 2_000_000

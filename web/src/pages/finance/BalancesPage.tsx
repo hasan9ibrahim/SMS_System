@@ -1,6 +1,7 @@
 // Enterprise Balance (§7): customer, vendor and net balance (customer − vendor) per enterprise,
 // positive = the partner's credit, negative = owed (decided 2026-10-17), with account manager,
 // customer credit and use, billing cycle and currency. Server-side filters and sort; CSV export.
+// Reserved: the credit the switch holds for the customer's messages in flight (decided 2026-10-31).
 // Send SOA opens the SOA screen for the enterprise (§7, build step 5.7).
 import type { EnterpriseBalanceRow } from "@sms/contract";
 import { downloadCsv } from "../../api/masterData";
@@ -58,6 +59,21 @@ export function BalancesPage() {
                 title={balanceWords(r.customerBalance, "customer").text}
               >
                 {money(r.customerBalance, r.customerCurrency)}
+              </span>
+            ),
+        },
+        customerReserved: {
+          width: 130,
+          align: "right",
+          render: (r) =>
+            r.customerReserved === null ? (
+              muted("—")
+            ) : (
+              <span
+                className={`num ${r.customerReserved > 0 ? "" : "muted"}`}
+                title="Held for messages in flight until they are charged or end unbilled"
+              >
+                {money(r.customerReserved, r.customerCurrency)}
               </span>
             ),
         },
@@ -152,6 +168,12 @@ export function BalancesPage() {
                   {r.customerBalance === null
                     ? "no customer billing"
                     : `${money(r.customerBalance, r.customerCurrency)} · ${balanceWords(r.customerBalance, "customer").text}`}
+                  {r.customerReserved !== null && r.customerReserved > 0 && (
+                    <span className="muted small">
+                      {" "}
+                      · {money(r.customerReserved, r.customerCurrency)} reserved for messages in flight
+                    </span>
+                  )}
                   {r.creditLimit !== null && (
                     <span className="muted small">
                       {" "}

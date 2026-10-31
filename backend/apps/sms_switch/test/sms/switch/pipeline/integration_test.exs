@@ -170,6 +170,16 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
         # Opening 10 + the payment − 2 of traffic not invoiced yet.
         assert Ledger.to_micro(balance) == base - 2_000_000
 
+        # What the switch holds for messages in flight, for the balance screens (migration 103, decided 2026-10-31).
+        assert :ok = Postgres.persist_reservations([{account, 1_234_567}])
+        assert :ok = Postgres.persist_reservations([{account, 250_000}])
+        assert :ok = Postgres.persist_reservations([])
+
+        assert [[reserved]] =
+                 q.("SELECT reserved FROM credit_reservations WHERE enterprise_id = $1", [ent])
+
+        assert Ledger.to_micro(reserved) == 250_000
+
         Repo.rollback(:done)
       end)
     end

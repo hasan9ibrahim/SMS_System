@@ -18,7 +18,9 @@ defmodule Sms.Switch.Pipeline.Sender do
     * when no vendor is left the message has failed: the customer gets a REJECTD receipt (UNKNOWN when the last
       vendor may have it) if it asked for receipts;
     * a message whose validity period ended before a vendor took it is not sent: an EXPIRED receipt (S-2.13). A
-      vendor gets the validity period and scheduled time as absolute times in UTC.
+      vendor gets the validity period and scheduled time as absolute times in UTC;
+    * a scheduled message the switch held (S-2.12, `Sms.Switch.Pipeline.Scheduled`) comes at its time: rated, routed
+      and its credit held then, and sent without a schedule.
 
   Every attempt that reached a vendor is an EDR row (`Sms.Switch.Pipeline.Edr`); a message sent is recorded
   (`Sms.Switch.Pipeline.Store`) so its receipts find it, and a receipt that came before its submit_sm_resp is picked
@@ -114,20 +116,53 @@ defmodule Sms.Switch.Pipeline.Sender do
           :cancelled ->
         cancelled(msg)
 
-      grows_parts?(msg, msg.ingress[:text]) ->
-        # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
-        fail(msg, [], %{
-          status: "REJECTD",
-          error: "001",
-          command_status: Status.code(:esme_rsubmitfail),
-          reason: :translation_grows
-        })
+      msg[:release] == true ->
+        released(Map.delete(msg, :release))
 
       true ->
-        attempt(msg, msg.route, 1, MapSet.new([msg.route.vendor_trunk_id]), [])
+        go(msg)
     end
 
     :ok
+  end
+
+  defp go(msg) do
+    if grows_parts?(msg, msg.ingress[:text]) do
+      # D3: a translation that adds parts never reaches a vendor; the customer is not billed.
+      fail(msg, [], %{
+        status: "REJECTD",
+        error: "001",
+        command_status: Status.code(:esme_rsubmitfail),
+        reason: :translation_grows
+      })
+    else
+      attempt(msg, msg.route, 1, MapSet.new([msg.route.vendor_trunk_id]), [])
+    end
+  end
+
+  # S-2.12 (decided 2026-10-31): a scheduled message at its time (`Sms.Switch.Pipeline.Scheduled`). Its validity period
+  # first (EXPIRED if it ended, S-2.13); then rated, routed and its credit held now. Refused then (no rate, no route, no
+  # credit): a REJECTD receipt if asked and an EDR row, not billed.
+  defp released(msg) do
+    if expired?(msg, nil) do
+      expired(msg, [])
+    else
+      case Intake.release(msg) do
+        {:ok, msg} ->
+          go(msg)
+
+        {:reject, status, reason, msg} ->
+          code = Status.code(status)
+          Logger.info("scheduled message #{msg.id} refused at its time (#{inspect(reason)})")
+
+          fail(msg, [], %{
+            status: "REJECTD",
+            error: err(code),
+            command_status: code,
+            reason: reason
+          })
+      end
+    end
   end
 
   # S-2.13: its validity period ended before a vendor took it: not sent, an EXPIRED receipt if the customer asked for
@@ -136,6 +171,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp expired(msg, rows) do
     Logger.info("message #{msg.id} expired before a vendor took it (S-2.13)")
     publish_rows(msg, rows, false)
+    release_hold(msg)
     edr_id = Edr.new_id()
 
     row =
@@ -162,6 +198,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   # DELETED).
   defp cancelled(msg) do
     Logger.info("message #{msg.id} cancelled by the customer before it was sent (S-2.15)")
+    release_hold(msg)
 
     row =
       msg
@@ -710,7 +747,12 @@ defmodule Sms.Switch.Pipeline.Sender do
       destination_addr: e[:receiver] || i[:receiver],
       protocol_id: f[:protocol_id] || 0,
       priority_flag: f[:priority_flag] || 0,
-      schedule_delivery_time: vendor_time(msg, :scheduled_at, f[:schedule_delivery_time]),
+      # S-2.12: a message the switch held goes when due, without a schedule of its own.
+      schedule_delivery_time:
+        if(Map.get(msg, :scheduled, false),
+          do: "",
+          else: vendor_time(msg, :scheduled_at, f[:schedule_delivery_time])
+        ),
       validity_period: vendor_time(msg, :expires_at, f[:validity_period]),
       # Receipts are always asked of the vendor; the customer gets what it asked for (S-2.14).
       registered_delivery: 1,
@@ -919,7 +961,23 @@ defmodule Sms.Switch.Pipeline.Sender do
     publish_rows(msg, rows, false)
     publish_rows(msg, [row], true)
 
+    # Not billed yet (reported or delivery billing): its credit hold waits for the receipt, as its record does (§7).
+    unless charged.charged,
+      do: Ledger.extend_hold(msg.trunk.enterprise_id, msg.id, timeout_s)
+
     _ = apply_orphans(msg, vt, parts)
+    :ok
+  end
+
+  # §7, decision 2026-10-31: a message that ends without being billed gives its credit hold back. A Test SMS or Repush
+  # held none; a message billed already had its hold replaced by the charge.
+  defp release_hold(%{internal: %{}}), do: :ok
+  defp release_hold(%{charged: true}), do: :ok
+  # A scheduled message refused or expired at its time before its credit was held (S-2.12).
+  defp release_hold(%{credit_held: false}), do: :ok
+
+  defp release_hold(msg) do
+    _ = Ledger.release(msg.trunk.enterprise_id, msg.id)
     :ok
   end
 
@@ -1052,6 +1110,10 @@ defmodule Sms.Switch.Pipeline.Sender do
 
     publish_rows(msg, earlier, false)
     publish_rows(msg, [last], true)
+
+    # Attempt billing bills a message no vendor took (its charge replaces the hold); otherwise the hold goes back.
+    unless Billing.flags(msg, Map.put_new(last, :success, false)).customer_billable,
+      do: release_hold(msg)
 
     # A Delayed Submit customer waiting for its resp gets the failure there, not as a receipt (S-2.18, D11).
     unless Delayed.notify(msg.id, {:error, failure.command_status}),

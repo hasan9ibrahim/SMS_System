@@ -260,7 +260,6 @@ Form (/customertrunk/add|edit|view/{id}):
 |  | HLR Rule Group | Lookup policy (§6.5) |
 |  | Consider HLR Rate | Add HLR cost to the customer charge |
 |  | Service Type Routing | Use SMPP service\_type as a routing key |
-|  | Part Wise Routing | Route each multipart segment independently |
 | Connection | Host Name\* | Allowed client IP(s) |
 |  | Username\* / Password\* | SMPP system\_id / password |
 |  | Max Connections | 1–10 binds |
@@ -1572,7 +1571,7 @@ Unlike other pages, the Route Rules page follows the screenshots above in layout
 | service\_type | Vendor ServiceType; customer Service Type Routing |
 | source\_addr\_ton/npi, dest\_addr\_ton/npi | Translation rule Sender/Destination TON and NPI; vendor Allowed src/dst TON and NPI; Route Simulator |
 | source\_addr / destination\_addr | Translation Sender ID / Receiver ID conversion; route rule patterns and lists |
-| esm\_class, UDH (sar\_\* TLVs) | Support Multipart, Max Msg Len, Part Wise Routing, Deny Multipart |
+| esm\_class, UDH (sar\_\* TLVs) | Support Multipart, Max Msg Len, Deny Multipart (the parts of a message are always routed as one, S-3.8) |
 | registered\_delivery | Translation rule Registered Delivery (0/1) |
 | data\_coding | Customer Default Coding; vendor AllowedDataCodingList |
 | message\_id (submit\_sm\_resp) | Vendor MsgID Type (Default/Decimal/Hexadecimal) |
