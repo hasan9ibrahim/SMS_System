@@ -65,6 +65,8 @@ const COMMON: FieldSpec[] = [
   { api: "tps", col: "tps" },
   { api: "overflowBuffer", col: "overflow_buffer" },
   { api: "billingTimezone", col: "billing_timezone" },
+  // TON / NPI as sent, or fixed from the address after the trunk's translation (S-4.7, migration 101).
+  { api: "tonNpiMode", col: "ton_npi_mode" },
 ];
 
 const CUSTOMER_SPECS: FieldSpec[] = [

@@ -165,6 +165,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     tps: "50",
     category: "OTP",
     billingType: "submit",
+    tonNpiMode: "as_sent",
   },
   vendor_trunks: {
     externalId: "VT-4001",
@@ -178,6 +179,7 @@ const EXAMPLES: Record<MigrationImportEntity, Record<string, string>> = {
     tps: "100",
     category: "DIRECT",
     billingType: "delivery",
+    tonNpiMode: "auto",
   },
   rate_tables: {
     externalId: "RT-5001",

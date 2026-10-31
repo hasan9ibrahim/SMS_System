@@ -367,11 +367,31 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   },
   customer_trunks: {
     table: "customer_trunks",
-    columns: ["host_ips", "ssl_type", "protocol", "tps", "product_category_id", "billing_type", "username", "password"],
+    columns: [
+      "host_ips",
+      "ssl_type",
+      "protocol",
+      "tps",
+      "product_category_id",
+      "billing_type",
+      "username",
+      "password",
+      "ton_npi_mode",
+    ],
   },
   vendor_trunks: {
     table: "vendor_trunks",
-    columns: ["host", "port", "username", "password", "protocol", "tps", "product_category_id", "billing_type"],
+    columns: [
+      "host",
+      "port",
+      "username",
+      "password",
+      "protocol",
+      "tps",
+      "product_category_id",
+      "billing_type",
+      "ton_npi_mode",
+    ],
   },
   rate_tables: { table: "rate_tables", columns: ["product_category_id"] },
   route_rules: {
@@ -613,6 +633,8 @@ function planTrunks(p: Planner, kind: "customer" | "vendor", raws: Raw[]): PlanR
       tps,
       bind_type: "TR",
       max_connections: 2,
+      // TON / NPI as sent or auto (S-4.7); left out on an update keeps the trunk's.
+      ton_npi_mode: r.tonNpiMode?.trim().toLowerCase() || (m.action === "create" ? "as_sent" : undefined),
     };
     if (kind === "customer") {
       let username = r.username?.trim();

@@ -113,6 +113,8 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
     tps: t.tps ?? "",
     category: name(categories, t.product_category_id),
     billingType: t.billing_type ?? "",
+    // S-4.7 (migration 101); a package from before it has none: as_sent on create.
+    tonNpiMode: t.ton_npi_mode ?? "",
   });
   out.push({
     entity: "customer_trunks",
