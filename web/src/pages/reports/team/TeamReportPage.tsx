@@ -100,7 +100,7 @@ function columnsFor(section: Section, r: TeamReport, onOpen: (row: TeamMemberRow
       return [
         name,
         dept,
-        num("clients", "Active clients", (x) => int(b(x)?.activeClients)),
+        num("clients", "Active clients", (x) => int(b(x)?.activeClients), 116),
         num(
           "new",
           "New",
@@ -771,8 +771,8 @@ export function TeamReportPage() {
           </>
         }
       />
-      <div className="lcr-controls">
-        <div className="field">
+      <div className="team-controls">
+        <div className="field team-period">
           <span>Period</span>
           {/* Shared period style (design refresh, team trial round 2); the range chip sets a custom period. */}
           <span className="period-line">

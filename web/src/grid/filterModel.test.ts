@@ -66,17 +66,35 @@ const type: FieldDescriptor = {
   ],
 };
 
-test("text: plain text starts with, %x anywhere, wildcards as typed, = equals, ! excludes, /re/ regex", () => {
+test("text: plain text and wildcards start with, %x anywhere, = equals, ! excludes, /re/ regex", () => {
   assert.deepEqual(parseColumnFilter(name, "au"), { field: "name", op: "like", value: "au%" });
   assert.deepEqual(parseColumnFilter(name, "%au"), { field: "name", op: "like", value: "%au%" });
   assert.deepEqual(parseColumnFilter(name, "re%"), { field: "name", op: "like", value: "re%" });
-  assert.deepEqual(parseColumnFilter(name, "a_c"), { field: "name", op: "like", value: "a_c" });
+  // Wildcards match the start of a value too: a part of a name with `_` in it (functional QA round 13).
+  assert.deepEqual(parseColumnFilter(name, "a_c"), { field: "name", op: "like", value: "a_c%" });
+  assert.deepEqual(parseColumnFilter(name, "PK_Tel"), { field: "name", op: "like", value: "PK_Tel%" });
+  assert.deepEqual(parseColumnFilter(name, "%a_c"), { field: "name", op: "like", value: "%a_c%" });
+  assert.deepEqual(parseColumnFilter(name, "tel%com"), { field: "name", op: "like", value: "tel%com%" });
+  assert.deepEqual(parseColumnFilter(name, "%tel%com%"), { field: "name", op: "like", value: "%tel%com%" });
+  assert.deepEqual(parseColumnFilter(name, "!a_c"), { field: "name", op: "not_like", value: "a_c%" });
   assert.deepEqual(parseColumnFilter(name, "=ACME"), { field: "name", op: "eq", value: "ACME" });
   assert.deepEqual(parseColumnFilter(name, "!test"), { field: "name", op: "not_like", value: "test%" });
   assert.deepEqual(parseColumnFilter(name, "/^ab/"), { field: "name", op: "regex", value: "^ab" });
   assert.ok(parseColumnFilter(name, "/(/") instanceof Error);
   assert.deepEqual(parseColumnFilter(name, "empty"), { field: "name", op: "empty" });
   assert.equal(parseColumnFilter(name, "   "), null);
+});
+
+test("matchAnywhere text: plain text and `_` patterns anywhere, `%` patterns as typed", () => {
+  const rule: FieldDescriptor = { ...name, matchAnywhere: true };
+  assert.deepEqual(parseColumnFilter(rule, "OTP"), { field: "name", op: "like", value: "%OTP%" });
+  assert.deepEqual(parseColumnFilter(rule, "VN_04"), { field: "name", op: "like", value: "%VN_04%" });
+  assert.deepEqual(parseColumnFilter(rule, "BLOCK%"), { field: "name", op: "like", value: "BLOCK%" });
+  for (const input of ["OTP", "%VN_04%", "BLOCK%"]) {
+    const c = parseColumnFilter(rule, input);
+    assert.ok(c && !(c instanceof Error));
+    assert.equal(formatColumnFilter(rule, c), input, input);
+  }
 });
 
 test("prefix and destination fields mean starts with", () => {
@@ -139,6 +157,8 @@ test("what the box shows round-trips through the parser", () => {
     [name, "!test"],
     [name, "/^ab/"],
     [name, "%re%"],
+    [name, "a_c%"],
+    [name, "%tel%com%"],
     [dest, "505"],
     [margin, ">=5"],
     [margin, "-3..10"],

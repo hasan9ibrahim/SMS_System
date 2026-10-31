@@ -8,7 +8,7 @@
 import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouteRule } from "../../api/routing";
 import type { RouteSimulatorResult, TrunkListRow } from "@sms/contract";
-import { autoCoding, autoTonNpi, parseReceivers } from "./monitorModel";
+import { autoCoding, autoTonNpi, parseReceivers, receiverProblem } from "./monitorModel";
 import { runRouteSimulator } from "../../api/observation";
 import { pageForPath } from "../../nav/registry";
 import { PageHeader } from "../../page/PageHeader";
@@ -507,6 +507,7 @@ export function RouteSimulatorPage() {
     shortcuts: "Enter runs",
   });
   const list = parseReceivers(receivers);
+  const numbersProblem = receiverProblem(receivers);
   const realNumber = testNumber.replace(/\D/g, "");
   // Numbers and destinations together (team trial round 12, no switch between them): one run each.
   const runs = [
@@ -524,6 +525,7 @@ export function RouteSimulatorPage() {
   const isAuto = !touched.coding && !touched.src && !touched.dst;
   const go = async () => {
     if (!trunkId) return toast({ tone: "warning", message: "Choose the customer trunk" });
+    if (numbersProblem) return toast({ tone: "warning", message: numbersProblem });
     if (!runs.length) return toast({ tone: "warning", message: "Enter a number or pick a destination" });
     if (list.length > 20) return toast({ tone: "warning", message: "At most 20 numbers at once" });
     if (dests.length > MAX_DESTS) return toast({ tone: "warning", message: `At most ${MAX_DESTS} networks at once` });
@@ -628,9 +630,13 @@ export function RouteSimulatorPage() {
                 placeholder="e.g. 447700900123, 33612345678"
                 onChange={(e) => setReceivers(e.target.value)}
               />
-              <span className="muted small">
-                {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
-              </span>
+              {numbersProblem ? (
+                <span className="error-text small">{numbersProblem}</span>
+              ) : (
+                <span className="muted small">
+                  {list.length > 1 ? `${list.length} numbers` : "Comma-separated, up to 20"}
+                </span>
+              )}
             </label>
             <div className="field">
               <span>Destinations</span>

@@ -304,6 +304,21 @@ export function parseReceivers(text: string): string[] {
   ];
 }
 
+/**
+ * What is wrong with the typed numbers, or null (functional QA round 13: "12x" was counted and sent as "12"). Each
+ * entry is a phone number written with digits, spaces, +, dashes, dots or brackets, of 5 to 15 digits (the contract's
+ * receiver).
+ */
+export function receiverProblem(text: string): string | null {
+  const bad = text
+    .split(/[,;\n]+/)
+    .map((x) => x.trim())
+    .filter((x) => x && (!/^\+?[\d\s().-]+$/.test(x) || !/^\d{5,15}$/.test(x.replace(/\D/g, ""))));
+  if (!bad.length) return null;
+  const shown = bad.slice(0, 3).join(", ") + (bad.length > 3 ? ", …" : "");
+  return `Not a phone number: ${shown}. Use 5 to 15 digits, e.g. 447700900123.`;
+}
+
 /** Data coding from the text: UCS-2 (8) when a character is outside GSM 7-bit, else the default (0). */
 export const autoCoding = (text: string) => (needsUcs2(text) ? 8 : 0);
 

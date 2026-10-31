@@ -113,6 +113,7 @@ function DestinationDialog({ row, done }: { row: Destination | null; done: () =>
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit MCCMNC ${row.mccmnc}` : "Add MCCMNC code"}
       saveLabel={row ? "Save" : "Add code"}
       saving={save.isPending}

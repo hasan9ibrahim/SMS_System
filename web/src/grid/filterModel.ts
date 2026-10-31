@@ -157,12 +157,18 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
   return { field, op: "like", value: pattern(text) };
 }
 
-/** Plain text starts with; a leading % alone (`%au`) searches anywhere (team trial round 4); other wildcards as typed. */
-const textPattern = (v: string) =>
-  !/[%_]/.test(v) ? `${v}%` : v.length > 1 && v.startsWith("%") && !/[%_]/.test(v.slice(1)) ? `${v}%` : v;
+/**
+ * Text matches the start of a value, wildcards included: `%` is added at the end unless the text already ends with
+ * one. `%au` finds au anywhere (team trial round 4); `PK_Tel` finds PK_Telenor_HQ (functional QA round 13: a part of
+ * a name with `_` in it found nothing, since it had to match the whole value).
+ */
+const textPattern = (v: string) => (v.endsWith("%") ? v : `${v}%`);
 
-/** Plain text anywhere (fields with matchAnywhere, team trial round 6); wildcards as typed. */
-const anywherePattern = (v: string) => (!/[%_]/.test(v) ? `%${v}%` : v);
+/**
+ * Text anywhere (fields with matchAnywhere, team trial round 6): without a `%` of its own it is wrapped in `%…%`, so
+ * `VN_04` finds BLOCK_VN_04_OTP (round 13); with one, the `%` say where it may match.
+ */
+const anywherePattern = (v: string) => (!v.includes("%") ? `%${v}%` : v);
 
 /** "abc%" (starts with, the plain-text default) → "abc"; anything else null. */
 const startsWithText = (s: string) =>

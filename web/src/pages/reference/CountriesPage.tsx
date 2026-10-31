@@ -44,6 +44,7 @@ function CountryDialog({ row, regions, done }: { row: Country | null; regions: s
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add country"}
       saveLabel={row ? "Save" : "Add country"}
       saving={save.isPending}

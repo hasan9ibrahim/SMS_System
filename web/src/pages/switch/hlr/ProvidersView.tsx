@@ -310,6 +310,7 @@ function RateDialog({
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Price for ${row.mccmnc} ${row.country}` : "Set a destination price"}
       saveLabel="Save price"
       saving={set.isPending}

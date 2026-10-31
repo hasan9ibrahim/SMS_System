@@ -68,12 +68,8 @@ export const HIGHLIGHTS: { value: MatrixHighlight; label: string; short: string;
   },
 ];
 
-const errText = (e: unknown) =>
-  e instanceof ApiError
-    ? [e.message, ...((e.problem.errors ?? []) as { path: string; message: string }[]).map((x) => x.message)].join(
-        " · ",
-      )
-    : String(e);
+// The message names each field's problem in plain words (api/problems.ts).
+const errText = (e: unknown) => (e instanceof ApiError ? e.message : String(e));
 
 // ---------------------------------------------------------------- inputs
 

@@ -1,12 +1,14 @@
 // Form kit for record screens (§5): one state object per form, a dirty flag for the tab's
 // unsaved-changes dot (§13.5), and server field errors (problem+json `errors[].path`,
 // e.g. "/address/city") shown under the matching field. Required fields carry a "*".
-import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
+import { fieldLine, problemFields, problemTitle } from "../api/problems";
 import { Icon } from "../ui/Icon";
 import { ComboBox } from "../ui/ComboBox";
 
 import { getAt, pointerToPath, setAt } from "./paths";
+import { checkValue, type FieldRule } from "./checks";
 
 export { getAt, pointerToPath, setAt };
 
@@ -22,6 +24,13 @@ export interface FormApi<T> {
   reset: (next: T) => void;
   /** Maps a failed save to field errors; returns the message for the form banner. */
   fail: (err: unknown) => string;
+  /** What a field on screen checks before Save (its required mark, limits, e-mail or list items). */
+  rule: (path: string, rule: FieldRule | null) => void;
+  /**
+   * Client checks before Save (functional QA round 13): every field on screen against its rule, plus the page's
+   * own `extra` errors. Shows them under the fields and returns them; empty when the form may be sent.
+   */
+  check: (extra?: Record<string, string>) => Record<string, string>;
 }
 
 export function useForm<T>(initial: T): FormApi<T> {
@@ -42,17 +51,33 @@ export function useForm<T>(initial: T): FormApi<T> {
   }, []);
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError) {
-      const list = (err.problem.errors ?? []) as { path: string; message: string }[];
+      // In plain words, each under its field (functional QA round 13); the banner names the ones with no field.
+      const list = problemFields(err.problem);
       const mapped: Record<string, string> = {};
-      for (const e of list) if (e.path && e.path !== "/") mapped[pointerToPath(e.path)] ??= e.message;
+      for (const e of list) if (e.path) mapped[pointerToPath(e.path)] ??= e.message;
       setErrors(mapped);
-      return list.length
-        ? `${err.problem.title}: ${list.length} field${list.length === 1 ? "" : "s"} to check`
-        : err.message;
+      const loose = list.filter((e) => !e.path);
+      if (!list.length) return err.message;
+      const title = `${problemTitle(err.problem.title)}: ${list.length} field${list.length === 1 ? "" : "s"} to check`;
+      return loose.length ? `${title}. ${loose.map(fieldLine).join(" ")}` : title;
     }
     return String(err);
   }, []);
   const dirty = useMemo(() => JSON.stringify(values) !== base.current, [values]);
+  const rules = useRef(new Map<string, FieldRule>());
+  const rule = useCallback((path: string, r: FieldRule | null) => {
+    if (r) rules.current.set(path, r);
+    else rules.current.delete(path);
+  }, []);
+  const latest = useRef(values);
+  latest.current = values;
+  const check = useCallback((extra: Record<string, string> = {}) => {
+    const found: Record<string, string> = {};
+    for (const [path, r] of rules.current) Object.assign(found, checkValue(path, getAt(latest.current, path), r));
+    const all = { ...found, ...extra };
+    setErrors(all);
+    return all;
+  }, []);
   return {
     values,
     dirty,
@@ -63,7 +88,19 @@ export function useForm<T>(initial: T): FormApi<T> {
     setErrors,
     reset,
     fail,
+    rule,
+    check,
   };
+}
+
+/** A field tells its form what to check before Save while it is on screen (and not disabled). */
+function useRule<T>(form: FormApi<T>, path: string, rule: FieldRule | null) {
+  const r = rule && Object.values(rule).some((x) => x !== undefined && x !== false) ? rule : null;
+  form.rule(path, r);
+  useEffect(() => {
+    form.rule(path, r);
+    return () => form.rule(path, null);
+  });
 }
 
 // ---------------------------------------------------------------- layout
@@ -289,6 +326,7 @@ export function TextField<T>({
 }) {
   const id = useId();
   const v = form.get(path);
+  useRule(form, path, disabled ? null : { required, format: type === "email" ? "email" : undefined, maxLength });
   const box = (
     <input
       id={id}
@@ -360,6 +398,7 @@ export function NumberField<T>({
 }: BaseProps<T> & { min?: number; max?: number; step?: number; suffix?: string; placeholder?: string }) {
   const id = useId();
   const v = form.get(path);
+  useRule(form, path, disabled ? null : { required, min, max, integer: step === 1 });
   return (
     <FormField label={label} required={required} error={form.error(path)} hint={hint} wide={wide} htmlFor={id}>
       <span className="input-suffix">
@@ -482,13 +521,17 @@ export function ListField<T>({
   wide,
   placeholder,
   keepPlaceholder,
+  item,
 }: BaseProps<T> & {
   placeholder?: string;
   /** Show the placeholder after the first value too (e.g. "+ Add email" under the list). */
   keepPlaceholder?: boolean;
+  /** What is wrong with one value (an IP address, an e-mail), checked before Save; null when it is fine. */
+  item?: "email" | "ip" | ((value: string) => string | null);
 }) {
   const id = useId();
   const list = ((form.get(path) as string[] | null) ?? []).slice();
+  useRule(form, path, disabled ? null : { required, item });
   const [draft, setDraft] = useState("");
   // A value being edited in place (click it, team trial round 12): Enter or leaving keeps the change, Escape not.
   const [editing, setEditing] = useState<{ i: number; text: string } | null>(null);

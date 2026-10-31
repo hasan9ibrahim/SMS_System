@@ -501,7 +501,12 @@ export const topics: HelpTopic[] = [
                 values:
                   "`%mobile` contains mobile anywhere; `%tel%com%` contains tel and later com; `/mobile$/` ends with mobile.",
               },
-              { name: "a_c", what: "`_` stands for exactly one character.", values: "`a_c` matches abc, a1c, aXc." },
+              {
+                name: "a_c",
+                what: "`_` stands for exactly one character. A pattern with `%` or `_` still matches the start of a value: a `%` is added at the end unless it already ends with one.",
+                values:
+                  "`a_c` finds abc, a1c, aXc and anything that goes on, such as abcd; `PK_Tel` finds PK_Telenor_HQ. On a column that searches anywhere (such as Rule on Route rules), `VN_04` finds BLOCK_VN_04_OTP. For an exact length use a regular expression, e.g. `/^a.c$/`.",
+              },
               { name: "=ACME", what: "Equals exactly (still not case-sensitive)." },
               { name: "!test", what: "Does not start with `test`. `!%test` does not contain it anywhere." },
               {
@@ -579,7 +584,7 @@ export const topics: HelpTopic[] = [
           },
           {
             kind: "text",
-            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. Inside a pill, and in every column filter, text matches the start of a value (`Colo` finds names starting with Colo); type `%colo` to find it anywhere. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** the plain quick search also matches the start; other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
+            text: "Plain text typed in the box (outside a pill) is a normal quick search over the main text columns: press **Enter**, or click **Search all text columns for …** in the card. **Esc** clears it. Inside a pill, and in every column filter, text matches the start of a value, with `_` or `%` in it too (`Colo` finds names starting with Colo, `PK_Tel` names starting with PK_Tel); type `%colo` to find it anywhere. On **Enterprises**, **Customer trunks**, **Vendor trunks** and **Users** the plain quick search also matches the start; other lists match anywhere. On some lists (such as EDRs) you can type several items separated by commas; a long number then matches a sender or receiver exactly.",
           },
         ],
       },

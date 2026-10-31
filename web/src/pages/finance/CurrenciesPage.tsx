@@ -87,6 +87,7 @@ function CurrencyDialog({ row, done }: { row: CurrencyRow | null; done: () => vo
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.iso}` : "Add currency"}
       saveLabel={row ? "Save" : "Add currency"}
       saving={save.isPending}
@@ -134,6 +135,7 @@ function RateDialog({ row, done }: { row: CurrencyRateRow; done: () => void }) {
     );
   return (
     <RecordDialog
+      form={form}
       title={`Edit rate · ${row.iso} ${row.currency}`}
       saveLabel="Save rate"
       saving={set.isPending}
