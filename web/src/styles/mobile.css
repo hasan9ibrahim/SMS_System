@@ -612,3 +612,151 @@
     text-overflow: ellipsis;
   }
 }
+
+/* Design QA round 13, phones (§15.1). */
+@media (max-width: 760px) {
+  /* Segmented controls wrap onto a second row instead of scrolling their last options out of sight with no hint
+     ("Change log" was cut to "Cha / lo", Live analytics periods ended at "This mon"). */
+  .seg,
+  .segmented {
+    flex-wrap: wrap;
+  }
+  .seg {
+    overflow: visible;
+  }
+  .segmented {
+    overflow: hidden;
+  }
+  .seg > button,
+  .segmented button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* Touch targets at least 36 px to a finger. Buttons, segments, fields and the quick search get the height; small
+     icons keep their look and get an invisible hit area around them. */
+  .btn,
+  .page-actions .btn,
+  .tps-pill,
+  .seg > button,
+  .page-actions .seg > button,
+  .segmented button,
+  .record-tabs button,
+  .detail-nav button,
+  .help-link,
+  .toggle-inline,
+  .range-chip,
+  .record-picker > button,
+  .choice-cards label,
+  .choice-seg label,
+  .dash-topdest .chip,
+  .rp-row button.chip,
+  .lookup-btn,
+  .vt-head .vt-sort,
+  select,
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  .pill-search .pill-search-input {
+    min-height: 36px;
+  }
+  .choice-cards label,
+  .lookup-btn {
+    height: auto;
+  }
+  .team-controls .toggle-inline {
+    min-height: 36px;
+  }
+  /* Rate lookup: the filter row grows with its fields. */
+  .vt-filters {
+    height: 42px;
+  }
+  .choice-seg label {
+    display: inline-flex;
+    align-items: center;
+  }
+  /* Record actions sit edge to edge in their group, so each one gets the full size itself. */
+  .record-actions {
+    height: auto;
+  }
+  .ra-btn {
+    min-width: 36px;
+    min-height: 36px;
+    justify-content: center;
+  }
+  /* The page's Help and Reload sat 2 px apart: they take the full size, the icons stay where they were. */
+  .page-header .page-title-row .icon-btn {
+    width: 36px;
+    height: 36px;
+    margin-left: -6px;
+  }
+  .icon-btn,
+  .logo,
+  .tabs-count,
+  .jump,
+  .bell,
+  .avatar,
+  .cell-edit,
+  .la-toggle,
+  .la-act,
+  .crumbs a,
+  button.link {
+    position: relative;
+  }
+  :is(.icon-btn, .logo, .tabs-count, .jump, .bell, .avatar, .cell-edit, .la-toggle, .la-act, .dash-grip, .crumbs a, button.link)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 36px);
+    height: max(100%, 36px);
+    transform: translate(-50%, -50%);
+  }
+  /* Tabs fill their strip from top to bottom, and the close button takes the tab's right end at full height (the
+     strip clips anything taller). */
+  .tabstrip {
+    height: 38px;
+  }
+  .tab::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -4px;
+    bottom: 0;
+  }
+  .tab-close::after {
+    content: "";
+    position: absolute;
+    top: -4px;
+    bottom: 0;
+    right: 0;
+    width: 36px;
+  }
+  /* Live analytics: sortable headers and the breakdown + get a row of their own height (cells clip anything
+     bigger). */
+  .la-grid thead th .la-sort {
+    padding-block: 11px;
+  }
+  .la-grid tbody td.la-name {
+    height: 36px;
+  }
+  .la-th-search .la-sort {
+    min-width: 36px;
+  }
+  /* A rate in a phone card: the edit button cuts its own text, so its hit area hangs off the value line instead,
+     and the second row of rates is no longer cut at its bottom edge. */
+  .gcard-fields:has(.cell-edit),
+  .gcard-value:has(> .cell-edit) {
+    overflow: visible;
+  }
+  .gcard-value:has(> .cell-edit) {
+    position: relative;
+  }
+  .gcard-value > .cell-edit {
+    position: static;
+  }
+  /* The rate table's subtitle wraps on a phone, so its trunk links are not cut and keep their hit area. */
+  .rate-title > div {
+    white-space: normal;
+    overflow: visible;
+  }
+}
