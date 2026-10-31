@@ -53,13 +53,15 @@ defmodule Sms.Switch.Pipeline.Billing do
   def on_receipt?(_type, _status), do: false
 
   @doc """
-  The billable flags of an attempt row (`row`: `no`, `final`, `success`, `vendor`): the customer on the final attempt
-  of a message not yet billed, a vendor on any attempt it received.
+  The billable flags of an attempt row (`row`: `no`, `final`, `success`, `vendor`, `accepted`): the customer on the
+  final attempt of a message not yet billed, a vendor on any attempt it received. A vendor that accepted some parts of
+  an attempt that then failed (`accepted` > 0) is billed for those as accepted (D2).
   """
   @spec flags(map(), map()) :: %{customer_billable: boolean(), vendor_billable: boolean()}
   def flags(msg, row) do
     vendor = row[:vendor]
     success = row[:success] == true
+    accepted = success or (row[:accepted] || 0) > 0
 
     customer =
       msg[:sell] != nil and row[:final] == true and (row[:no] || 0) > 0 and
@@ -68,7 +70,7 @@ defmodule Sms.Switch.Pipeline.Billing do
 
     %{
       customer_billable: customer,
-      vendor_billable: vendor != nil and on_send?(vendor_type(vendor.vendor_trunk_id), success)
+      vendor_billable: vendor != nil and on_send?(vendor_type(vendor.vendor_trunk_id), accepted)
     }
   end
 
@@ -90,6 +92,10 @@ defmodule Sms.Switch.Pipeline.Billing do
       v_parts: submits,
       cost: route[:cost],
       base_currency: trunk[:base_currency],
+      # S-6.7: both rates in the base currency at the exchange rates in force now, at send time; the outcome row,
+      # written when the receipt comes, converts with them.
+      c_sys_rate: msg[:sell] && sys_rate(msg.sell, trunk[:base_currency]),
+      v_sys_rate: route[:cost] && sys_rate(route.cost, trunk[:base_currency]),
       attempt_no: 0,
       # §13.9: where its revenue counts once billed.
       rev_keys: Revenue.keys(msg, route[:rule_id]),
@@ -111,12 +117,19 @@ defmodule Sms.Switch.Pipeline.Billing do
     }
   end
 
-  @doc "A rate × parts, and the same in the business company's base currency: `{amount, amount_sys}` (strings)."
-  @spec amount(map() | nil, non_neg_integer(), String.t() | nil) :: {String.t(), String.t()}
-  def amount(nil, _parts, _base), do: {"0", "0"}
+  @doc """
+  A rate × parts, and the same in the business company's base currency: `{amount, amount_sys}` (strings). `sys`: the
+  rate in the base currency as taken at send time (S-6.7); without it, at today's exchange rate.
+  """
+  @spec amount(map() | nil, non_neg_integer(), String.t() | nil, Decimal.t() | nil) ::
+          {String.t(), String.t()}
+  def amount(rate, parts, base, sys \\ nil)
+  def amount(nil, _parts, _base, _sys), do: {"0", "0"}
 
-  def amount(rate, parts, base),
-    do: {money(Decimal.mult(rate.rate, parts)), money(Decimal.mult(sys_rate(rate, base), parts))}
+  def amount(rate, parts, base, sys),
+    do:
+      {money(Decimal.mult(rate.rate, parts)),
+       money(Decimal.mult(sys || sys_rate(rate, base), parts))}
 
   # 6 decimals (Q20), written without trailing zeros.
   defp money(d), do: d |> Decimal.round(6) |> Decimal.normalize() |> Decimal.to_string(:normal)

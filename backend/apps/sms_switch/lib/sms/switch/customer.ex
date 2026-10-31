@@ -30,8 +30,8 @@ defmodule Sms.Switch.Customer do
 
   Returns `{:ok, session_id, response}` once the client has answered (a non-zero `response.status` is the client
   refusing it), `{:error, :timeout, session_id}` when that session did not answer (the client may have it; retry
-  on the same session, S-5.14), or `:hold` when no allowed session can take it now (none bound, all windows full):
-  the caller keeps it and tries again, for instance when `sms.session.customer.bound` says a session bound.
+  on the same session, S-5.14), or `:hold` when no allowed session can take it now (none bound, all windows full or
+  slow): the caller keeps it and tries again, for instance when `sms.session.customer.bound` says a session bound.
   """
   @spec deliver(Affinity.origin(), Trunk.affinity(), map(), list()) ::
           {:ok, String.t(), map()}
