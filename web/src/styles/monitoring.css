@@ -961,7 +961,7 @@
   cursor: pointer;
 }
 .open-inc-btn {
-  color: var(--color-error);
+  color: color-mix(in srgb, var(--color-error) 85%, var(--color-text));
   border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
   background: color-mix(in srgb, var(--color-error) 6%, var(--color-panel));
   gap: 6px;
