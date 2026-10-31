@@ -652,4 +652,60 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     assert.equal(again.statusCode, 400);
     check("restoreCustomerTrunk", again);
   });
+
+  // The switch reloads when its fingerprint changes: count and latest updated_at per table
+  // (Sms.Switch.Pipeline.Config.Loader). Archive, restore and undo keep the count, so they must move updated_at
+  // (migration 099).
+  test("archive, restore and undo change the switch's fingerprint (§13.29, §13.10)", async () => {
+    const fingerprint = async () =>
+      (await db().query("SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') AS f FROM customer_trunks"))
+        .rows[0].f as string;
+    const ent = (await newEnterprise("customer", "F")).record;
+    const id = (await ok("createCustomerTrunk", call("POST", "/customer-trunks", customerTrunk(ent.id, "f")), 201)).record
+      .id;
+    let seen = await fingerprint();
+    const moved = async (what: string) => {
+      const now = await fingerprint();
+      assert.notEqual(now, seen, what);
+      seen = now;
+    };
+    await ok("archiveCustomerTrunk", call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }));
+    await moved("archive");
+    await ok("restoreCustomerTrunk", call("POST", `/customer-trunks/${id}/restore`));
+    await moved("restore");
+    const archived = await ok("archiveCustomerTrunk", call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }));
+    await moved("archive again");
+    await ok("undoChange", call("POST", `/changes/${archived.change.id}/undo`, {}));
+    await moved("undo of the archive");
+
+    // Every table the fingerprint counts this way, whoever writes deleted_at (rolled back).
+    const c = await db().connect();
+    try {
+      await c.query("BEGIN");
+      for (const t of [
+        "business_companies",
+        "customer_trunks",
+        "dial_codes",
+        "enterprises",
+        "hlr_policies",
+        "hlr_provider_rates",
+        "hlr_providers",
+        "hlr_rules",
+        "mccmnc",
+        "number_lists",
+        "rate_tables",
+        "vendor_trunks",
+      ]) {
+        const { rows } = await c.query(
+          `UPDATE ${t} SET deleted_at = CASE WHEN deleted_at IS NULL THEN now() END
+            WHERE id = (SELECT min(id) FROM ${t})
+           RETURNING updated_at > now() AS moved`,
+        );
+        if (rows[0]) assert.equal(rows[0].moved, true, t);
+      }
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
+  });
 });
