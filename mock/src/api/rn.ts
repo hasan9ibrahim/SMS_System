@@ -740,7 +740,8 @@ export async function acceptLines(
     change = await recordChange(c, {
       entityType: "rate_table",
       entityIds: [table.id],
-      changeType: edits.length > 1 ? "bulk" : "edit",
+      // An edit of the table, however many lines (QA 2026-10-31): "bulk" is Bulk rating's.
+      changeType: "edit",
       diff,
       note:
         note?.trim() ||

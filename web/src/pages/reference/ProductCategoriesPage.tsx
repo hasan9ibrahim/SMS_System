@@ -36,6 +36,7 @@ function CategoryDialog({ row, done }: { row: ProductCategory | null; done: () =
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Rename ${row.name}` : "Add product category"}
       saveLabel={row ? "Save" : "Add category"}
       saving={save.isPending}

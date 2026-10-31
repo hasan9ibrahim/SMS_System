@@ -2,7 +2,7 @@
 // duplicated, pinned tabs stay left, closing picks a neighbour, split view follows tabs.
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { HOME_TAB_ID, canGoBack, toWorkspace, useTabs } from "./tabs";
+import { HOME_TAB_ID, canGoBack, parentPath, toWorkspace, useTabs } from "./tabs";
 
 const s = () => useTabs.getState();
 const paths = () => s().tabs.map((t) => t.path);
@@ -116,6 +116,61 @@ test("Back: previous page and section in the tab (filters kept); never another t
   assert.equal(s().goBack(second), true);
   assert.equal(s().activeId, second);
   assert.equal(s().tabs.find((t) => t.id === second)!.path, "/enterprises/customer-trunks");
+});
+
+test("Back from a record a list opens in place (?list=12) returns to the list (team trial round 13)", () => {
+  const tab = s().open("/switch/number-lists", { newTab: true });
+  s().setPath(tab, "/switch/number-lists?q=fake");
+  s().setPath(tab, "/switch/number-lists?list=12", { step: true });
+  assert.equal(canGoBack(s(), tab), true);
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().tabs.find((t) => t.id === tab)!.path, "/switch/number-lists?q=fake", "the list with its filters");
+  // Opened straight into its own tab: Back goes up to the list, in that tab.
+  const own = s().open("/switch/number-lists?list=7", { forceNew: true });
+  assert.equal(s().goBack(own), true);
+  assert.equal(s().tabs.find((t) => t.id === own)!.path, "/switch/number-lists");
+  assert.equal(parentPath("/rates/manager?table=5&view=log&kind=customer"), "/rates/manager?kind=customer");
+  assert.equal(parentPath("/rates/incoming?rn=3"), "/rates/incoming");
+  assert.equal(parentPath("/switch/hlr?view=providers&provider=2"), "/switch/hlr?view=providers");
+  assert.equal(parentPath("/switch/number-lists?q=fake"), null, "a list with filters has no parent");
+});
+
+test("a record's title goes when the tab leaves the record, also for its own list (functional QA round 13)", () => {
+  const title = (id: string) => s().tabs.find((t) => t.id === id)!.title;
+  const tab = s().open("/enterprises", { newTab: true });
+  assert.equal(title(tab), "Enterprises");
+  s().setPath(tab, "/enterprises/218", { step: true });
+  s().setTitle(tab, "Enterprise · Aladex Messaging Ltd");
+  s().setPath(tab, "/enterprises/218?tab=billing");
+  assert.equal(title(tab), "Enterprise · Aladex Messaging Ltd", "a section of the same record keeps it");
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().tabs.find((t) => t.id === tab)!.path, "/enterprises");
+  assert.equal(title(tab), "Enterprises", "Back to the list shows the list's title");
+  // A record a list opens in place, and the list's own filters.
+  s().setPath(tab, "/rates/manager?table=5");
+  s().setTitle(tab, "Rates · FAKE_TABLE buy");
+  s().setPath(tab, "/rates/manager?table=5&view=log");
+  assert.equal(title(tab), "Rates · FAKE_TABLE buy");
+  s().setPath(tab, "/rates/manager?g=abc");
+  assert.equal(title(tab), "Rate manager");
+  s().setTitle(tab, "My rate tables");
+  s().setPath(tab, "/rates/manager?g=abd");
+  assert.equal(title(tab), "My rate tables", "filter changes keep a title given on the list");
+  // A link to a rule in the list's panel: once the list takes over, the list's title.
+  const rule = s().open("/routing/rules?rule=183", { forceNew: true, title: "FAKE_RULE" });
+  assert.equal(title(rule), "FAKE_RULE");
+  s().setPath(rule, "/routing/rules");
+  assert.equal(title(rule), "Route rules");
+});
+
+test("a page that moved: the tab takes the new address and title, no step for Back (functional QA round 13)", () => {
+  const tab = s().open("/routing/re-rating", { newTab: true });
+  assert.equal(s().tabs.find((t) => t.id === tab)!.title, "Page");
+  s().setPath(tab, "/rates/re-rating", { moved: true });
+  const moved = s().tabs.find((t) => t.id === tab)!;
+  assert.deepEqual([moved.path, moved.title], ["/rates/re-rating", "Re-rating"]);
+  assert.equal(canGoBack(s(), tab), false);
 });
 
 test("closing the tab in view goes back to the tab used before it (team trial round 12)", () => {

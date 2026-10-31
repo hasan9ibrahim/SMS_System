@@ -3,7 +3,8 @@ defmodule Sms.Api.Lists.Query do
   Checks a list query (`ListQuery` in the contract, §13.25) before it becomes SQL: its shape (the contract's schema:
   known keys, `logic` and, `or`, operators, a limit of 1 to 4000, at most 5 sort keys and 200 conditions per group), then
   what the schema cannot say: every field and operator exists in the list's catalogue, operands suit the field's type
-  (so the database never sees a bad cast), regular expressions compile, sorted fields are sortable (the mock's
+  (so the database never sees a bad cast), regular expressions compile, LIKE patterns do not end in a lone backslash,
+  sorted fields are sortable (the mock's
   mock/src/lists/validate.ts). Errors are `%{path, message}` with JSON pointers into the body.
   """
 
@@ -120,8 +121,21 @@ defmodule Sms.Api.Lists.Query do
 
     allowed ++
       arity ++
-      Enum.flat_map(operands, &operand_errors(&1, field["type"], at)) ++ regex_errors(c, at)
+      Enum.flat_map(operands, &operand_errors(&1, field["type"], at)) ++
+      regex_errors(c, at) ++ escape_errors(c, at)
   end
+
+  # PostgreSQL refuses a LIKE pattern that ends in its escape character (QA 2026-10-31, as the mock checks).
+  defp escape_errors(%{"op" => op, "value" => v}, at)
+       when op in ~w(like not_like) and is_binary(v) do
+    if v =~ ~r/(^|[^\\])(\\\\)*\\$/,
+      do: [
+        err("#{at}/value", "a pattern cannot end with a single \\; write \\\\ for a backslash")
+      ],
+      else: []
+  end
+
+  defp escape_errors(_c, _at), do: []
 
   defp arity_errors(op, _c, values, at) when op in @multi do
     cond do

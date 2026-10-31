@@ -239,7 +239,8 @@ export function SidePanel({
     {
       key: "code",
       header: "MCCMNC",
-      width: 84,
+      // Fits the bold header (design QA round 13).
+      width: 92,
       filter: (
         <TextFilter label="MCCMNC" placeholder="262…" value={state.code ?? ""} onChange={(code) => set({ code })} />
       ),

@@ -308,6 +308,20 @@ export const PendingCategoryContext = createContext<{
   ids: number[];
   set: (mode: MatchMode, ids: number[]) => void;
 } | null>(null);
+/** The destination picked in the rule window but not saved yet. */
+export interface PendingDestination {
+  mccmncMode: MatchMode;
+  mccmncs: string[];
+  mccmncPattern: string | null;
+}
+/**
+ * The destination picked in the rule window but not saved yet (functional QA round 13), so the vendors' Cost follows
+ * it at once. Null outside the window: there the saved destination counts.
+ */
+export const PendingDestinationContext = createContext<{
+  dest: PendingDestination;
+  set: (dest: PendingDestination) => void;
+} | null>(null);
 /** True in New rule (a draft): the destination starts Inclusive with nothing picked (team trial round 8). */
 export const NewDraftContext = createContext(false);
 
@@ -321,6 +335,7 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
     ids.map((id) => ({ key: id, label: list.find((x) => x.id === id)?.name ?? `#${id}` }));
   const newDraft = useContext(NewDraftContext);
   const pendingCategory = useContext(PendingCategoryContext);
+  const pendingDestination = useContext(PendingDestinationContext);
   const [mode, setMode] = useState<MatchMode>(
     key === "trunk"
       ? rule.customerTrunkMode
@@ -379,6 +394,15 @@ function useConditionForm(key: ConditionKey, rule: RouteRuleDetail): { form: Rea
     if (key === "category")
       pendingCategory?.set(categories.length ? (mode === "all" ? "inclusive" : mode) : "all", categories);
   }, [key, mode, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The destination block tells the vendors what is picked, for their Cost (rule window, functional QA round 13).
+  useEffect(() => {
+    if (key === "destination")
+      pendingDestination?.set({
+        mccmncMode: mode,
+        mccmncs: mode === "all" ? [] : codes,
+        mccmncPattern: regexError(mccPattern) ? null : mccPattern.trim() || null,
+      });
+  }, [key, mode, codes, mccPattern]); // eslint-disable-line react-hooks/exhaustive-deps
   const catMode = pendingCategory ? pendingCategory.mode : rule.categoryMode;
   const catIds = pendingCategory ? pendingCategory.ids : rule.categoryIds;
 

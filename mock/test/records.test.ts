@@ -204,6 +204,41 @@ describe("enterprise record (§5.1–5.3)", { skip }, () => {
     assert.ok(paths.includes("/creditAlertPercent"));
   });
 
+  test("website: an http(s) address, a bare domain gets https:// (QA 2026-10-31, §5.1)", async () => {
+    const saved = await newEnterprise("customer", "W");
+    const id = saved.record.id as number;
+    const { contacts, address, creditAlertPercent } = saved.record;
+    const input = (website: string | null) => ({
+      ...Object.fromEntries(
+        ["name", "alias", "type", "tier", "status", "businessCompanyId"].map((k) => [k, saved.record[k]]),
+      ),
+      address,
+      contacts,
+      creditAlertPercent,
+      website,
+    });
+    const edit = (website: string | null) => call("PUT", `/enterprises/${id}`, input(website));
+    const stored = async (website: string | null) => (await ok("updateEnterprise", edit(website))).record.website;
+    assert.equal(await stored("partner.example"), "https://partner.example");
+    assert.equal(await stored(" http://www.partner.example/sms?x=1 "), "http://www.partner.example/sms?x=1");
+    assert.equal(await stored("   "), null);
+    for (const bad of [
+      "javascript:alert(1)",
+      "ftp://partner.example",
+      "partner",
+      "not a website",
+      "user:pw@partner.example",
+    ]) {
+      const r = await edit(bad);
+      assert.equal(r.statusCode, 400, `${bad}: ${r.body}`);
+      check("updateEnterprise", r);
+      assert.ok(
+        r.json().errors.some((e: { path: string }) => e.path === "/website"),
+        bad,
+      );
+    }
+  });
+
   test("billing sides, balance and undo", async () => {
     const saved = await newEnterprise("customer", "B");
     const id = saved.record.id;
@@ -651,5 +686,61 @@ describe("trunks (§5.4, §5.5, §13.2)", { skip }, () => {
     const again = await call("POST", `/customer-trunks/${id}/restore`);
     assert.equal(again.statusCode, 400);
     check("restoreCustomerTrunk", again);
+  });
+
+  // The switch reloads when its fingerprint changes: count and latest updated_at per table
+  // (Sms.Switch.Pipeline.Config.Loader). Archive, restore and undo keep the count, so they must move updated_at
+  // (migration 099).
+  test("archive, restore and undo change the switch's fingerprint (§13.29, §13.10)", async () => {
+    const fingerprint = async () =>
+      (await db().query("SELECT count(*) || ':' || coalesce(max(updated_at)::text, '') AS f FROM customer_trunks"))
+        .rows[0].f as string;
+    const ent = (await newEnterprise("customer", "FP")).record;
+    const id = (await ok("createCustomerTrunk", call("POST", "/customer-trunks", customerTrunk(ent.id, "f")), 201)).record
+      .id;
+    let seen = await fingerprint();
+    const moved = async (what: string) => {
+      const now = await fingerprint();
+      assert.notEqual(now, seen, what);
+      seen = now;
+    };
+    await ok("archiveCustomerTrunk", call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }));
+    await moved("archive");
+    await ok("restoreCustomerTrunk", call("POST", `/customer-trunks/${id}/restore`));
+    await moved("restore");
+    const archived = await ok("archiveCustomerTrunk", call("POST", `/customer-trunks/${id}/archive`, { reason: "Test" }));
+    await moved("archive again");
+    await ok("undoChange", call("POST", `/changes/${archived.change.id}/undo`, {}));
+    await moved("undo of the archive");
+
+    // Every table the fingerprint counts this way, whoever writes deleted_at (rolled back).
+    const c = await db().connect();
+    try {
+      await c.query("BEGIN");
+      for (const t of [
+        "business_companies",
+        "customer_trunks",
+        "dial_codes",
+        "enterprises",
+        "hlr_policies",
+        "hlr_provider_rates",
+        "hlr_providers",
+        "hlr_rules",
+        "mccmnc",
+        "number_lists",
+        "rate_tables",
+        "vendor_trunks",
+      ]) {
+        const { rows } = await c.query(
+          `UPDATE ${t} SET deleted_at = CASE WHEN deleted_at IS NULL THEN now() END
+            WHERE id = (SELECT min(id) FROM ${t})
+           RETURNING updated_at > now() AS moved`,
+        );
+        if (rows[0]) assert.equal(rows[0].moved, true, t);
+      }
+    } finally {
+      await c.query("ROLLBACK");
+      c.release();
+    }
   });
 });

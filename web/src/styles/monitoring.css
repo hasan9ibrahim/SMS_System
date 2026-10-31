@@ -1,7 +1,9 @@
 /* Live analytics (§13.4), alert rules and incidents (§13.6). Tokens only (§15.2). */
 
-.row-muted {
-  opacity: 0.62;
+/* Dimmed with the secondary text colour, not opacity, so the text stays readable (design QA round 13). */
+.row-muted,
+.row-muted .gc {
+  color: var(--color-text-secondary);
 }
 .row-alert {
   box-shadow: inset 3px 0 0 var(--color-error);
@@ -343,7 +345,7 @@
   color: #1d1d1d;
 }
 .la-grid td.la-bad {
-  background: var(--color-error);
+  background: var(--color-error-fill);
   color: #fff;
 }
 .la-total td {
@@ -556,7 +558,7 @@
 }
 .la-by {
   flex: none;
-  color: var(--color-text-secondary);
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
   font-size: 11px;
   font-weight: 400;
 }
@@ -572,7 +574,7 @@
   font-weight: 700;
 }
 .la-grid td.la-good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .la-grid td.la-warn {
   background: color-mix(in srgb, var(--color-warning) 85%, transparent);
@@ -772,6 +774,17 @@
   font-size: 12px;
   color: var(--color-text-secondary);
   white-space: nowrap;
+  /* Shrinks with its address cut by an ellipsis when the cell is narrow (a phone card; design QA round 13). */
+  min-width: 0;
+}
+.ip-chip > .num {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ip-dot,
+.ip-count {
+  flex: none;
 }
 .ip-chip.on {
   border-style: solid;
@@ -794,11 +807,12 @@
   border-radius: 5px;
   font-size: 11px;
   font-weight: 700;
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
   background: color-mix(in srgb, var(--color-text) 8%, var(--color-panel));
 }
 .ip-chip.on .ip-count {
-  background: var(--color-good);
-  color: #fff;
+  background: var(--color-good-text);
+  color: var(--color-panel);
 }
 .conn-bar-cell {
   width: 100%;
@@ -859,7 +873,7 @@
 }
 .chip-tag.red {
   background: color-mix(in srgb, var(--color-error) 11%, var(--color-panel));
-  color: var(--color-error);
+  color: color-mix(in srgb, var(--color-error) 80%, var(--color-text));
 }
 /* Alert rules (team trial round 4): summary tiles and rules as cards with a severity edge. */
 .kpi-tiles {
@@ -947,7 +961,7 @@
   cursor: pointer;
 }
 .open-inc-btn {
-  color: var(--color-error);
+  color: color-mix(in srgb, var(--color-error) 85%, var(--color-text));
   border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));
   background: color-mix(in srgb, var(--color-error) 6%, var(--color-panel));
   gap: 6px;
@@ -1010,7 +1024,7 @@
   --band: var(--color-accent);
 }
 .la-grid th.la-band-quality {
-  --band: var(--color-good);
+  --band: var(--color-good-text);
 }
 .la-grid th.la-band-money {
   --band: var(--color-warning);

@@ -181,6 +181,11 @@ defmodule Sms.Switch.Test.PipelineConfig do
         max_msg_len: nil,
         multipart_format: "udh8",
         overflow_buffer: 0,
+        allowed_data_codings: nil,
+        allowed_src_ton: nil,
+        allowed_src_npi: nil,
+        allowed_dst_ton: nil,
+        allowed_dst_npi: nil,
         rate_table_ids: [200]
       },
       Map.new(fields)
@@ -256,7 +261,8 @@ defmodule Sms.Switch.Test.PipelineConfig do
         vendor_category_mode: "all",
         vendor_category_ids: [],
         lcr_profile_id: nil,
-        skip_vendor_at_tps_pct: nil
+        skip_vendor_at_tps_pct: nil,
+        deny_multipart: false
       },
       fields
     )

@@ -60,6 +60,7 @@ function CycleDialog({ row, done }: { row: BillingCycleRow | null; done: () => v
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit ${row.name}` : "Add billing cycle"}
       saveLabel={row ? "Save" : "Add cycle"}
       saving={save.isPending}

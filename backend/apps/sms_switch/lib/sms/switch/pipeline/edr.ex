@@ -225,7 +225,12 @@ defmodule Sms.Switch.Pipeline.Edr do
       "v_message_keys" => attempt[:vendor_message_keys] || [],
       "v_mccmnc" => mccmnc(msg.destination),
       "v_billing_type" => to_string(vt[:billing_type] || ""),
-      "v_translation_rule_ids" => egress[:fired] || []
+      "v_translation_rule_ids" => egress[:fired] || [],
+      # The vendor connection's address as connected (0.0.0.0 when no connection answered).
+      "v_ip" => ip(vendor[:peer][:ip]),
+      "v_port" => vendor[:peer][:port] || 0,
+      # An attempt made because the vendor before sent a failed receipt (S-5.11, D2).
+      "dlr_reroute" => flag(vendor[:dlr_reroute])
     })
     |> Map.merge(route(vendor))
   end
@@ -251,6 +256,8 @@ defmodule Sms.Switch.Pipeline.Edr do
   defp route(vendor) do
     %{
       "route_rule_id" => vendor[:rule_id] || 0,
+      # Route rule groups were removed (product owner R4, migration 069): the column stays 0.
+      "route_rule_group_id" => 0,
       "route_type" => to_string(vendor[:route_type] || ""),
       "route_level" => vendor[:level] || 0,
       "route_decided_by" => to_string(vendor[:decided_by] || "")
@@ -317,11 +324,16 @@ defmodule Sms.Switch.Pipeline.Edr do
     bill = data.bill
     base = bill.base_currency
 
+    # In the base currency at the exchange rates of the send, not of the receipt (S-6.7).
     {revenue, revenue_sys} =
-      if o.customer_billable, do: Billing.amount(bill.sell, bill.c_parts, base), else: {"0", "0"}
+      if o.customer_billable,
+        do: Billing.amount(bill.sell, bill.c_parts, base, bill[:c_sys_rate]),
+        else: {"0", "0"}
 
     {cost, cost_sys} =
-      if o.vendor_billable, do: Billing.amount(bill.cost, bill.v_parts, base), else: {"0", "0"}
+      if o.vendor_billable,
+        do: Billing.amount(bill.cost, bill.v_parts, base, bill[:v_sys_rate]),
+        else: {"0", "0"}
 
     %{
       edr_id: data.edr_id,

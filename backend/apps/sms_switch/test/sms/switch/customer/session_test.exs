@@ -500,6 +500,45 @@ defmodule Sms.Switch.Customer.SessionTest do
       {:ok, client} = Client.connect(port)
       assert Client.closed?(client, 1_000)
     end
+
+    test "while the inbound window is full the session reads nothing, and never times the client out (S-1.18)" do
+      %{port: port} =
+        restart(
+          session: [
+            inbound_window: 2,
+            enquire_link_interval_ms: 200,
+            enquire_link_timeout_ms: 200,
+            tick_ms: 20
+          ]
+        )
+
+      # A slow intake (a Delayed Submit trunk waiting for its vendor, a slow HLR): 1.5 s per request.
+      Intake.own(fn _, pdu ->
+        Process.sleep(1_500)
+        {:ok, %{message_id: "m#{pdu.sequence}"}, []}
+      end)
+
+      client = bound(port)
+      Client.send_raw(client, [Pdu.encode!(submit(2)), Pdu.encode!(submit(3))])
+      seen = answer_enquire_links(client, System.monotonic_time(:millisecond) + 2_500, [])
+      assert {:submit_sm_resp, 2, 0} in seen
+      assert {:submit_sm_resp, 3, 0} in seen
+    end
+  end
+
+  # Answers every enquire_link until `deadline`; the other PDUs seen, in order. Fails if the session closes.
+  defp answer_enquire_links(client, deadline, seen) do
+    case Client.recv(client, max(deadline - System.monotonic_time(:millisecond), 0)) do
+      {:error, :timeout} ->
+        Enum.reverse(seen)
+
+      {client, %Pdu{command: :enquire_link} = pdu} ->
+        Client.send_pdu(client, Pdu.response(pdu))
+        answer_enquire_links(client, deadline, seen)
+
+      {client, pdu} ->
+        answer_enquire_links(client, deadline, [{pdu.command, pdu.sequence, pdu.status} | seen])
+    end
   end
 
   defp drain_until(client, command) do
@@ -525,6 +564,26 @@ defmodule Sms.Switch.Customer.SessionTest do
       Client.send_pdu(client, Pdu.new(:deliver_sm_resp, %{message_id: ""}, sequence: seq))
       assert {:ok, %{status: 0, session_id: id}} = Task.await(task)
       assert [%{id: ^id}] = Customer.sessions()
+    end
+
+    test "TLVs go only to a client bound at version 3.4 or later; a 3.3 client gets none (S-1.4)",
+         %{
+           port: port
+         } do
+      tlvs = [receipted_message_id: "1", message_state: 2]
+
+      for {version, expected} <- [{0x33, []}, {0x34, tlvs}, {0x50, tlvs}] do
+        fields = %{system_id: "acme", password: "secret", interface_version: version}
+        {client, %Pdu{status: 0}} = Client.bind(port, :bind_transceiver, fields)
+        [%{pid: pid}] = Customer.sessions()
+        task = Task.async(fn -> Session.deliver(pid, %{esm_class: 4}, tlvs) end)
+        assert {client, %Pdu{command: :deliver_sm} = dlr} = Client.recv(client)
+        Client.send_pdu(client, Pdu.response(dlr, :esme_rok, %{message_id: ""}))
+        assert {:ok, %{status: 0}} = Task.await(task)
+        assert dlr.tlvs == expected
+        Client.close(client)
+        assert_eventually(fn -> Customer.sessions() == [] end)
+      end
     end
 
     test "a client refusing the receipt: its status comes back", %{port: port} do
@@ -614,6 +673,31 @@ defmodule Sms.Switch.Customer.SessionTest do
       %{port: port} = restart(session: [deliver_timeout_ms: 100])
       _client = bound(port)
       assert Session.deliver(session_pid(), %{}) == {:error, :timeout}
+    end
+
+    test "after a timeout a slow reader takes no receipt until it answers one, or for the timeout (S-1.18)" do
+      %{port: port} = restart(session: [deliver_timeout_ms: 300])
+      client = bound(port)
+      pid = session_pid()
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      assert {client, %Pdu{command: :deliver_sm} = late} = Client.recv(client)
+      # At once, without waiting for the client.
+      assert Session.deliver(pid, %{}) == {:error, :slow}
+
+      # A late answer shows the client reading again.
+      Client.send_pdu(client, Pdu.response(late, :esme_rok, %{message_id: ""}))
+      Process.sleep(100)
+      task = Task.async(fn -> Session.deliver(pid, %{}) end)
+      assert {client, %Pdu{command: :deliver_sm} = dlr} = Client.recv(client)
+      Client.send_pdu(client, Pdu.response(dlr, :esme_rok, %{message_id: ""}))
+      assert {:ok, %{status: 0}} = Task.await(task)
+
+      # Silent again: slow until the timeout has passed once more.
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      assert Session.deliver(pid, %{}) == {:error, :slow}
+      Process.sleep(350)
+      assert Session.deliver(pid, %{}) == {:error, :timeout}
+      _ = client
     end
 
     test "the session closing: waiting deliveries get :closed", %{port: port} do

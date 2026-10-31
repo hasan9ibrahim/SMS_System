@@ -195,6 +195,34 @@ defmodule Sms.Switch.Message.TextTest do
                {:error, :concatenation_twice}
     end
 
+    test "other UDH elements are kept, after the switch's concatenation element (D9)" do
+      udh = <<11, 0x00, 3, 7, 2, 1, 0x24, 1, 1, 0x25, 1, 2>>
+      assert Concat.other_elements(udh) == <<0x24, 1, 1, 0x25, 1, 2>>
+      assert Concat.other_elements(udh, [0x00, 0x08, 0x24, 0x25]) == <<>>
+      assert Concat.other_elements(<<>>) == <<>>
+      assert Concat.udh(<<0x24, 1, 1>>) == <<3, 0x24, 1, 1>>
+      assert Concat.udh(<<>>) == <<>>
+      assert Concat.udh8(9, 3, 1, <<0x24, 1, 1>>) == <<8, 0, 3, 9, 3, 1, 0x24, 1, 1>>
+      assert Concat.udh16(9, 3, 1, <<0x24, 1, 1>>) == <<9, 8, 4, 0, 9, 3, 1, 0x24, 1, 1>>
+    end
+
+    test "other UDH elements take their room in every part and in a single SMS" do
+      # A single SMS with a 4-octet header (shift table): 155 septets.
+      assert Text.part_count(String.duplicate("a", 155), :gsm, 3) == 1
+      assert Text.part_count(String.duplicate("a", 156), :gsm, 3) == 2
+      # Parts with a 9-octet header: 149 septets; 8-bit 131 bytes.
+      assert Enum.map(Text.split(String.duplicate("a", 300), :gsm, 6, 3), &byte_size/1) == [
+               149,
+               149,
+               2
+             ]
+
+      assert Enum.map(Text.split(:binary.copy(<<1>>, 200), :binary, 6, 7), &byte_size/1) == [
+               127,
+               73
+             ]
+    end
+
     test "headers the switch builds" do
       assert Concat.udh8(9, 3, 1) == <<5, 0, 3, 9, 3, 1>>
       assert Concat.with_udhi(0x03) == 0x43

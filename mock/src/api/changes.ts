@@ -23,7 +23,7 @@ import { applyRouteRuleField } from "./routeRules.js";
 import { applyTranslationRuleField } from "./translationRules.js";
 import { applyHlrField } from "./hlr.js";
 import { applyCurrencyRate, applyTransactionEntries } from "./finance.js";
-import { MIGRATION_TABLES } from "../migration/importer.js";
+import { MIGRATION_TABLES, sameId, setAmFromNow } from "../migration/importer.js";
 
 interface DiffEntry {
   entity_id: number;
@@ -379,6 +379,20 @@ async function applyFields(c: pg.PoolClient, entityType: string, entries: DiffEn
         `UPDATE ${e.table} SET ${cols.map((k, i) => `${k} = $${i + 2}`).join(", ")}, updated_at = now() WHERE id = $1`,
         [e.entity_id, ...cols.map((k) => values[k])],
       );
+      // The AM the import set goes back in the AM history too (QA 2026-10-31, §13.30).
+      const after = (e.after ?? {}) as Record<string, unknown>;
+      if (
+        e.table === "enterprises" &&
+        "account_manager_id" in after &&
+        !sameId(after.account_manager_id, values.account_manager_id)
+      )
+        await setAmFromNow(
+          c,
+          e.entity_id,
+          values.account_manager_id == null ? null : Number(values.account_manager_id),
+          "Import undone",
+          userId,
+        );
     }
     return;
   }

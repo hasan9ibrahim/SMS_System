@@ -16,7 +16,7 @@
   gap: 6px;
 }
 .pw-rules li.met {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .pw-input {
   display: flex;

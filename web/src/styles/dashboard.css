@@ -84,7 +84,8 @@
 /* ---------- 1. summary ---------- */
 .dash-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  /* Wide enough for a paired card ("SUBMITTED 253,912"); narrower, they ran past their border (design QA round 13). */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
 }
 .dash-kpi {
@@ -127,6 +128,10 @@
 .dash-topdest .chip {
   cursor: pointer;
   gap: 6px;
+}
+/* The rank on the chip's grey fill, a shade darker than secondary text (design QA round 13). */
+.dash-topdest .chip .muted {
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
 }
 
 /* ---------- 2. movers ---------- */
@@ -222,7 +227,7 @@
   font-variant-numeric: tabular-nums;
 }
 .dash-mover .chg.up {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .dash-mover .chg.down {
   color: var(--color-error);
@@ -285,14 +290,54 @@ button.dash-cols {
 button.dash-cols:hover {
   background: var(--accent-soft);
 }
+/* The name keeps at least 120 px (design QA round 13); a narrow panel drops columns instead (below). */
 .dash-tps-row {
-  grid-template-columns: minmax(0, 1fr) 64px 56px 120px 56px;
+  grid-template-columns: minmax(120px, 1fr) 64px 56px 120px 56px;
 }
 .dash-top-row {
-  grid-template-columns: 22px minmax(0, 1fr) 88px 92px 88px 54px 54px;
+  grid-template-columns: 22px minmax(120px, 1fr) 88px 92px 88px 54px 54px;
 }
 .dash-dest-row {
-  grid-template-columns: 22px minmax(0, 1fr) 64px 88px 92px 88px 54px 54px;
+  grid-template-columns: 22px minmax(120px, 1fr) 64px 88px 92px 88px 54px 54px;
+}
+/* A ranked table sized by its own panel, not the window: a panel too narrow for every column (half of a pair on a
+   tablet, a frame made narrow) drops the lowest-priority ones as on phones: ASR and DLR, a destination's network
+   count, the TPS limit bar (design QA round 13). */
+.dash-top,
+.dash-tps {
+  container-type: inline-size;
+}
+@container (max-width: 590px) {
+  .dash-top-row,
+  .dash-tps-row {
+    column-gap: 6px;
+  }
+  .dash-top-row {
+    grid-template-columns: 22px minmax(0, 1fr) 64px 64px 60px;
+  }
+  .dash-top-row > :nth-child(n + 6),
+  .dash-tps-row > :nth-child(4) {
+    display: none;
+  }
+  .dash-tps-row {
+    grid-template-columns: minmax(0, 1fr) 52px 52px 48px;
+  }
+}
+@container (max-width: 670px) {
+  .dash-dest-row {
+    column-gap: 6px;
+    grid-template-columns: 22px minmax(0, 1fr) 64px 64px 60px;
+  }
+  .dash-dest-row > :nth-child(3),
+  .dash-dest-row > :nth-child(n + 7) {
+    display: none;
+  }
+}
+/* Pairs stack below 1000 px, as on phones (design QA round 13): side by side on a tablet each table had about 350 px. */
+@media (max-width: 1000px) {
+  .dash-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .dash-ranked {
   overflow-y: auto;
@@ -444,7 +489,7 @@ button.dash-cols:hover {
   left: -1000px;
   padding: 6px 12px;
   border-radius: var(--radius-md);
-  background: var(--color-accent);
+  background: var(--color-accent-fill);
   color: #fff;
   font: 600 13px var(--font-family);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);

@@ -10,6 +10,16 @@ export interface OpenEvent {
   button?: number;
 }
 
+/**
+ * Ctrl/Cmd-click or the middle button asks for a new tab, the middle button opening it behind the current one as a
+ * browser does (§13.5). Every row, link and menu that opens a page reads its click through this, so a middle click
+ * never opens the page in the tab in view (QA round 14).
+ */
+export function newTabOf(e?: OpenEvent): { forceNew: boolean; background: boolean } {
+  const middle = e?.button === 1;
+  return { forceNew: !!e && (e.ctrlKey === true || e.metaKey === true || middle), background: middle };
+}
+
 export function useOpener(opts: { popout?: boolean } = {}) {
   const { data: me } = useMe();
   return (path: string, e?: OpenEvent, title?: string) => {

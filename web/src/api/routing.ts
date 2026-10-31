@@ -60,6 +60,14 @@ export function useDiscardRouteRule() {
   });
 }
 
+/**
+ * Discards a New rule draft while the page goes away (reload, leaving the app, window closed: QA round 13, §6.3).
+ * React's cleanup never runs then, and a keepalive request outlives the page.
+ */
+export function discardRouteRuleOnLeave(id: number) {
+  void api.POST("/route-rules/{id}/discard", { params: { path: { id } }, keepalive: true }).catch(() => undefined);
+}
+
 export function useCloneRouteRule() {
   const refresh = useRefreshRecords();
   return useMutation({

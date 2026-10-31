@@ -151,7 +151,7 @@ export const marketMoveList: ListDef<MarketMoveRow> = {
     topCount: { sql: "mm.top_count" },
     firstEffective: { sql: "mm.first_effective" },
     lastEffective: { sql: "mm.last_effective" },
-    newCost: { sql: `(mm.new_cost_eur * ${PLATFORM})` },
+    newCost: { sql: `(mm.new_cost_eur * ${PLATFORM})`, round: 6 },
     affectedClients: { sql: "mm.affected_clients" },
     volume7d: { sql: "mm.volume_7d" },
     urgent: { sql: "mm.urgent" },
@@ -163,8 +163,9 @@ export const marketMoveList: ListDef<MarketMoveRow> = {
     amUserId: {
       sql: "NULL",
       where: (op, c, p) => {
-        const ids = op === "in" ? (c.values ?? []).map(Number) : [Number(c.value)];
-        return `(mm.affected_am_ids && ${p(ids)}::bigint[])`;
+        const ids = op === "in" || op === "not_in" ? (c.values ?? []).map(Number) : [Number(c.value)];
+        const any = `(mm.affected_am_ids && ${p(ids)}::bigint[])`;
+        return op === "neq" || op === "not_in" ? `NOT ${any}` : any;
       },
     },
   },

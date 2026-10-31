@@ -15,7 +15,7 @@ import {
 } from "react";
 import { useLocation } from "react-router";
 import type { ListId, ListQuery } from "@sms/contract";
-import { useListFields, type ListPage } from "../api/hooks";
+import { fetchListPage, useListFields, type ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride, type GridMeta } from "../grid/DataGrid";
 import { FilterBuilder } from "../grid/FilterBuilder";
 import { PillSearch } from "../grid/PillSearch";
@@ -34,7 +34,7 @@ import { HistoryDrawer, useUndoLast, useUndoShortcut, type HistoryScope } from "
 import type { PageDef } from "../nav/registry";
 import { usePageStatus, useTab, useTabNavigate } from "../shell/tabContext";
 import { Icon, type IconName } from "../ui/Icon";
-import { confirmDialog } from "../ui/feedback";
+import { confirmDialog, toast } from "../ui/feedback";
 import { Button, Menu, Popover, type MenuItem } from "../ui/primitives";
 import { PageHeader } from "./PageHeader";
 
@@ -109,6 +109,11 @@ export interface ListScreenProps<Row extends { id: number }> {
   rowClass?: (row: Row) => string | undefined;
   /** Makes this row the active one once it is loaded (e.g. a rule just added). */
   selectId?: number | null;
+  /**
+   * A `?<name>=<id>` in the tab's address (Ctrl K, Team report and Cleanup links) selects that row and opens its
+   * detail, fetched by its ID even when it is not on the first page; the parameter then leaves the address.
+   */
+  deepLink?: string;
   /** Controlled detail section, when the page opens a section itself. */
   section?: [string | null, (key: string) => void];
   /** Shown between the header and the filter row (e.g. report settings and totals). */
@@ -566,6 +571,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     onKey,
     rowClass,
     selectId = null,
+    deepLink,
     above,
     fetchPage,
     queryScope,
@@ -614,6 +620,8 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     error: null,
   });
   const [builderOpen, setBuilderOpen] = useState(false);
+  // Clear all also takes the quick search's empty pills (functional QA round 13).
+  const [clears, setClears] = useState(0);
   const [historyOpen, setHistoryOpen] = useState(false);
   const { undoLast } = useUndoLast(historyScope);
   useUndoShortcut(historyScope, active);
@@ -661,10 +669,55 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
     const fresh = rows.find((r) => r.id === activeRow.id);
     if (fresh && fresh !== activeRow) setActiveRow(fresh);
   }, [rows, selectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A deep link to one record (functional QA round 13): fetched by its ID, deleted ones too, so it opens wherever
+  // it sits in the list.
+  const location = useLocation();
+  const tabNavigate = useTabNavigate();
+  const linkRaw = deepLink ? new URLSearchParams(location.search).get(deepLink) : null;
+  const linkId = linkRaw && /^\d+$/.test(linkRaw) ? Number(linkRaw) : null;
+  const hasArchived = byName.has("archived");
+  useEffect(() => {
+    if (!deepLink || linkId === null || !fields.data) return;
+    let live = true;
+    const conditions: NonNullable<ListQuery["filter"]>["conditions"] = [{ field: "id", op: "eq", value: linkId }];
+    if (hasArchived) conditions.push({ field: "archived", op: "in", values: [true, false] });
+    const body = { limit: 1, filter: { logic: "and", conditions } } as ListQuery;
+    void (fetchPage ?? ((b: ListQuery) => fetchListPage<Row>(list, b)))(body)
+      .then((res) => {
+        if (!live) return;
+        const row = res.rows[0];
+        if (row) openPanel(row);
+        else toast({ tone: "warning", message: `#${linkId} is not in this list, or you may not see it.` });
+      })
+      .catch((e: unknown) => live && toast({ tone: "error", message: e instanceof Error ? e.message : String(e) }))
+      .finally(() => {
+        if (!live) return;
+        const params = new URLSearchParams(location.search);
+        params.delete(deepLink);
+        const qs = params.toString();
+        tabNavigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+      });
+    return () => {
+      live = false;
+    };
+  }, [linkId, !!fields.data]); // eslint-disable-line react-hooks/exhaustive-deps
   // A new filter or search changes the rows: drop a selection the user can no longer see,
   // so the selection actions never act on hidden rows.
   const filterKey = JSON.stringify([state.columns, state.pills, state.switches, state.builder, state.search]);
   useEffect(() => setSelected(new Set()), [filterKey]);
+  // Rows that went away between two answers of the same list (deleted, or archived out of view) leave the selection
+  // too: "0 rows · 1 selected" after a Delete (functional QA round 13, §13.29). A new sort keeps the selection.
+  const settled = useRef<{ ids: Set<number>; sort: string } | null>(null);
+  useEffect(() => {
+    if (meta.fetching) return;
+    const ids = new Set(rows.map((r) => r.id));
+    const sort = JSON.stringify(state.sort);
+    const before = settled.current?.sort === sort ? settled.current.ids : null;
+    settled.current = { ids, sort };
+    if (!before || !selected.size) return;
+    const gone = [...selected].filter((id) => before.has(id) && !ids.has(id));
+    if (gone.length) setSelected(new Set([...selected].filter((id) => !gone.includes(id))));
+  }, [rows, meta.fetching]); // eslint-disable-line react-hooks/exhaustive-deps
   const onActive = useCallback((row: Row | null) => setActiveRow(row), []);
   const builderCount = countConditions(state.builder);
   // Clear all: the page's own filters and switches, the columns and sort as they are.
@@ -689,6 +742,7 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
       freeText={!noQuickSearch}
       exclude={toolbarFields}
       onAdvanced={() => setBuilderOpen(true)}
+      resetKey={clears}
     />
   );
 
@@ -820,7 +874,10 @@ export function ListScreen<Row extends { id: number }>(props: ListScreenProps<Ro
               type="button"
               className="btn btn-ghost btn-sm"
               // Back to the page's own defaults (e.g. EDR search's today), not to nothing (team trial round 2).
-              onClick={() => setState(cleared)}
+              onClick={() => {
+                setState(cleared);
+                setClears((n) => n + 1);
+              }}
             >
               Clear all
             </button>

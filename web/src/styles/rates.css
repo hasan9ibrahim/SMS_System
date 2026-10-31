@@ -110,9 +110,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The page title size, like "Rate manager" beside it (design QA round 13: it was 28 px next to 20 px). */
 .rate-title h1 {
   margin: 0;
-  font-size: var(--font-size-title);
   font-weight: 650;
 }
 .stat-cards {
@@ -658,7 +658,7 @@
   font-variant-numeric: tabular-nums;
 }
 .mc-page .good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .mc-page .bad {
   color: var(--color-error);
@@ -742,7 +742,7 @@
 }
 .send-summary.good {
   background: color-mix(in srgb, var(--color-good) 10%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .send-summary.partial {
   background: color-mix(in srgb, var(--color-warning) 10%, var(--color-panel));

@@ -72,6 +72,25 @@ defmodule Sms.Switch.Customer.BindTest do
     assert status(resp) == :esme_rbindfail
   end
 
+  test "from an IP no trunk lets in, an unknown system_id gets 0x0D like a known one: no id enumeration (S-8.1)",
+       %{port: port} do
+    reload([trunk(host_ips: [{{10, 0, 0, 0}, 8}])])
+
+    for fields <- [%{system_id: "nobody"}, %{}, %{password: "wrong"}] do
+      {_client, resp} = bind(port, :bind_transceiver, fields)
+      assert status(resp) == :esme_rbindfail
+    end
+
+    # Still audited as an unknown system_id.
+    assert_eventually(fn ->
+      Enum.any?(Local.published(), fn e ->
+        e.subject == "sms.session.customer.bind_failed" and
+          e.data["reason"] == "unknown_system_id" and
+          e.data["status"] in ["esme_rbindfail", 0x0D]
+      end)
+    end)
+  end
+
   test "every failed bind is audited on the bus, without the password (S-1.1)", %{port: port} do
     {_client, _resp} = bind(port, :bind_transmitter, %{password: "wrong"})
 

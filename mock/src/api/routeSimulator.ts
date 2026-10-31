@@ -11,6 +11,7 @@ import { withDb } from "../db.js";
 import { messageEncoding } from "../smpp.js";
 import { listIdsOf, loadRulesInOrder, messageContext, routeThrough, vendorOptions } from "./routeRules.js";
 import { skipEgressBlocked } from "./egress.js";
+import { natural, type MessageForm } from "../routing/coding.js";
 import { customerPrice, priced, vendorPrice } from "./linePrice.js";
 import { badInput } from "./switchTools.js";
 import { runTrunkRules } from "./translationRules.js";
@@ -21,7 +22,8 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
   const b = request.body as RouteSimulatorInput;
   return withDb(reply, async (pool): Promise<RouteSimulatorResult | FastifyReply> => {
     const { rows: tr } = await pool.query(
-      `SELECT t.id, t.name, e.name AS enterprise FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+      `SELECT t.id, t.name, t.default_coding, e.name AS enterprise FROM customer_trunks t
+         JOIN enterprises e ON e.id = t.enterprise_id
         WHERE t.id = $1 AND t.deleted_at IS NULL`,
       [b.customerTrunkId],
     );
@@ -63,6 +65,14 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
       b.senderId ?? "",
     );
     const options = await vendorOptions(pool, m.mccmnc, null);
+    // The message as the customer sent it: Deny Multipart counts its parts, and a vendor that cannot take it as it
+    // would get it (TON / NPI, coding, multipart, Max Msg Len) is passed over (§6.3, §5.5, S-3.9, S-4.4).
+    const form: MessageForm = {
+      text: b.text ?? "",
+      dataCoding: b.dataCoding,
+      defaultCoding: Number(tr[0].default_coding ?? 0),
+    };
+    m.parts = natural(form)?.parts || 1;
     // A vendor whose own egress rules block the message is skipped and the next vendor tried
     // (decided 2026-10-18); a block on the customer trunk rejects the message before routing.
     const { result: route, skipped: egressSkipped } =
@@ -79,6 +89,13 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
             },
             (mm) => routeThrough(rules, mm, options),
             (r) => r.decision?.vendor,
+            {
+              form,
+              senderTon: translation.after.senderTon ?? b.sourceTon,
+              senderNpi: translation.after.senderNpi ?? b.sourceNpi,
+              destTon: translation.after.destTon ?? b.destTon,
+              destNpi: translation.after.destNpi ?? b.destNpi,
+            },
           )
         : { result: routeThrough(rules, m, options), skipped: [] };
 
@@ -174,7 +191,7 @@ export function runRouteSimulator(request: FastifyRequest, reply: FastifyReply) 
                 : d.outcome === "block"
                   ? `Blocked by route rule ${d.ruleId}`
                   : d.outcome === "no_vendor"
-                    ? `Route rule ${d.ruleId} matched but no vendor qualifies`
+                    ? `Route rule ${d.ruleId} matched but no vendor can take the message; the switch refuses it at once (0x45)`
                     : egress?.blocked
                       ? `Blocked by a translation rule on vendor trunk ${egressName}`
                       : null;

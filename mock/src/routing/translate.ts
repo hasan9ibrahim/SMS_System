@@ -2,6 +2,7 @@
 // reports every check and change. Pure: lists, the receiver's network and randomness come in
 // through the context, so the same code serves the rule Test, the trunk Rules tab Test and tests.
 import { keywordPattern } from "./evaluate.js";
+import { compilePattern } from "./pattern.js";
 import { valuesHit, valuesText } from "./values.js";
 import type {
   ContentWordRule,
@@ -31,14 +32,8 @@ export interface EngineContext {
 type Check = TranslationStep["checks"][number];
 type FieldChange = TranslationStep["changes"][number];
 
-/** Compiles a pattern; invalid ones are reported by the caller. */
-export function compile(pattern: string, flags = ""): RegExp | null {
-  try {
-    return new RegExp(pattern, flags);
-  } catch {
-    return null;
-  }
-}
+/** Compiles a pattern as the switch reads it (routing/pattern.ts); invalid ones are reported by the caller. */
+export const compile = compilePattern;
 
 export function initialState(m: TestMessage, ctx: EngineContext): MessageState {
   return {
