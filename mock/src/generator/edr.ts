@@ -594,6 +594,9 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
       const tried = new Set<number>();
       let attempt = 1;
       let submitAt = t0 + rng.int(1, 40);
+      // The attempt that re-sends after the previous vendor's failed receipt is the DLR re-route, as the switch writes
+      // it (S-5.11, D2); the attempt that got the failed receipt is not.
+      let resendAfterReceipt = false;
       for (;;) {
         const r = route(submitAt, trunk, m, sender, dst, tps, tried);
         if (!r || "blocked" in r) {
@@ -698,7 +701,8 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
         let err = "";
         let cmd = 0;
         let retry = false;
-        let dlrReroute = 0;
+        const dlrReroute = resendAfterReceipt ? 1 : 0;
+        resendAfterReceipt = false;
         if (!success) {
           cmd = rng.weighted(SUBMIT_ERRORS, SUBMIT_ERROR_WEIGHTS);
           status = "REJECTD";
@@ -717,7 +721,7 @@ export async function generateEdrs(world: World, rng: Rng, writer: EdrWriter, op
               err = FAIL_ERR[status] ?? "000";
               if (attempt < 3 && v.rerouteOn.includes(status) && rng.chance(0.3)) {
                 retry = true;
-                dlrReroute = 1;
+                resendAfterReceipt = true;
               }
             }
           }

@@ -326,6 +326,25 @@ describe("EDRs (spec §9.1, §13.29, §13.30)", () => {
     }
   });
 
+  test("the attempt that re-sends after a failed receipt is the DLR re-route, as the switch writes it (S-5.11)", () => {
+    // Attempts of one message share the customer's message ID and follow each other by attempt number.
+    const byMsg = new Map<string, string[][]>();
+    for (const r of edrs) byMsg.set(cell(r, "c_message_id"), [...(byMsg.get(cell(r, "c_message_id")) ?? []), r]);
+    let reroutes = 0;
+    for (const rows of byMsg.values()) {
+      rows.sort((a, b) => Number(cell(a, "attempt_no")) - Number(cell(b, "attempt_no")));
+      for (const [i, r] of rows.entries()) {
+        if (cell(r, "dlr_reroute") !== "1") continue;
+        reroutes++;
+        const before = rows[i - 1];
+        assert.ok(before, "never the first attempt");
+        assert.equal(cell(before, "is_submit_success"), "1", "the attempt before was taken by its vendor");
+        assert.notEqual(cell(before, "msg_status"), "DELIVRD", "and got a failed receipt");
+      }
+    }
+    assert.ok(reroutes > 0, "some messages are re-routed on a failed receipt");
+  });
+
   test("look realistic: most messages deliver, some are re-routed", () => {
     const final = edrs.filter((r) => cell(r, "is_final_attempt") === "1");
     const delivered = final.filter((r) => cell(r, "msg_status") === "DELIVRD").length / final.length;

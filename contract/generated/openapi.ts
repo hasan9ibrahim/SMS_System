@@ -15479,6 +15479,7 @@ export type components = {
       routeRuleId: number;
       /** @description whitelist, warmup, split … (§13.27). */
       routeDecidedBy: string;
+      /** @description This vendor attempt re-sends the message after the previous attempt's vendor returned a failed delivery receipt (S-5.11, D2): true on the re-send, false on the attempt that got the failed receipt (it keeps its own status). An attempt after a submit rejection or timeout is not a DLR re-route. */
       dlrReroute: boolean;
       /** @description 0 = not a repush. */
       repushRequestId: number;
