@@ -3,6 +3,7 @@
 // e.g. "/address/city") shown under the matching field. Required fields carry a "*".
 import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
+import { fieldLine, problemFields, problemTitle } from "../api/problems";
 import { Icon } from "../ui/Icon";
 import { ComboBox } from "../ui/ComboBox";
 
@@ -42,13 +43,15 @@ export function useForm<T>(initial: T): FormApi<T> {
   }, []);
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError) {
-      const list = (err.problem.errors ?? []) as { path: string; message: string }[];
+      // In plain words, each under its field (functional QA round 13); the banner names the ones with no field.
+      const list = problemFields(err.problem);
       const mapped: Record<string, string> = {};
-      for (const e of list) if (e.path && e.path !== "/") mapped[pointerToPath(e.path)] ??= e.message;
+      for (const e of list) if (e.path) mapped[pointerToPath(e.path)] ??= e.message;
       setErrors(mapped);
-      return list.length
-        ? `${err.problem.title}: ${list.length} field${list.length === 1 ? "" : "s"} to check`
-        : err.message;
+      const loose = list.filter((e) => !e.path);
+      if (!list.length) return err.message;
+      const title = `${problemTitle(err.problem.title)}: ${list.length} field${list.length === 1 ? "" : "s"} to check`;
+      return loose.length ? `${title}. ${loose.map(fieldLine).join(" ")}` : title;
     }
     return String(err);
   }, []);

@@ -20,6 +20,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { FieldDescriptor, ListFields, ListId, ListQuery } from "@sms/contract";
 import { fetchListPage, type ListPage } from "../api/hooks";
 import { ApiError } from "../api/client";
+import { fieldLine, problemFields, problemTitle } from "../api/problems";
 import { Icon } from "../ui/Icon";
 import { StatusPill } from "../ui/primitives";
 import { ColumnFilter } from "./ColumnFilter";
@@ -827,13 +828,15 @@ export function DataGrid<Row extends { id: number }>(props: DataGridProps<Row>) 
           {error && (
             <div className="grid-message error">
               <Icon name="alert" />{" "}
-              {error.status === 503 ? `${error.problem.title}. ${error.problem.detail ?? ""}` : error.message}
+              {error.status === 503
+                ? `${error.problem.title}. ${error.problem.detail ?? ""}`
+                : error.problem.errors?.length
+                  ? problemTitle(error.problem.title)
+                  : error.message}
               {error.problem.errors?.length ? (
                 <ul>
-                  {error.problem.errors.map((e, i) => (
-                    <li key={i}>
-                      {e.path}: {e.message}
-                    </li>
+                  {problemFields(error.problem).map((e, i) => (
+                    <li key={i}>{fieldLine(e)}</li>
                   ))}
                 </ul>
               ) : null}

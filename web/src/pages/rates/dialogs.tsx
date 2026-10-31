@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { NoticeBreach, RateLineEdit, RateTableDetail, TrunkListRow } from "@sms/contract";
 import { ApiError } from "../../api/client";
+import { fieldLine, problemFields } from "../../api/problems";
 import { fetchListPage } from "../../api/hooks";
 import { usePlatformCurrency, useChangeRateLines, useReference, useSaveRateTable } from "../../api/records";
 import { useNotifySaved } from "../../history/undo";
@@ -32,8 +33,8 @@ export function SendRnCheck({ checked, onChange }: { checked: boolean; onChange:
 
 const problemText = (e: unknown) => {
   if (!(e instanceof ApiError)) return String(e);
-  const errors = (e.problem.errors ?? []) as { path: string; message: string }[];
-  return errors.length ? errors.map((x) => `${x.path.replace(/^\//, "")}: ${x.message}`).join("; ") : e.message;
+  const fields = problemFields(e.problem);
+  return fields.length ? fields.map(fieldLine).join(" ") : e.message;
 };
 
 export function NewRateTableDialog({

@@ -10,6 +10,7 @@ import type {
   TrunkListRow,
 } from "@sms/contract";
 import { ApiError } from "../../api/client";
+import { fieldLine, problemFields } from "../../api/problems";
 import { useBulkRouteRules, useRouteRule, useSaveRouteRule } from "../../api/routing";
 import { useNotifySaved } from "../../history/undo";
 import { useMe } from "../../api/hooks";
@@ -22,10 +23,11 @@ import { shareProblems, soleOnLevel, toInput, withSoleShares } from "./ruleModel
 export const DEFAULT_PRIORITY = 97;
 const useMaxPriority = () => (isAdminUser(useMe().data?.permissions) ? 100 : DEFAULT_PRIORITY);
 
+/** What went wrong, in plain words: each field's problem, else the problem's title (functional QA round 13). */
 export const problemText = (e: unknown) => {
   if (!(e instanceof ApiError)) return String(e);
-  const errors = (e.problem.errors ?? []) as { path: string; message: string }[];
-  return errors.length ? errors.map((x) => `${x.path.replace(/^\//, "")}: ${x.message}`).join("; ") : e.message;
+  const fields = problemFields(e.problem);
+  return fields.length ? fields.map(fieldLine).join(" ") : e.message;
 };
 
 type General = Pick<
