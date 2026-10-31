@@ -324,9 +324,11 @@ span.w-num {
   margin: 0;
   font-weight: 600;
 }
+/* Customer and vendor tables side by side only when both fit; in the detail panel on a laptop they stack, where the
+   vendor table's DLR and Margin ran past the panel (design QA round 13, §15.4). */
 .traffic-tables {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
   gap: 16px;
   margin-top: 6px;
 }

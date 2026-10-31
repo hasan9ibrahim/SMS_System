@@ -117,7 +117,7 @@
 .gf-select.in-use {
   border-color: var(--color-accent);
   background: var(--accent-softer);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
 }
 .gf-input.invalid {
   border-color: var(--color-error);
@@ -129,7 +129,8 @@
   justify-content: space-between;
   gap: 4px;
   height: 30px;
-  min-width: 56px;
+  /* Never wider than its column, so it cannot cover the next filter (design QA round 13). */
+  min-width: min(56px, 100%);
   max-width: 100%;
   padding: 0 10px;
   border: var(--border-width) solid var(--color-border);
@@ -137,6 +138,9 @@
   background: var(--color-panel);
   font-size: var(--text-md);
   cursor: pointer;
+}
+.gf-select svg {
+  flex: none;
 }
 .gf-select span {
   overflow: hidden;
@@ -190,6 +194,34 @@
   display: flex;
   align-items: center;
 }
+/* Chips, badges, links and status pills in a cell shrink to the cell and end in an ellipsis, instead of being cut off
+   at its edge (design QA round 13): an ellipsis never applies to an inline-block or inline-flex box itself. */
+.gc :is(.tag, .rr-badge, .chip-tag, .status-pill, .with-dot, button.link),
+.gcard-value :is(.tag, .rr-badge, .chip-tag, .status-pill, .with-dot, button.link) {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.gc .chip-tag,
+.gcard-value .chip-tag {
+  display: inline-block;
+}
+.gc .chip-tag > .dot-mini,
+.gcard-value .chip-tag > .dot-mini {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+/* The label beside a dot (status pill, route type) is the part that shrinks. */
+.status-pill-label,
+.with-dot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .grid-message {
   position: absolute;
   left: 16px;
@@ -209,9 +241,10 @@
   margin: 6px 0 0;
 }
 
-/* Archived rows, listed with "Show deleted" (§13.29) */
+/* Archived rows, listed with "Show deleted" (§13.29): secondary text and struck through; opacity took the text to
+   2.4:1 (design QA round 13). */
 .gr.archived .gc:not(.gc-check) {
-  opacity: 0.5;
+  color: var(--color-text-secondary);
   text-decoration: line-through;
   text-decoration-color: color-mix(in srgb, var(--color-text) 35%, transparent);
 }

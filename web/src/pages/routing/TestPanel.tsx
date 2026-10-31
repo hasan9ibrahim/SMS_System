@@ -242,13 +242,8 @@ function DecisionView({ d, skipped = [] }: { d: RouteDecision; skipped?: EgressS
   );
 }
 
-const errText = (e: unknown) =>
-  e instanceof ApiError
-    ? [
-        e.message,
-        ...((e.problem.errors ?? []) as { path: string; message: string }[]).map((x) => `${x.path}: ${x.message}`),
-      ].join(" · ")
-    : String(e);
+// The message names each field's problem in plain words (api/problems.ts).
+const errText = (e: unknown) => (e instanceof ApiError ? e.message : String(e));
 
 /**
  * What the customer trunk's ingress translation did before the rules were tried (team trial round 12): each rule

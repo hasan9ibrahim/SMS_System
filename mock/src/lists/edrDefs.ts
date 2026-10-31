@@ -37,18 +37,30 @@ const has = (arr: string) => (c: { op: string; value?: unknown; values?: unknown
         ? `notEmpty(${arr})`
         : any;
 };
+/**
+ * Vendor Msg ID: one ID per part, comma-joined. eq / in match any part's ID, any case like every text column; like and
+ * regex the whole value (QA 2026-10-31: not_like and regex used to match like eq).
+ */
 const msgIdWhere = (c: { op: string; value?: unknown; values?: unknown[] }) => {
-  const ids = (c.values ?? [c.value]).map((v) => lit(String(v)));
-  const any = `hasAny(splitByChar(',', v_message_id), [${ids.join(",")}])`;
-  return c.op === "neq" || c.op === "not_in"
-    ? `NOT ${any}`
-    : c.op === "empty"
-      ? "v_message_id = ''"
-      : c.op === "not_empty"
-        ? "v_message_id != ''"
-        : c.op === "like"
-          ? `v_message_id ILIKE ${lit(`%${String(c.value)}%`)}`
-          : any;
+  const ids = (c.values ?? [c.value]).map((v) => lit(String(v).toLowerCase()));
+  const any = `hasAny(splitByChar(',', lower(v_message_id)), [${ids.join(",")}])`;
+  switch (c.op) {
+    case "neq":
+    case "not_in":
+      return `NOT ${any}`;
+    case "empty":
+      return "v_message_id = ''";
+    case "not_empty":
+      return "v_message_id != ''";
+    case "like":
+      return `v_message_id ILIKE ${lit(String(c.value))}`;
+    case "not_like":
+      return `NOT (v_message_id ILIKE ${lit(String(c.value))})`;
+    case "regex":
+      return `match(v_message_id, ${lit(`(?i)${String(c.value)}`)})`;
+    default:
+      return any;
+  }
 };
 /**
  * Number, sender or Msg ID (team trial round 2, §9.1): each value is the start of a receiver number, a sender ID,

@@ -191,6 +191,29 @@ describe("visibility policies (§13.17)", { skip }, () => {
       assert.equal(t.name, `Customer trunk #${t.id}`);
       assert.equal(t.username, null);
     }
+    // The enterprises' trunks column filters on the names the viewer sees (QA 2026-10-31).
+    const { rows: tn } = await db().query(
+      "SELECT name FROM customer_trunks WHERE enterprise_id = $1 AND deleted_at IS NULL ORDER BY id LIMIT 1",
+      [other],
+    );
+    const byTrunk = (value: string, as: number | null = AM) =>
+      list(
+        "enterprises",
+        "queryEnterprises",
+        {
+          filter: {
+            logic: "and",
+            conditions: [
+              { field: "id", op: "eq", value: other },
+              { field: "customerTrunkCount", op: "like", value },
+            ],
+          },
+        },
+        as,
+      );
+    assert.equal((await byTrunk(`${tn[0].name}%`)).total, 0, "a masked trunk name cannot be found");
+    assert.equal((await byTrunk(`${tn[0].name}%`, null)).total, 1);
+    assert.equal((await byTrunk(`Customer trunk #${trunks.rows[0].id}%`)).total, 1);
     // Filtering on a withheld value finds nothing of others (it is NULL for this viewer).
     const inv = await list("invoices", "queryInvoices", {
       filter: {

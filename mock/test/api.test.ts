@@ -106,7 +106,7 @@ describe("lists (§13.25)", { skip }, () => {
     });
     const { rows: expected } = await db().query(
       `SELECT e.id FROM enterprises e LEFT JOIN users am ON am.id = e.account_manager_id WHERE e.deleted_at IS NULL
-        ORDER BY (am.first_name || ' ' || am.last_name) DESC NULLS LAST, e.id DESC LIMIT 50`,
+        ORDER BY lower(am.first_name || ' ' || am.last_name) DESC NULLS LAST, e.id DESC LIMIT 50`,
     );
     assert.deepEqual(
       sorted.json().rows.map((r: { id: number }) => r.id),
@@ -167,6 +167,69 @@ describe("lists (§13.25)", { skip }, () => {
       name: string;
     }[];
     assert.ok(mid.some((r) => r.name === first.name));
+  });
+
+  test("enterprise trunk columns filter on the trunk names they show (QA 2026-10-31, §5)", async () => {
+    const { rows } = await db().query(
+      `SELECT t.enterprise_id AS id, t.name FROM customer_trunks t JOIN enterprises e ON e.id = t.enterprise_id
+        WHERE t.deleted_at IS NULL AND e.deleted_at IS NULL ORDER BY t.id LIMIT 1`,
+    );
+    const { id, name } = rows[0] as { id: number; name: string };
+    const query = (...conditions: object[]) =>
+      call("POST", "/enterprises/query", { filter: { logic: "and", conditions }, limit: 500 });
+    const head = name.slice(0, 4).toLowerCase();
+    const hit = await query({ field: "customerTrunkCount", op: "like", value: `${head}%` });
+    check("queryEnterprises", hit);
+    const found = hit.json().rows as { id: number; customerTrunkNames: string[] }[];
+    assert.ok(
+      found.some((r) => r.id === id),
+      `${head}% finds the enterprise of ${name}`,
+    );
+    for (const r of found)
+      assert.ok(
+        r.customerTrunkNames.some((n) => n.toLowerCase().startsWith(head)),
+        `${r.id}: ${r.customerTrunkNames}`,
+      );
+    const none = (await query({ field: "customerTrunkCount", op: "empty" })).json().rows as {
+      customerTrunkCount: number;
+    }[];
+    assert.ok(none.every((r) => r.customerTrunkCount === 0));
+    const exact = await query(
+      { field: "id", op: "eq", value: id },
+      { field: "customerTrunkCount", op: "eq", value: name.toUpperCase() },
+    );
+    assert.equal(exact.json().total, 1, "equals takes a whole name, any case");
+    const not = await query(
+      { field: "id", op: "eq", value: id },
+      { field: "customerTrunkCount", op: "not_like", value: `${head}%` },
+    );
+    assert.equal(not.json().total, 0);
+  });
+
+  test("part of a name with _ finds the names it starts (QA 2026-10-31, §13.25)", async () => {
+    const { rows } = await db().query(
+      `SELECT id, name FROM customer_trunks WHERE deleted_at IS NULL AND name LIKE '%\\_%' AND length(name) > 8
+        ORDER BY id LIMIT 1`,
+    );
+    if (!rows[0]) return;
+    const { id, name } = rows[0] as { id: number; name: string };
+    const part = name.slice(0, name.indexOf("_") + 2);
+    for (const url of ["/customer-trunks/query", "/lookups/customer_trunks/query"]) {
+      const res = await call("POST", url, { search: part, limit: 500 });
+      assert.equal(res.statusCode, 200, res.body);
+      assert.ok(
+        (res.json().rows as { id: number }[]).some((r) => r.id === id),
+        `${url}: "${part}" finds ${name}`,
+      );
+    }
+    const hits = (await call("GET", `/search?q=${encodeURIComponent(part)}&limit=50`)).json().hits as {
+      id: number;
+      kind: string;
+    }[];
+    assert.ok(
+      hits.some((h) => h.id === id && h.kind === "customer_trunk"),
+      `Ctrl K "${part}" finds ${name}`,
+    );
   });
 
   test("users and change history", async () => {

@@ -400,3 +400,42 @@ test("sender and receiver lists can be negated - Not match (decided 2026-10-24, 
   );
   assert.match(checks.find((c) => c.condition === "Sender list")!.detail, /must not be/);
 });
+
+test("Deny Multipart is a gate: a multipart message never matches the rule, whatever its match mode (§6.3, S-3.9)", () => {
+  for (const matchMode of ["all", "any"]) {
+    const r = rule({ denyMultipart: true, matchMode });
+    assert.equal(quickMatch(r, msg({ parts: 2 })), false, matchMode);
+    const d = decide(r, msg({ parts: 2 }), options);
+    assert.equal(d.matched, false);
+    assert.deepEqual(
+      d.checks.find((c) => c.condition === "Multipart"),
+      { condition: "Multipart", ok: false, detail: "2 parts: multipart messages denied" },
+    );
+    assert.equal(quickMatch(r, msg({ parts: 1 })), true, matchMode);
+    assert.equal(decide(r, msg(), options).matched, true);
+  }
+  // Without Deny Multipart a multipart message matches as before, with no Multipart check.
+  const open = decide(rule(), msg({ parts: 3 }), options);
+  assert.equal(open.matched, true);
+  assert.ok(!open.checks.some((c) => c.condition === "Multipart"));
+});
+
+test("a vendor that cannot take the message as it would get it is passed over, saying why (§5.5, S-4.4)", () => {
+  const first = decide(rule(), msg(), options).vendor!.vendorTrunkId;
+  const other = first === 10 ? 11 : 10;
+  const why = "data coding 8 is not allowed and the text fits none it takes (0, 3)";
+  const next = decide(rule(), msg({ incapable: new Map([[first, why]]) }), options);
+  assert.equal(next.vendor?.vendorTrunkId, other);
+  assert.equal(next.candidates.find((c) => c.vendorTrunkId === first)!.note, `cannot take the message: ${why}`);
+  const both = new Map([
+    [10, why],
+    [11, why],
+  ]);
+  const none = decide(rule(), msg({ incapable: both }), options);
+  assert.equal(none.outcome, "no_vendor");
+  // Least cost too.
+  const lcr = rule({ routeType: "dynamic", vendors: [] });
+  const cheapest = decide(lcr, msg(), options).vendor!.vendorTrunkId;
+  assert.equal(cheapest, 12);
+  assert.equal(decide(lcr, msg({ incapable: new Map([[12, why]]) }), options).vendor?.vendorTrunkId, 10);
+});

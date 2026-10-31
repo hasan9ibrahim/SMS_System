@@ -241,7 +241,7 @@
   color: var(--color-text-secondary);
 }
 .good-text {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .bad-text {
   color: var(--color-error);

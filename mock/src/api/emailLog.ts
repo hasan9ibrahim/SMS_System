@@ -68,6 +68,9 @@ async function amCopy(c: Db, m: EmailLogInput): Promise<string | null> {
   return (rows[0]?.email as string | undefined)?.trim() || null;
 }
 
+/** What the log shows of a sign-in code e-mail: the code is never shown, and not kept once sent (§13.28). */
+export const OTP_HIDDEN = "Sign-in code e-mail. The code is not kept in the log.";
+
 export async function logEmail(c: Db, input: EmailLogInput, id?: { value: number }): Promise<"sent" | "failed"> {
   const am = await amCopy(c, input);
   const known = [...input.to, ...(input.cc ?? [])].map((x) => x.toLowerCase());

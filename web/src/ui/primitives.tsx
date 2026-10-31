@@ -232,7 +232,7 @@ export function StatusPill({ active, label }: { active: boolean; label?: string 
   return (
     <span className={`status-pill ${active ? "on" : "off"}`}>
       <span className="status-pill-dot" aria-hidden="true" />
-      {label ?? (active ? "Active" : "Inactive")}
+      <span className="status-pill-label">{label ?? (active ? "Active" : "Inactive")}</span>
     </span>
   );
 }

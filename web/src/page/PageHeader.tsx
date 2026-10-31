@@ -3,6 +3,7 @@
 import { useContext, useEffect, type ReactNode } from "react";
 import type { PageDef } from "../nav/registry";
 import { TabContext, useTabNavigate } from "../shell/tabContext";
+import { newTabOf } from "../shell/useOpener";
 import { canGoBack, useTabs } from "../shell/tabs";
 import { useReloadTab } from "../shell/reload";
 import { Icon } from "../ui/Icon";
@@ -112,7 +113,13 @@ export function PageHeader({
                   href={c.path}
                   onClick={(e) => {
                     e.preventDefault();
-                    navigate(c.path!, e.ctrlKey || e.metaKey ? { forceNew: true } : {});
+                    navigate(c.path!, newTabOf(e).forceNew ? newTabOf(e) : {});
+                  }}
+                  // Middle button: a new tab here, not a new browser window (QA round 14).
+                  onAuxClick={(e) => {
+                    if (e.button !== 1) return;
+                    e.preventDefault();
+                    navigate(c.path!, newTabOf(e));
                   }}
                 >
                   {c.label}

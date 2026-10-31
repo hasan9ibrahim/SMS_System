@@ -8,7 +8,6 @@ defmodule Sms.Switch.Pipeline.Receipt do
     * `build/1` makes the receipt the switch sends its customer.
   """
   import Bitwise
-  alias Sms.Switch.Message.Text
   alias Sms.Switch.Smpp.Pdu
 
   @states %{
@@ -193,15 +192,11 @@ defmodule Sms.Switch.Pipeline.Receipt do
     {fields, tlvs}
   end
 
-  # The receipt text is ASCII apart from the message excerpt: characters outside GSM become ? so it always encodes.
+  # Written in ASCII, as clients parse receipt text (SMPP 3.4 appendix B): never GSM-coded, where "@" would be a NUL and
+  # "_" 0x11. A character of the message excerpt outside printable ASCII becomes "?". (sub and dlvrd count the
+  # messages of a distribution list, appendix B, so they are 001 for a message to one number.)
   defp receipt_bytes(text) do
-    {:ok, bytes} =
-      text
-      |> String.codepoints()
-      |> Enum.map_join(&if(Text.gsm?(&1), do: &1, else: "?"))
-      |> Text.encode(:gsm)
-
-    bytes
+    for <<c::utf8 <- text>>, into: "", do: if(c in 0x20..0x7E, do: <<c>>, else: "?")
   end
 
   defp pad3(n), do: n |> Integer.to_string() |> String.pad_leading(3, "0")

@@ -26,7 +26,7 @@ const fmtTps = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits:
 /**
  * The open main-menu dropdown. The mouse opens a section by hovering it, no click needed (team trial round 8); moving
  * to another section swaps the dropdown at once, leaving both the button and its dropdown closes it after a moment.
- * Clicks and touch still open and close it.
+ * A mouse click only opens it; touch and the keyboard open and close it.
  */
 const useOpenSection = create<{ open: SectionKey | null; set: (s: SectionKey | null) => void }>((set) => ({
   open: null,
@@ -90,7 +90,9 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
         className={`menu-top${current ? " current" : ""}${shown ? " open" : ""}`}
         aria-haspopup="menu"
         aria-expanded={shown}
-        onClick={() => setShown((v) => !v)}
+        // A mouse has opened it by hovering, so its click only opens: toggling shut what the hover just opened made
+        // the dropdown flash and vanish (design QA round 13). Touch and the keyboard still open and close it.
+        onClick={(e) => setShown((v) => ((e.nativeEvent as PointerEvent).pointerType === "mouse" ? true : !v))}
         onPointerEnter={(e) => isMouse(e) && setShown(true)}
         onPointerLeave={(e) => isMouse(e) && closeSoon(section)}
       >
@@ -114,12 +116,12 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
                 setShown(false);
                 open(pg.path, e);
               }}
-              // Middle button on press (team trial round 12): closes the dropdown and opens the page in a new tab
-              // behind; on press, so Windows' autoscroll cannot swallow it and leave the dropdown open.
+              // Middle button on press: opens the page in a new tab behind and keeps the dropdown open, so more pages
+              // can be opened from it (team trial round 13); on press, so Windows' autoscroll cannot swallow it.
               onMouseDown={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
-                  setShown(false);
+                  cancelClose();
                   open(pg.path, e);
                 }
               }}

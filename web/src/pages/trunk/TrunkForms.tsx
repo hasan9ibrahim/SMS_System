@@ -212,20 +212,20 @@ export function fillService(kind: TrunkKind, v: TrunkForm, isNew: boolean): Trun
 
 export function checkTrunk(kind: TrunkKind, v: TrunkForm, isNew: boolean): Record<string, string> {
   const e: Record<string, string> = {};
-  if (!v.name.trim()) e.name = "Required";
-  if (!v.username.trim()) e.username = "Required";
-  if (isNew && !v.password) e.password = "Required for a new trunk";
-  if (!v.enterpriseId) e.enterpriseId = "Required";
+  if (!v.name.trim()) e.name = "Required.";
+  if (!v.username.trim()) e.username = "Required.";
+  if (isNew && !v.password) e.password = "Required for a new trunk.";
+  if (!v.enterpriseId) e.enterpriseId = "Required.";
   if (kind === "customer") {
     const c = v as CustomerTrunkInput;
-    if (!c.hostIps.length) e.hostIps = "At least one IP address";
-    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null)) e.revenueLimitPeriod = "Set both or neither";
+    if (!c.hostIps.length) e.hostIps = "Add at least one IP address.";
+    if ((c.revenueLimit == null) !== (c.revenueLimitPeriod == null)) e.revenueLimitPeriod = "Set both or neither.";
   } else {
     const x = v as VendorTrunkInput;
-    if (!x.host.trim()) e.host = "Required";
-    if (!x.categoryId) e.categoryId = "Required";
-    if (x.protocol === "http" && !x.http?.url) e["http.url"] = "Required for an HTTP trunk";
-    if ((x.costLimit == null) !== (x.costLimitPeriod == null)) e.costLimitPeriod = "Set both or neither";
+    if (!x.host.trim()) e.host = "Required.";
+    if (!x.categoryId) e.categoryId = "Required.";
+    if (x.protocol === "http" && !x.http?.url) e["http.url"] = "Required for an HTTP trunk.";
+    if ((x.costLimit == null) !== (x.costLimitPeriod == null)) e.costLimitPeriod = "Set both or neither.";
   }
   return e;
 }
@@ -562,6 +562,7 @@ export function CustomerTrunkFields({
             label="Allowed host IPs"
             required
             wide
+            item="ip"
             placeholder="192.0.2.10, 192.0.2.0/24, 192.0.2.10-192.0.2.50"
             hint="An address, a network (IP/prefix, e.g. 192.0.2.0/24) or a range (a-b). Binds from anywhere else are refused"
           />

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router";
 import type { PortalMessageRow, PortalRateRow, PortalTrafficQuery } from "@sms/contract";
 import { ApiError } from "../api/client";
+import { friendlyMessage } from "../api/problems";
 import type { ListPage } from "../api/hooks";
 import { DataGrid, type ColumnOverride } from "../grid/DataGrid";
 import { emptyState, switchOf, toListQuery, withSwitch, type GridState } from "../grid/filterModel";
@@ -243,7 +244,7 @@ function ChangePassword({ forced, onDone }: { forced: boolean; onDone?: () => vo
       {errors?.length ? (
         <ul className="error-text">
           {errors.map((x) => (
-            <li key={x.message}>{x.message}</li>
+            <li key={x.message}>{friendlyMessage(x.message)}</li>
           ))}
         </ul>
       ) : (

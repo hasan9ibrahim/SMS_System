@@ -311,6 +311,7 @@ function FilterDialog({ row, done }: { row: FirewallFilterRow | null; done: () =
   const v = form.values;
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit filter ${row.name}` : "Add filter"}
       saveLabel={row ? "Save" : "Add filter"}
       saving={save.isPending}

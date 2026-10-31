@@ -21,8 +21,10 @@ import { TeamReportPage } from "./reports/team/TeamReportPage";
 import { CleanupPage } from "./admin/cleanup/CleanupPage";
 import { MigrationPage } from "./admin/migration/MigrationPage";
 import { SecurityPage } from "./admin/security/SecurityPage";
-import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router";
+import { lazy, Suspense, useEffect } from "react";
+import { Route, Routes, useLocation } from "react-router";
+import { popoutPath, useTab } from "../shell/tabContext";
+import { useTabs } from "../shell/tabs";
 import { PAGES } from "../nav/registry";
 import { ChangeHistoryPage } from "./ChangeHistoryPage";
 import { EnterprisePage } from "./enterprise/EnterprisePage";
@@ -161,6 +163,21 @@ const BUILT = new Set([
   "/help",
 ]);
 
+/**
+ * An old address of a page that moved: the tab itself goes to the new one, keeping the query, with the new page's
+ * title and no step for Back (functional QA round 13). A <Navigate> moved the browser's address instead, so the tab
+ * stayed a blank "Page" and a hidden old tab rewrote the address bar.
+ */
+function MovedTo({ path }: { path: string }) {
+  const { tab, popout } = useTab();
+  const { search } = useLocation();
+  useEffect(() => {
+    if (popout) popoutPath.getState().set(`${path}${search}`);
+    else if (tab) useTabs.getState().setPath(tab.id, `${path}${search}`, { moved: true });
+  }, [tab?.id, popout, path, search]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+}
+
 export function PageRoutes({ path }: { path: string }) {
   return (
     <Routes location={path}>
@@ -190,8 +207,8 @@ export function PageRoutes({ path }: { path: string }) {
       <Route path="/routing/map" element={<RouteMapPage />} />
       <Route path="/rates/re-rating" element={<ReratingPage />} />
       {/* Re-rating and Rate lookup moved under Rates (team trial round 2); old tabs and links still open. */}
-      <Route path="/routing/re-rating" element={<Navigate to="/rates/re-rating" replace />} />
-      <Route path="/routing/rate-lookup" element={<Navigate to="/rates/rate-lookup" replace />} />
+      <Route path="/routing/re-rating" element={<MovedTo path="/rates/re-rating" />} />
+      <Route path="/routing/rate-lookup" element={<MovedTo path="/rates/rate-lookup" />} />
       <Route path="/switch/qbr-stats" element={<QbrStatsPage />} />
       <Route path="/switch/number-lists" element={<NumberListsPage />} />
       <Route path="/switch/translation-rules" element={<TranslationRulesPage />} />

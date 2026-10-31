@@ -205,7 +205,8 @@
   height: auto;
   resize: vertical;
 }
-.ff input[type="checkbox"] {
+.ff input[type="checkbox"],
+.ff input[type="radio"] {
   width: auto;
   height: auto;
 }
@@ -313,7 +314,7 @@
   font-variant-numeric: tabular-nums;
 }
 .rtable tr.off td {
-  opacity: 0.55;
+  color: var(--color-text-secondary);
 }
 .rtable tr:last-child td {
   border-bottom: 0;
@@ -407,25 +408,24 @@
   color: var(--color-warning);
 }
 .tone-good {
-  color: var(--color-good);
+  color: var(--color-good-text);
 }
 .record-meta {
   margin-top: -4px;
   font-size: var(--text-sm);
 }
-/* Visually hidden, still read out. ".ff input" (width 100 %) used to win over it, so each hidden radio of a choice
-   field was as wide as the window and the whole page scrolled sideways on record pages (§15). */
-.sr-only,
-.ff input.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+/* Visually hidden but still read and focused. !important so no field rule (".ff input" sets a full width) can
+   stretch a hidden radio across the page and make the whole app scroll sideways (design QA round 13, §15). */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
 }
 .lookup {
   display: flex;
@@ -566,7 +566,7 @@
   padding: 1px 8px;
   border-radius: 999px;
   background: var(--accent-soft);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   text-decoration: none;
   font-size: var(--text-sm);
 }
@@ -712,7 +712,7 @@
 }
 .chip-tag.green {
   background: color-mix(in srgb, var(--color-good) 13%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .chip-tag .dot-mini {
   width: 6px;
@@ -819,6 +819,8 @@
   background: color-mix(in srgb, var(--color-text) 6%, var(--color-panel));
 }
 .choice-seg label {
+  /* Anchors the hidden radio inside its button. */
+  position: relative;
   padding: 4px 12px;
   border-radius: 7px;
   font-size: var(--text-md);
@@ -884,7 +886,7 @@
 .status-card.on {
   border-color: color-mix(in srgb, var(--color-good) 45%, var(--color-border));
   background: color-mix(in srgb, var(--color-good) 9%, var(--color-panel));
-  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 80%, var(--color-text));
   font-weight: 600;
 }
 .toggle-card {
@@ -939,7 +941,7 @@
   border-color: color-mix(in srgb, var(--color-good) 30%, var(--color-border));
 }
 .notice-tile.down .notice-tile-label {
-  color: color-mix(in srgb, var(--color-good) 85%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 85%, var(--color-text));
 }
 .notice-tile.new {
   background: color-mix(in srgb, var(--color-accent) 6%, var(--color-panel));
@@ -1030,7 +1032,8 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   background: color-mix(in srgb, var(--color-text) 7%, var(--color-panel));
-  color: var(--color-text-secondary);
+  /* A shade darker than secondary text, which was 4.3:1 on the grey fill (design QA round 13). */
+  color: color-mix(in srgb, var(--color-text-secondary) 80%, var(--color-text));
 }
 .contact-card .tag-input {
   flex-direction: column;
@@ -1121,7 +1124,7 @@
 }
 .bill-card.balance.credit .bill-card-value,
 .bill-card.balance.credit .bill-card-label {
-  color: color-mix(in srgb, var(--color-good) 80%, var(--color-text));
+  color: color-mix(in srgb, var(--color-good-text) 80%, var(--color-text));
 }
 .bill-card.balance.owed {
   border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border));

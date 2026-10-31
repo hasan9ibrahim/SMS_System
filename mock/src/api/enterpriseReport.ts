@@ -473,10 +473,12 @@ export async function runEnterpriseReport(
   const sort = (q.sort?.length ? q.sort : FIELDS.defaultSort).filter((k) => COLUMN[k.field]);
   const order = [
     ...sort.map((k) => `${COLUMN[k.field]} ${k.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
-    // Stable order for paging.
+    // Stable order for paging; the IDs after the names, which two partners can share.
     "period ASC",
     "enterprise_name ASC",
+    "enterprise_id_out ASC",
     "trunk_name ASC",
+    "trunk_id ASC",
     "mccmnc ASC",
     "am_name ASC",
     "currency ASC",

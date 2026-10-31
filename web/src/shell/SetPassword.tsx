@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { PasswordSetupInfo } from "@sms/contract";
 import { checkPasswordSetup, completePasswordSetup } from "../api/admin";
 import { ApiError } from "../api/client";
+import { friendlyMessage } from "../api/problems";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Button } from "../ui/primitives";
@@ -53,7 +54,7 @@ export function SetPasswordScreen() {
       .then(() => setDone(true))
       .catch((err: unknown) => {
         const errors = err instanceof ApiError ? (err.problem.errors as { message: string }[] | undefined) : undefined;
-        setError(errors?.length ? errors.map((x) => x.message).join("; ") : message(err));
+        setError(errors?.length ? errors.map((x) => friendlyMessage(x.message)).join(" ") : message(err));
       })
       .finally(() => setBusy(false));
   };

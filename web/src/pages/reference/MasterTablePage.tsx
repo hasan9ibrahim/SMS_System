@@ -44,6 +44,7 @@ function ProfileDialog({ row, done }: { row: DialCodeProfile | null; done: (id: 
     );
   return (
     <RecordDialog
+      form={form}
       title={row ? `Rename ${row.name}` : "Add dial-code profile"}
       saveLabel={row ? "Save" : "Add profile"}
       saving={save.isPending}
@@ -93,6 +94,7 @@ function DialCodeDialog({ profile, row, done }: { profile: DialCodeProfile; row:
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit dial code ${row.prefix}` : `Add dial code to ${profile.name}`}
       saveLabel={row ? "Save" : "Add dial code"}
       saving={save.isPending}

@@ -78,7 +78,7 @@
 }
 .help-link.current {
   background: var(--accent-soft);
-  color: var(--color-accent);
+  color: var(--color-accent-text);
   font-weight: 600;
 }
 .help-main {

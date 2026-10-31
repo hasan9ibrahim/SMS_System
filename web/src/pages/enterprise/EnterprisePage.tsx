@@ -23,6 +23,7 @@ import {
   useSectionTab,
 } from "../../records/parts";
 import { usePageStatus, useTabDirty, useTabNavigate, useTabTitle } from "../../shell/tabContext";
+import { newTabOf, type OpenEvent } from "../../shell/useOpener";
 import { confirmDialog, toast } from "../../ui/feedback";
 import { fetchListPage } from "../../api/hooks";
 import { openSendRate, openTechInfo } from "../switch/tools/NotificationsPage";
@@ -184,10 +185,10 @@ export function EnterprisePage() {
     slot: key === section ? slot : null,
     onDirty: onDirty[key as keyof typeof onDirty] ?? (() => {}),
   });
-  const openTrunk = (kind: "customer" | "vendor") => (row: TrunkListRow, ev: { ctrlKey: boolean; metaKey: boolean }) =>
+  const openTrunk = (kind: "customer" | "vendor") => (row: TrunkListRow, ev: OpenEvent) =>
     // In this tab, Back returns to the enterprise's trunks (team trial round 12); Ctrl/Cmd-click: a new tab.
     navigate(`/enterprises/${kind}-trunks/${row.id}`, {
-      forceNew: ev.ctrlKey || ev.metaKey,
+      ...newTabOf(ev),
       title: `${kind === "customer" ? "Customer" : "Vendor"} trunk · ${row.name}`,
     });
 

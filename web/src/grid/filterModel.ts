@@ -69,6 +69,13 @@ function operand(f: FieldDescriptor, raw: string): string | number | null {
   return v;
 }
 
+/** A date typed without a time as an upper bound: the last millisecond of that day (UTC), so the day is included. */
+function dayEnd(f: FieldDescriptor, raw: string): string | number | null {
+  const value = operand(f, raw);
+  if (!isTime(f) || raw.trim().length > 10 || value === null) return value;
+  return new Date(Date.parse(String(value)) + 86_399_999).toISOString();
+}
+
 /**
  * Parses a column filter box. Returns null for an empty box and an Error for text that
  * cannot be a condition on this field.
@@ -77,7 +84,7 @@ function operand(f: FieldDescriptor, raw: string): string | number | null {
  *           typed · =ACME → equals · !test → does not start with · /^ab/ → regex · empty / !empty
  * Prefix:   505 → starts with
  * Numbers:  5 or =5 · >5 >=5 ≥5 <5 <=5 ≤5 · !=5 · 5..10 (inclusive) · 1,2,3 (in list)
- * Dates:    2026-10-01..2026-10-16 · >=2026-10-01 · <2026-10-01
+ * Dates:    2026-10-01..2026-10-16 (both days included) · >=2026-10-01 · <2026-10-01 · <=2026-10-16 (with that day)
  */
 export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCondition | null | Error {
   const text = input.trim();
@@ -91,7 +98,7 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
     const range = text.split("..");
     if (range.length === 2) {
       const a = operand(f, range[0]!);
-      const b = operand(f, range[1]!);
+      const b = dayEnd(f, range[1]!);
       if (a === null || b === null) return new Error("Use from..to, e.g. 5..10");
       return { field, op: "between", values: [a, b] };
     }
@@ -102,7 +109,8 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
     }
     const m = /^(>=|<=|!=|≥|≤|>|<|=)?\s*(.+)$/.exec(text)!;
     const sym = m[1] ?? "";
-    const value = operand(f, m[2]!);
+    // "<=2026-10-29" includes that day; ">2026-10-29" starts after it.
+    const value = ["<=", "≤", ">"].includes(sym) ? dayEnd(f, m[2]!) : operand(f, m[2]!);
     if (value === null)
       return new Error(isTime(f) ? "Use a date, e.g. >=2026-10-01" : "Use a number, e.g. >=5 or 5..10");
     const op: FilterOperator =
@@ -149,12 +157,18 @@ export function parseColumnFilter(f: FieldDescriptor, input: string): FilterCond
   return { field, op: "like", value: pattern(text) };
 }
 
-/** Plain text starts with; a leading % alone (`%au`) searches anywhere (team trial round 4); other wildcards as typed. */
-const textPattern = (v: string) =>
-  !/[%_]/.test(v) ? `${v}%` : v.length > 1 && v.startsWith("%") && !/[%_]/.test(v.slice(1)) ? `${v}%` : v;
+/**
+ * Text matches the start of a value, wildcards included: `%` is added at the end unless the text already ends with
+ * one. `%au` finds au anywhere (team trial round 4); `PK_Tel` finds PK_Telenor_HQ (functional QA round 13: a part of
+ * a name with `_` in it found nothing, since it had to match the whole value).
+ */
+const textPattern = (v: string) => (v.endsWith("%") ? v : `${v}%`);
 
-/** Plain text anywhere (fields with matchAnywhere, team trial round 6); wildcards as typed. */
-const anywherePattern = (v: string) => (!/[%_]/.test(v) ? `%${v}%` : v);
+/**
+ * Text anywhere (fields with matchAnywhere, team trial round 6): without a `%` of its own it is wrapped in `%…%`, so
+ * `VN_04` finds BLOCK_VN_04_OTP (round 13); with one, the `%` say where it may match.
+ */
+const anywherePattern = (v: string) => (!v.includes("%") ? `%${v}%` : v);
 
 /** "abc%" (starts with, the plain-text default) → "abc"; anything else null. */
 const startsWithText = (s: string) =>

@@ -85,6 +85,7 @@ export function PillSearch({
   freeText = true,
   exclude = [],
   onAdvanced,
+  resetKey,
 }: {
   fields: FieldDescriptor[] | undefined;
   visible: string[] | null;
@@ -98,6 +99,8 @@ export function PillSearch({
   exclude?: string[];
   /** Opens the AND / OR builder. */
   onAdvanced?: () => void;
+  /** Changes on Clear all: the picked fields still without a value go too. */
+  resetKey?: unknown;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -108,6 +111,23 @@ export function PillSearch({
   const [pending, setPending] = useState<string[]>([]);
   const [focusField, setFocusField] = useState<string | null>(null);
   useEffect(() => setDraft(search), [search]);
+  // Pills changed from outside (Clear all, a saved view, Back): a field whose value went leaves no empty pill behind
+  // (functional QA round 13: Clear all left an empty "Brand Name" pill).
+  const emitted = useRef(JSON.stringify(columns));
+  useEffect(() => {
+    const now = JSON.stringify(columns);
+    if (now === emitted.current) return;
+    emitted.current = now;
+    setPending((p) => p.filter((k) => k in columns));
+  }, [columns]);
+  const firstReset = useRef(true);
+  useEffect(() => {
+    if (firstReset.current) {
+      firstReset.current = false;
+      return;
+    }
+    setPending([]);
+  }, [resetKey]);
   const byName = useMemo(() => new Map((fields ?? []).map((f) => [f.field, f])), [fields]);
   const pillFields = [
     ...Object.keys(columns).filter((k) => k !== "archived" && !exclude.includes(k)),
@@ -121,6 +141,7 @@ export function PillSearch({
     if (c) next[field] = c;
     else delete next[field];
     if (!c && !pending.includes(field)) setPending((p) => [...p, field]);
+    emitted.current = JSON.stringify(next);
     onColumns(next);
   };
   const remove = (field: string) => {
@@ -128,6 +149,7 @@ export function PillSearch({
     if (field in columns) {
       const next = { ...columns };
       delete next[field];
+      emitted.current = JSON.stringify(next);
       onColumns(next);
     }
   };
@@ -195,7 +217,13 @@ export function PillSearch({
         onBlur={() => freeText && draft.trim() !== search && onSearch(draft.trim())}
       />
       <Popover anchor={barRef} open={open} onClose={() => setOpen(false)} className="pill-pop">
-        <div className="pill-card" onMouseDown={(e) => e.preventDefault()}>
+        <div
+          className="pill-card"
+          onMouseDown={(e) => e.preventDefault()}
+          // A click here would bubble through the portal to the bar, which opens the card again: "Any of (OR)…" left
+          // it open on top of the filter builder (design QA round 13).
+          onClick={(e) => e.stopPropagation()}
+        >
           {freeText && draft.trim() && (
             <button
               type="button"

@@ -8,6 +8,7 @@ import { sendMyPasswordCode, useChangeMyPassword, usePasswordCheck } from "../..
 import { useMyPasswordStatus } from "../../api/security";
 import { useMe } from "../../api/hooks";
 import { ApiError } from "../../api/client";
+import { problemFields } from "../../api/problems";
 import { ask, toast } from "../../ui/feedback";
 import { Icon } from "../../ui/Icon";
 import { Button, Modal, StatusDot } from "../../ui/primitives";
@@ -96,8 +97,7 @@ function PasswordInput({
 
 const fieldErrors = (e: unknown): Record<string, string> => {
   const out: Record<string, string> = {};
-  if (e instanceof ApiError)
-    for (const x of (e.problem.errors ?? []) as { path: string; message: string }[]) out[x.path] ??= x.message;
+  if (e instanceof ApiError) for (const x of problemFields(e.problem)) out[x.path || "/"] ??= x.message;
   return out;
 };
 

@@ -125,6 +125,7 @@ function ScheduleDialog({ row, done }: { row: ScheduledReportRow | null; done: (
   };
   return (
     <RecordDialog
+      form={form}
       title={row ? `Edit scheduled report ${row.name}` : "Add scheduled report"}
       saveLabel={row ? "Save" : "Add schedule"}
       saving={save.isPending}
