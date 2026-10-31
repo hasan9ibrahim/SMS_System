@@ -2361,6 +2361,127 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "credit holds (§7, S-6.3, S-6.4, decision 2026-10-31)" do
+    defp ledger(accounts) do
+      LedgerSource.put(accounts)
+      start_supervised!({Sync, source: LedgerSource, interval_ms: 3_600_000})
+      start_supervised!(Pipeline.Ledger.Charges)
+      :ok = Sync.sync()
+    end
+
+    defp exposure(key) do
+      {:ok, used} = Pipeline.Ledger.used(key)
+      {used, Pipeline.Ledger.held(key)}
+    end
+
+    test "a message waiting for its receipt holds its cost; the receipt that bills nothing releases it" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      {client, resp} = submit(client, %{short_message: "first", registered_delivery: 1})
+      assert resp.status == 0
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert exposure("c11") == {0, 50_000}
+
+      # Not billed yet, but held: no overshoot.
+      {client, resp} = submit(client, %{short_message: "second"}, 3)
+      assert resp.status == 0x45
+
+      receipt(conn, "1", "UNDELIV", "005")
+      {client, _} = customer_receipt(client)
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+
+      {_client, resp} = submit(client, %{short_message: "third"}, 4)
+      assert resp.status == 0
+    end
+
+    test "billed on submit: the charge replaces the hold" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "1"]])
+      %{client: client, conns: [conn]} = start_all()
+      {_client, %{status: 0}} = submit(client, %{short_message: "billed at once"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+    end
+
+    test "delivery billing per part: the delivered parts are charged, the whole hold released (S-6.4)" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "1"]])
+
+      %{client: client, conns: [conn]} =
+        start_all(config: billed("delivery", billing_type: "delivery"))
+
+      fields = %{
+        source_addr: "FakeBank",
+        destination_addr: @dest,
+        registered_delivery: 1,
+        short_message: ""
+      }
+
+      Client.send_pdu(
+        client,
+        Pdu.new(:submit_sm, fields,
+          tlvs: [message_payload: String.duplicate("t", 200)],
+          sequence: 2
+        )
+      )
+
+      assert {client, %Pdu{command: :submit_sm_resp, status: 0}} = Client.recv(client, 5_000)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      # Both parts held.
+      assert exposure("c11") == {0, 100_000}
+
+      receipt(conn, "1", "DELIVRD")
+      receipt(conn, "2", "UNDELIV", "005")
+      {_client, dlr} = customer_receipt(client)
+      assert dlr.fields.short_message =~ "stat:UNDELIV"
+
+      assert_eventually(fn -> match?([_], outcome_rows()) end)
+
+      assert [
+               %{
+                 "is_customer_billable" => 1,
+                 "revenue" => "0.05",
+                 "is_vendor_billable" => 1,
+                 "cost" => "0.02"
+               }
+             ] = outcome_rows()
+
+      assert_eventually(fn -> exposure("c11") == {50_000, 0} end)
+    end
+
+    test "a message no vendor takes releases its hold" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, smscs: [smsc], conns: [conn]} = start_all()
+      FakeSmsc.set(smsc, :submit, {:status, 0x45})
+      {client, %{status: 0}} = submit(client, %{short_message: "refused by the vendor"})
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 2_000
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+      {_client, %{status: 0}} = submit(client, %{short_message: "room again"}, 3)
+    end
+
+    test "a message whose validity ends before the sender takes it releases its hold (S-2.13)" do
+      ledger([[enterprise_id: 11, prepaid: true, base: "0.06"]])
+      %{client: client, conns: [conn]} = start_all(sender: false)
+
+      {_client, %{status: 0}} =
+        submit(client, %{
+          short_message: "short-lived",
+          registered_delivery: 1,
+          validity_period: "000000000001000R"
+        })
+
+      assert exposure("c11") == {0, 50_000}
+      Process.sleep(1_100)
+      [event] = for e <- Local.published(), e.type == "msg.accepted", do: e
+      assert :ok = Pipeline.Sender.handle_event(event)
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 200
+      assert_eventually(fn -> exposure("c11") == {0, 0} end)
+      assert Enum.any?(edr("edr.attempt"), &(&1["c_msg_status"] == "EXPIRED"))
+    end
+  end
+
   describe "accumulated revenue conditions (§13.9)" do
     test "the customer's revenue today above a value sends its traffic to the rule's vendor" do
       start_supervised!(Pipeline.Ledger.Charges)

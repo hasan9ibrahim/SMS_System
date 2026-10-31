@@ -3,12 +3,14 @@ defmodule Sms.Switch.Pipeline.Timeouts do
   The vendor DLR timeout (spec §5.5 DLR Timeout / DLR Timeout Status, S-5.10): every `:sweep_ms` this server takes the
   messages whose deadline passed from the shared list in Redis (`Sms.Switch.Pipeline.Store`, key `t`) and answers
   them with the trunk's DLR Timeout Status (`Sms.Switch.Pipeline.Receipts.timeout/1`); it also fails the multipart
-  groups still incomplete after their reassembly timeout (`Sms.Switch.Pipeline.Reassembly`, D1). Both servers sweep; each
-  message is taken by one. A message whose answer could not be queued is tried again in half a minute.
+  groups still incomplete after their reassembly timeout (`Sms.Switch.Pipeline.Reassembly`, D1), and releases the
+  credit holds whose expiry passed (`Sms.Switch.Pipeline.Ledger.sweep_holds/0`, §7: a lost message never locks credit).
+  Both servers sweep; each message is taken by one. A message whose answer could not be queued is tried again in half a
+  minute.
   """
   use GenServer
   require Logger
-  alias Sms.Switch.Pipeline.{Reassembly, Receipts, Store}
+  alias Sms.Switch.Pipeline.{Ledger, Reassembly, Receipts, Store}
 
   @sweep_ms 1_000
   @batch 500
@@ -34,6 +36,8 @@ defmodule Sms.Switch.Pipeline.Timeouts do
   def sweep do
     # Multipart groups whose reassembly timeout passed (D1).
     _ = Reassembly.sweep()
+    # Credit holds of messages whose outcome never came (§7).
+    _ = Ledger.sweep_holds()
 
     case Store.due_timeouts(System.os_time(:millisecond), @batch) do
       {:ok, []} ->

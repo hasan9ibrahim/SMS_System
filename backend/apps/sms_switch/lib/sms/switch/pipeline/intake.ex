@@ -13,7 +13,8 @@ defmodule Sms.Switch.Pipeline.Intake do
        0x0B (S-6.2);
     4. **routing**: the route rules and the egress-block skip (`Sms.Switch.Pipeline.Router`); no rule, a blocking rule
        or no vendor → 0x45 (decided Q15);
-    5. **credit**: `Sms.Switch.Pipeline.Credit` (balances come with build step 6);
+    5. **credit**: `Sms.Switch.Pipeline.Credit`: checked and the message's cost held in one step until it is
+       charged or its outcome releases it (§7, S-6.3);
     6. **stored**: the message goes on the durable bus (`sms.msg.accepted`, JetStream), and only then the resp is
        sent with our message_id (S-2.2). The vendor leg runs from the bus (`Sms.Switch.Pipeline.Sender`).
 
@@ -206,7 +207,15 @@ defmodule Sms.Switch.Pipeline.Intake do
          {:ok, msg} <- rate(msg),
          {:ok, msg} <- route_now(msg),
          :ok <- credit(msg) do
-      store(msg)
+      stored_or_unreserved(msg)
+    end
+  end
+
+  # A message the bus could not take was never accepted: its credit hold goes back at once (§7).
+  defp stored_or_unreserved(msg) do
+    with {:error, _} = error <- store(msg) do
+      _ = if credit_held?(msg), do: Credit.impl().unreserve(msg)
+      error
     end
   end
 
@@ -696,15 +705,20 @@ defmodule Sms.Switch.Pipeline.Intake do
     }
   end
 
-  # A Test SMS or Repush is not the customer's traffic and never charges it (backend step 11c).
-  defp credit(%{internal: %{}}), do: :ok
-
+  # The check and the hold of the message's cost in one step (§7, S-6.3, decision 2026-10-31). A Test SMS or Repush is
+  # not the customer's traffic and never charges it (backend step 11c).
   defp credit(msg) do
-    case Credit.impl().check(msg) do
-      :ok -> :ok
-      {:error, status} -> {:reject, status, :credit, msg}
+    if credit_held?(msg) do
+      case Credit.impl().reserve(msg) do
+        :ok -> :ok
+        {:error, status} -> {:reject, status, :credit, msg}
+      end
+    else
+      :ok
     end
   end
+
+  defp credit_held?(msg), do: not is_map(msg[:internal])
 
   # ---------------------------------------------------------------- stored, or refused
 

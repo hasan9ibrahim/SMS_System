@@ -453,6 +453,12 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       Process.sleep(300)
       {:error, :esme_rsubmitfail}
     end
+
+    @impl true
+    def reserve(msg), do: check(msg)
+
+    @impl true
+    def unreserve(_msg), do: :ok
   end
 
   defp with_credit(module) do

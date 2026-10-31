@@ -8,7 +8,9 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
     3. when the cut-off moved (a new invoice), recounts the uninvoiced total from the buckets after it; when Redis has no
        buckets for an account yet (first start, or Redis was lost), loads them from PostgreSQL first;
     4. writes the buckets changed since the last run to `traffic_charges` (absolute amounts, so both servers writing
-       the same bucket agree), and drops buckets older than two days before the cut-off from Redis.
+       the same bucket agree), and drops buckets older than two days before the cut-off from Redis;
+    5. writes what each customer account holds for messages in flight (§7, decision 2026-10-31) to
+       `credit_reservations` (migration 103) when it changed since the last run, for the balance screens.
 
   A failed run is logged and tried on the next tick; the check keeps using the accounts already loaded.
   """
@@ -35,7 +37,7 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
     source = Keyword.get(opts, :source, Ledger.Source.Postgres)
     {:ok, _} = :timer.send_interval(Keyword.get(opts, :interval_ms, @interval_ms), :tick)
     send(self(), :tick)
-    {:ok, %{source: source}}
+    {:ok, %{source: source, held: nil}}
   end
 
   defp new_table(name) do
@@ -47,23 +49,48 @@ defmodule Sms.Switch.Pipeline.Ledger.Sync do
   end
 
   @impl true
-  def handle_call(:sync, _from, state), do: {:reply, run(state.source), state}
+  def handle_call(:sync, _from, state) do
+    {reply, state} = run(state)
+    {:reply, reply, state}
+  end
 
   @impl true
   def handle_info(:tick, state) do
-    _ = run(state.source)
+    {_, state} = run(state)
     {:noreply, state}
   end
 
-  defp run(source) do
+  defp run(%{source: source} = state) do
     with {:ok, accounts} <- source.accounts(),
          :ok <- Enum.reduce_while(accounts, :ok, &load(source, &1, &2)) do
       Alerts.check(accounts)
-      flush(source)
+      result = flush(source)
+      {result, %{state | held: reservations(source, accounts, state.held)}}
     else
       {:error, reason} = error ->
         Logger.warning("ledger not synced: #{inspect(reason)}")
-        error
+        {error, state}
+    end
+  end
+
+  # The customer accounts' holds (one read), written when they changed since the last run; all of them on the first
+  # run, so a row left from before a restart is corrected. A failed read or write is tried on the next run.
+  defp reservations(source, accounts, last) do
+    customers = for %{side: :customer} = a <- accounts, do: a
+
+    with {:ok, held} <- Store.credit_held(Enum.map(customers, & &1.key)),
+         changed =
+           for(
+             a <- customers,
+             last == nil or Map.get(last, a.key) != held[a.key],
+             do: {a, held[a.key]}
+           ),
+         :ok <- source.persist_reservations(changed) do
+      held
+    else
+      {:error, reason} ->
+        Logger.warning("credit reservations not written, tried again: #{inspect(reason)}")
+        last
     end
   end
 

@@ -136,6 +136,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp expired(msg, rows) do
     Logger.info("message #{msg.id} expired before a vendor took it (S-2.13)")
     publish_rows(msg, rows, false)
+    release_hold(msg)
     edr_id = Edr.new_id()
 
     row =
@@ -162,6 +163,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   # DELETED).
   defp cancelled(msg) do
     Logger.info("message #{msg.id} cancelled by the customer before it was sent (S-2.15)")
+    release_hold(msg)
 
     row =
       msg
@@ -916,7 +918,21 @@ defmodule Sms.Switch.Pipeline.Sender do
     publish_rows(msg, rows, false)
     publish_rows(msg, [row], true)
 
+    # Not billed yet (reported or delivery billing): its credit hold waits for the receipt, as its record does (§7).
+    unless charged.charged,
+      do: Ledger.extend_hold(msg.trunk.enterprise_id, msg.id, timeout_s)
+
     _ = apply_orphans(msg, vt, parts)
+    :ok
+  end
+
+  # §7, decision 2026-10-31: a message that ends without being billed gives its credit hold back. A Test SMS or Repush
+  # held none; a message billed already had its hold replaced by the charge.
+  defp release_hold(%{internal: %{}}), do: :ok
+  defp release_hold(%{charged: true}), do: :ok
+
+  defp release_hold(msg) do
+    _ = Ledger.release(msg.trunk.enterprise_id, msg.id)
     :ok
   end
 
@@ -1049,6 +1065,10 @@ defmodule Sms.Switch.Pipeline.Sender do
 
     publish_rows(msg, earlier, false)
     publish_rows(msg, [last], true)
+
+    # Attempt billing bills a message no vendor took (its charge replaces the hold); otherwise the hold goes back.
+    unless Billing.flags(msg, Map.put_new(last, :success, false)).customer_billable,
+      do: release_hold(msg)
 
     # A Delayed Submit customer waiting for its resp gets the failure there, not as a receipt (S-2.18, D11).
     unless Delayed.notify(msg.id, {:error, failure.command_status}),

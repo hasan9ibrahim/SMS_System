@@ -267,7 +267,7 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
   defp forward(message_id, rec) do
     final = aggregate(rec.finals)
-    outcome(rec.data, final, true)
+    outcome(rec.data, final, true, rec.finals)
 
     case Forwarder.publish(rec.data, final) do
       :ok ->
@@ -283,26 +283,35 @@ defmodule Sms.Switch.Pipeline.Receipts do
 
   # §7: the attempt's outcome row, once its final status is known: the money of the billing types decided by the
   # receipt; the customer on the status it is told (after the DLR maps), only for the message's final outcome; the
-  # vendor on its own status, never on one the switch made after the DLR timeout. Written again on a retry, the row
-  # has the same bus id and is stored once.
-  defp outcome(%{bill: bill} = data, final, message_final) do
+  # vendor on its own status, never on one the switch made after the DLR timeout. Per part (S-6.4): delivery billing
+  # counts the delivered parts only, reported billing the parts with a final status (`finals`: each part's; nil: the
+  # one status `final` for every part). Written again on a retry, the row has the same bus id and is stored once.
+  #
+  # The message's credit hold (decision 2026-10-31): its charge replaces it; a final outcome that bills the customer
+  # nothing releases it whole.
+  defp outcome(data, final, message_final, finals \\ nil)
+
+  defp outcome(%{bill: bill} = data, final, message_final, finals) do
     {customer_status, _error} = Forwarder.mapped(data, final)
+    finals = finals || Map.new(1..max(data.parts, 1), &{&1, final})
+    c_parts = if message_final, do: customer_parts(data, finals), else: 0
+    v_parts = vendor_parts(data, finals)
+    billed = %{data | bill: %{bill | c_parts: c_parts, v_parts: v_parts}}
 
     row =
-      Edr.outcome_row(data, %{
+      Edr.outcome_row(billed, %{
         at: final.received_at,
         status: final.status,
         customer_status: customer_status,
-        customer_billable:
-          message_final and bill.sell != nil and not bill.charged and
-            Billing.on_receipt?(bill.c_type, customer_status),
-        vendor_billable:
-          final[:source] != "switch" and bill.cost != nil and
-            Billing.on_receipt?(bill.v_type, final.status),
+        customer_billable: c_parts > 0,
+        vendor_billable: v_parts > 0,
         source: final[:source]
       })
 
-    _ = charge(data, row)
+    _ = charge(billed, row)
+
+    if message_final and c_parts == 0 and bill.charged != true,
+      do: Ledger.release(data.trunk.enterprise_id, data.id)
 
     case Edr.publish_receipt(row) do
       :ok -> :ok
@@ -311,7 +320,36 @@ defmodule Sms.Switch.Pipeline.Receipts do
   end
 
   # A message sent before billing was kept with it.
-  defp outcome(_data, _final, _message_final), do: :ok
+  defp outcome(_data, _final, _message_final, _finals), do: :ok
+
+  # The customer's parts billed on the final outcome; none when billed at send already.
+  defp customer_parts(%{bill: %{sell: sell, charged: charged} = bill} = data, finals)
+       when sell != nil and charged != true,
+       do: billed_parts(bill.c_parts, data.parts, count(finals, &customer_billable?(data, &1)))
+
+  defp customer_parts(_data, _finals), do: 0
+
+  defp vendor_parts(%{bill: %{cost: cost} = bill} = data, finals) when cost != nil,
+    do: billed_parts(bill.v_parts, data.parts, count(finals, &vendor_billable?(bill, &1)))
+
+  defp vendor_parts(_data, _finals), do: 0
+
+  defp count(finals, billable?), do: Enum.count(finals, fn {_n, f} -> billable?.(f) end)
+
+  defp customer_billable?(%{bill: bill} = data, final) do
+    {status, _error} = Forwarder.mapped(data, final)
+    Billing.on_receipt?(bill.c_type, status)
+  end
+
+  defp vendor_billable?(bill, final),
+    do: final[:source] != "switch" and Billing.on_receipt?(bill.v_type, final.status)
+
+  # The parts billed when `n` of the `pdus` the vendor got are billable (S-6.4): all when all are; as many as the PDUs
+  # when they match one to one; else the same share (one message_payload carrying them all bills all or none).
+  defp billed_parts(_parts, _pdus, 0), do: 0
+  defp billed_parts(parts, pdus, n) when n >= pdus, do: parts
+  defp billed_parts(parts, parts, n), do: n
+  defp billed_parts(parts, pdus, n), do: div(parts * n, pdus)
 
   # The balances, and the customer's revenue (§13.9), charged as the outcome row bills them.
   defp charge(%{bill: bill} = data, row) do

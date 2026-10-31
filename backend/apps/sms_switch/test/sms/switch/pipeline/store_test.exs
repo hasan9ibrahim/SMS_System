@@ -17,6 +17,59 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         }
       end
 
+      test "credit holds: check and hold in one step, released once, swept when expired (§7, S-6.3)",
+           %{
+             id: id
+           } do
+        account = "c#{id}"
+        now = System.os_time(:millisecond)
+
+        # 0.1 available, nothing charged: 0.06 then 0.06 does not fit.
+        assert {:ok, :held, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}a", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, :refused, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}b", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, :already, 0, 60_000} =
+                 Store.reserve_credit(account, "#{id}a", 60_000, 100_000, now + 60_000)
+
+        assert {:ok, %{^account => 60_000}} = Store.credit_held([account])
+
+        # The charge replaces the hold in one transaction.
+        assert {:ok, _} =
+                 Store.transaction([
+                   ["INCRBY", "cht:#{account}", 60_000],
+                   Store.release_credit_command(account, "#{id}a")
+                 ])
+
+        assert {:ok, %{^account => 0}} = Store.credit_held([account])
+        assert {:ok, 0} = Store.release_credit(account, "#{id}a")
+
+        assert {:ok, :held, 60_000, 40_000} =
+                 Store.reserve_credit(account, "#{id}b", 40_000, 100_000, now - 1)
+
+        assert {:ok, :held, 60_000, 40_000} =
+                 Store.reserve_credit(account, "#{id}c", 0, 100_000, now + 60_000)
+
+        assert {:ok, due} = Store.due_credit_holds(now, 1_000)
+        assert {account, "#{id}b"} in due
+        refute {account, "#{id}c"} in due
+
+        # A hold moved on since it was listed stays; one still expired goes.
+        :ok = Store.extend_credit_hold(account, "#{id}b", now + 60_000)
+        assert {:ok, 0} = Store.release_credit(account, "#{id}b", now)
+        :ok = Store.extend_credit_hold(account, "#{id}b", now - 1)
+        assert {:ok, 40_000} = Store.release_credit(account, "#{id}b", now)
+        assert {:ok, %{^account => 0}} = Store.credit_held([account])
+        assert {:ok, due} = Store.due_credit_holds(now, 1_000)
+        refute {account, "#{id}b"} in due
+
+        # A shared Redis keeps nothing of this test.
+        assert {:ok, 0} = Store.release_credit(account, "#{id}c")
+        for key <- ["cht", "chh", "chht"], do: Store.command(["DEL", "#{key}:#{account}"])
+      end
+
       test "queued marks: cancel while queued, the sender's take, query (S-2.15, D8)", %{
         id: id,
         vt: ent
