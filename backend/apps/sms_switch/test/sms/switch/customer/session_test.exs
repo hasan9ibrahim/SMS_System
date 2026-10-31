@@ -500,6 +500,45 @@ defmodule Sms.Switch.Customer.SessionTest do
       {:ok, client} = Client.connect(port)
       assert Client.closed?(client, 1_000)
     end
+
+    test "while the inbound window is full the session reads nothing, and never times the client out (S-1.18)" do
+      %{port: port} =
+        restart(
+          session: [
+            inbound_window: 2,
+            enquire_link_interval_ms: 200,
+            enquire_link_timeout_ms: 200,
+            tick_ms: 20
+          ]
+        )
+
+      # A slow intake (a Delayed Submit trunk waiting for its vendor, a slow HLR): 1.5 s per request.
+      Intake.own(fn _, pdu ->
+        Process.sleep(1_500)
+        {:ok, %{message_id: "m#{pdu.sequence}"}, []}
+      end)
+
+      client = bound(port)
+      Client.send_raw(client, [Pdu.encode!(submit(2)), Pdu.encode!(submit(3))])
+      seen = answer_enquire_links(client, System.monotonic_time(:millisecond) + 2_500, [])
+      assert {:submit_sm_resp, 2, 0} in seen
+      assert {:submit_sm_resp, 3, 0} in seen
+    end
+  end
+
+  # Answers every enquire_link until `deadline`; the other PDUs seen, in order. Fails if the session closes.
+  defp answer_enquire_links(client, deadline, seen) do
+    case Client.recv(client, max(deadline - System.monotonic_time(:millisecond), 0)) do
+      {:error, :timeout} ->
+        Enum.reverse(seen)
+
+      {client, %Pdu{command: :enquire_link} = pdu} ->
+        Client.send_pdu(client, Pdu.response(pdu))
+        answer_enquire_links(client, deadline, seen)
+
+      {client, pdu} ->
+        answer_enquire_links(client, deadline, [{pdu.command, pdu.sequence, pdu.status} | seen])
+    end
   end
 
   defp drain_until(client, command) do

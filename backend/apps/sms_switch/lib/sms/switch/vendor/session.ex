@@ -37,7 +37,8 @@ defmodule Sms.Switch.Vendor.Session do
 
   After the trunk's Enquire Link Interval without any PDU from the vendor, the session sends `enquire_link`; if
   nothing at all arrives within the trunk's Enquire Link Timeout after it, the connection is dropped and opened again.
-  The vendor's own `enquire_link` is answered at once.
+  The vendor's own `enquire_link` is answered at once. While the receipts in hand fill the inbound window the session
+  reads nothing, so the time it does not read never counts against the vendor.
   """
   use GenServer, restart: :temporary
   require Logger
@@ -999,6 +1000,12 @@ defmodule Sms.Switch.Vendor.Session do
   end
 
   # ---------------------------------------------------------------- keep-alive and the bind alert
+
+  # Reading paused by our own inbound window (receipts in hand): the vendor's answers wait unread in the socket, so it
+  # counts as heard from until reading starts again.
+  defp keepalive(%{phase: :bound} = state)
+       when map_size(state.inflight) >= state.settings.inbound_window,
+       do: %{state | last_rx: now()}
 
   defp keepalive(%{phase: :bound} = state) do
     now = now()

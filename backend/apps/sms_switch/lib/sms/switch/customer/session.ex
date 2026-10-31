@@ -34,7 +34,8 @@ defmodule Sms.Switch.Customer.Session do
 
   After `:enquire_link_interval_ms` without any PDU from the client, the session sends `enquire_link`. If nothing
   at all arrives within `:enquire_link_timeout_ms` after it, the client is gone (S-1.5, also a half-open TCP
-  connection, S-1.6) and the session closes. TCP keepalive is on as a second net.
+  connection, S-1.6) and the session closes. TCP keepalive is on as a second net. While the inbound window is full
+  the session reads nothing, so the time it does not read never counts against the client.
   """
   use GenServer
   require Logger
@@ -954,6 +955,11 @@ defmodule Sms.Switch.Customer.Session do
 
     state
   end
+
+  # Reading paused by our own inbound window (S-1.18): the client's answers wait unread in the socket, so it counts as
+  # heard from until reading starts again; a client really gone is caught once it does (or by TCP keepalive).
+  defp keepalive(state) when map_size(state.inflight) >= state.settings.inbound_window,
+    do: {:noreply, %{state | last_rx: now()}}
 
   defp keepalive(state) do
     s = state.settings

@@ -205,6 +205,32 @@ defmodule Sms.Switch.Vendor.SessionTest do
       assert_receive {:smsc, ^conn, %Pdu{command: :enquire_link_resp, sequence: 77}}
     end
 
+    test "while receipts in hand fill the inbound window, unread answers never time the vendor out (S-1.18)",
+         %{port: port} do
+      start_vendor([trunk(port, enquire_link_interval_s: 1, enquire_link_timeout_s: 1)],
+        session: [inbound_window: 1]
+      )
+
+      {conn, _} = assert_bind()
+      await_bound(1, 1)
+
+      Receipts.own(fn _, _ ->
+        Process.sleep(3_000)
+        :ok
+      end)
+
+      FakeSmsc.send_pdu(
+        conn,
+        Pdu.new(:deliver_sm, %{esm_class: 4, short_message: "id:1 stat:DELIVRD"}, sequence: 5)
+      )
+
+      assert_receive {:smsc, ^conn, %Pdu{command: :deliver_sm_resp, sequence: 5, status: 0}},
+                     4_000
+
+      refute Enum.any?(events("closed"))
+      refute_receive {:smsc, _, %Pdu{command: :bind_transceiver}}, 100
+    end
+
     test "the vendor's unbind is answered after the receipts in hand, then the connection opens again",
          %{port: port} do
       start_vendor([trunk(port)])
