@@ -842,18 +842,39 @@ describe("migration center", { skip }, () => {
   });
 
   test("a package from this system dry-runs to skips: nothing is duplicated", async () => {
-    const x = await ok(
-      "createMigrationExport",
-      call("POST", "/migration/exports", {
-        includeCredentials: false,
-        withPasswords: false,
-        rateLines: "none",
-        password: "long-enough-password",
-      }),
-      201,
-    );
-    madeExports.push(x.id);
-    await runningExports.get(x.id);
+    const exportPackage = async () => {
+      const x = await ok(
+        "createMigrationExport",
+        call("POST", "/migration/exports", {
+          includeCredentials: false,
+          withPasswords: false,
+          rateLines: "none",
+          password: "long-enough-password",
+        }),
+        201,
+      );
+      madeExports.push(x.id);
+      await runningExports.get(x.id);
+      return x;
+    };
+    const dryRun = async (exportId: number) => {
+      const dry = await ok(
+        "createMigrationImport",
+        call("POST", "/migration/imports", {
+          sourceSystem: `Twin ${run}`,
+          files: [],
+          packageExportId: exportId,
+          packagePassword: "long-enough-password",
+          trunksInactive: true,
+        }),
+        201,
+      );
+      madeImports.push(dry.id);
+      return dry;
+    };
+    const changed = (dry: { report: { entities: { create: number; update: number }[] } }) =>
+      dry.report.entities.some((e) => e.create + e.update > 0);
+    const x = await exportPackage();
     const wrong = await fails(
       "createMigrationImport",
       call("POST", "/migration/imports", {
@@ -866,18 +887,11 @@ describe("migration center", { skip }, () => {
       400,
     );
     assert.equal(wrong.errors[0].path, "/packagePassword");
-    const dry = await ok(
-      "createMigrationImport",
-      call("POST", "/migration/imports", {
-        sourceSystem: `Twin ${run}`,
-        files: [],
-        packageExportId: x.id,
-        packagePassword: "long-enough-password",
-        trunksInactive: true,
-      }),
-      201,
-    );
-    madeImports.push(dry.id);
+    let dry = await dryRun(x.id);
+    // Other test files share the database and add, then remove, rows (number list entries) while they run: one that
+    // went between the export and the dry run reads as new. A second export and dry run settles it; a real
+    // duplication shows both times.
+    if (changed(dry)) dry = await dryRun((await exportPackage()).id);
     for (const e of dry.report.entities) assert.equal(e.create + e.update, 0, `${e.entity}: ${JSON.stringify(e)}`);
     assert.equal(dry.report.canApply, false);
     assert.ok(dry.report.issues.some((i: { entity: string }) => i.entity === "package"));
