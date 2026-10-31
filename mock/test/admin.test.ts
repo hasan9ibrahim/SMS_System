@@ -176,9 +176,20 @@ describe("§11 access group catalogue", () => {
     const src = readFileSync(new URL("../../web/src/nav/registry.ts", import.meta.url), "utf8");
     const body = src.slice(src.indexOf("export const PAGES"), src.indexOf("export const HOME"));
     // The help center (§15.1) is open to every user, so it has no access-group entry.
-    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!).filter((k) => k !== "help");
+    // A page opened with another page's access ({ ...p(...), access: "x" }, e.g. Voice gateways with SMS to voice)
+    // has no entry of its own; the page it borrows from must be in the catalogue.
+    const borrowed = new Map(
+      [...body.matchAll(/\.\.\.p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"[^}]*?\),\s*access:\s*"([a-z0-9-]+)"/g)].map(
+        (m) => [m[1]!, m[2]!] as const,
+      ),
+    );
+    assert.ok(borrowed.has("voice-gateways"));
+    const keys = [...body.matchAll(/p\(\s*"[a-z]+",\s*"([a-z0-9-]+)"/g)]
+      .map((m) => m[1]!)
+      .filter((k) => k !== "help" && !borrowed.has(k));
     assert.ok(keys.length > 50);
     assert.deepEqual([...keys].sort(), MODULES.map((m) => m.key).sort());
+    for (const target of borrowed.values()) assert.ok(keys.includes(target), target);
   });
   test("permission checks need View and known actions", () => {
     assert.deepEqual(checkPermissions({ "route-rules": ["view", "edit"], "*": ["view"] }), []);
