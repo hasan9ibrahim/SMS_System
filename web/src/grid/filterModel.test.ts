@@ -96,10 +96,28 @@ test("numbers: comparisons, ranges and lists", () => {
 });
 
 test("dates: ranges, comparisons, and a bare date means the whole day", () => {
+  // A date-only upper bound includes that day (round 13 QA: the last day was dropped).
   assert.deepEqual(parseColumnFilter(at, "2026-10-01..2026-10-16"), {
     field: "at",
     op: "between",
-    values: ["2026-10-01T00:00:00.000Z", "2026-10-16T00:00:00.000Z"],
+    values: ["2026-10-01T00:00:00.000Z", "2026-10-16T23:59:59.999Z"],
+  });
+  assert.deepEqual(parseColumnFilter(at, "<=2026-10-16"), {
+    field: "at",
+    op: "lte",
+    value: "2026-10-16T23:59:59.999Z",
+  });
+  assert.deepEqual(parseColumnFilter(at, ">2026-10-16"), {
+    field: "at",
+    op: "gt",
+    value: "2026-10-16T23:59:59.999Z",
+  });
+  assert.deepEqual(parseColumnFilter(at, "<2026-10-16"), { field: "at", op: "lt", value: "2026-10-16T00:00:00.000Z" });
+  // With a time, the time is kept as typed.
+  assert.deepEqual(parseColumnFilter(at, "2026-10-01..2026-10-16T12:00:00Z"), {
+    field: "at",
+    op: "between",
+    values: ["2026-10-01T00:00:00.000Z", "2026-10-16T12:00:00.000Z"],
   });
   assert.deepEqual(parseColumnFilter(at, ">=2026-10-01"), {
     field: "at",
@@ -127,6 +145,9 @@ test("what the box shows round-trips through the parser", () => {
     [margin, "1,2,3"],
     [margin, "5"],
     [at, ">=2026-10-01"],
+    [at, "2026-10-01..2026-10-16"],
+    [at, "<=2026-10-16"],
+    [at, ">2026-10-16"],
   ] as const) {
     const c = parseColumnFilter(f, input);
     assert.ok(c && !(c instanceof Error));

@@ -13,8 +13,10 @@ defmodule Sms.Switch.Pipeline.Buffers do
       from when it was buffered; then it goes to the next vendor.
 
   A drain runs on each server that has something to drain (both servers drain the same queue; the TPS and buffer
-  counts are shared in Redis) and stops after a few idle seconds. `kick/1` starts it when a message is buffered;
-  every `@discover_ms` the queues with something waiting are listed, so buffers left by a restart are drained too.
+  counts are shared in Redis) and stops after a few idle seconds, setting its buffer's count back to zero then (a
+  place lost with a server that stopped mid-message is not kept for ever). `kick/1` starts it when a message is
+  buffered; every `@discover_ms` the queues with something waiting are listed, so buffers left by a restart are
+  drained too.
   """
   use Supervisor
   require Logger
@@ -229,9 +231,13 @@ defmodule Sms.Switch.Pipeline.Buffers.Drain do
   defp idle(%{idle_since: nil} = state), do: later(%{state | idle_since: now()}, @poll_ms)
 
   defp idle(state) do
-    if now() - state.idle_since >= @idle_ms,
-      do: exit(:normal),
-      else: later(state, @poll_ms)
+    if now() - state.idle_since >= @idle_ms do
+      # Empty all this time: no place of the buffer can still be in use (S-2.4).
+      state.queue |> String.replace(".", ":", global: false) |> Throttle.buffer_reset()
+      exit(:normal)
+    else
+      later(state, @poll_ms)
+    end
   end
 
   defp retry(state, reason) do

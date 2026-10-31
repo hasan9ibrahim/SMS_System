@@ -11,7 +11,13 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     * on the session the message came in on, else another the trunk's DLR Session Affinity allows
       (`Sms.Switch.Customer.Affinity`, §13.1);
     * when no session can take it, it is held (`Sms.Switch.Pipeline.Held`) and sent when one binds, until the trunk's
-      DLR hold hours (default 72) run out.
+      DLR hold hours (default 72) run out;
+    * a session that does not answer in time, or a customer refusing it for now (0x58 throttled, 0x14 queue full,
+      0x08 system error, 0x64 temporary application error), has it held and tried again later, on the same session
+      first, with a growing delay (S-5.14).
+
+  A receipt is reported in progress while it waits for the customer's answer, so the bus never hands a second copy to
+  another worker meanwhile, and the same receipt is held only once (S-5.14: never delivered twice).
 
   Every receipt that went out, or was given up, is an EDR receipt row of kind customer.
   """
@@ -20,6 +26,7 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     filter: "sms.receipt.forward",
     max_deliver: 20,
     ack_wait_ms: 30_000,
+    progress_ms: 10_000,
     concurrency: 20
 
   require Logger
@@ -31,6 +38,10 @@ defmodule Sms.Switch.Pipeline.Forwarder do
 
   @default_hold_hours 72
   @intermediate 0x10
+  # A customer's answers that mean "not now" (S-5.14): throttled, queue full, system error, temporary app error.
+  @temporary [0x58, 0x14, 0x08, 0x64]
+  @retry_first_ms 15_000
+  @retry_max_ms 600_000
 
   @doc """
   What the pipeline keeps of a message for its receipts (stored with the message when it is sent, `Store`): the
@@ -116,12 +127,17 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     end)
   end
 
-  defp publish_one(data, receipt) do
+  # One final receipt per customer message id; intermediates each.
+  defp receipt_key(data, receipt) do
     key = if receipt[:intermediate], do: "#{receipt.status}:#{receipt.received_at}", else: "final"
+    "#{data.id}:#{key}"
+  end
+
+  defp publish_one(data, receipt) do
     blob = Base.encode64(:erlang.term_to_binary(%{data: data, receipt: receipt}, compressed: 1))
 
     case Bus.publish("sms.receipt.forward", "receipt.forward", %{"id" => data.id, "r" => blob},
-           id: "fwd:#{data.id}:#{key}"
+           id: "fwd:#{receipt_key(data, receipt)}"
          ) do
       {:ok, _} ->
         :ok
@@ -167,8 +183,11 @@ defmodule Sms.Switch.Pipeline.Forwarder do
   end
 
   @doc false
-  # Sends one receipt; held when no session can take it. Public for the held queue and tests.
-  @spec deliver(map(), map(), non_neg_integer()) :: :ok | :hold | {:error, term()}
+  # Sends one receipt. Tried for the first time, one that cannot go now is held; a held one (`held_ms` > 0) answers
+  # why it did not go: `:hold` (no session can take it now), `:slow` (the session did not answer) or `:retry` (the
+  # customer refused it for now). Public for the held queue and tests.
+  @spec deliver(map(), map(), non_neg_integer()) ::
+          :ok | :hold | :slow | :retry | {:error, term()}
   def deliver(data, receipt, held_ms \\ 0) do
     intermediate = receipt[:intermediate] == true
     {status, error} = mapped(data, receipt)
@@ -183,6 +202,13 @@ defmodule Sms.Switch.Pipeline.Forwarder do
     {fields, tlvs} = Receipt.build(build_input(data, receipt, status, error))
 
     case Customer.deliver(data.origin, trunk.dlr_session_affinity, fields, tlvs) do
+      {:ok, _session_id, %{status: code}} when code in @temporary ->
+        Logger.info(
+          "customer refused the receipt of #{data.id} for now (0x#{Integer.to_string(code, 16)}): tried again later"
+        )
+
+        not_sent(data, receipt, trunk, held_ms, :retry)
+
       {:ok, session_id, response} ->
         if response.status != 0,
           do:
@@ -192,35 +218,44 @@ defmodule Sms.Switch.Pipeline.Forwarder do
 
         customer_row(data, receipt, status, error, session_id, held_ms)
 
-      # The session did not answer; it may have it. Held and tried again on the next sweep, the same session first
-      # (S-5.14), so a slow client never makes the bus give the receipt up.
-      {:error, :timeout, _session} when held_ms > 0 ->
-        :hold
-
+      # The session did not answer; it may have it. Held and tried again later, the same session first (S-5.14), so
+      # a slow client never makes the bus give the receipt up.
       {:error, :timeout, _session} ->
-        hold(data, receipt, trunk)
+        not_sent(data, receipt, trunk, held_ms, :slow)
 
       {:error, {:invalid_pdu, reason}} ->
         Logger.error("receipt of #{data.id} could not be encoded, dropped: #{inspect(reason)}")
         :ok
 
-      :hold when held_ms > 0 ->
-        :hold
-
       :hold ->
-        hold(data, receipt, trunk)
+        not_sent(data, receipt, trunk, held_ms, :hold)
     end
   end
 
-  defp hold(data, receipt, trunk) do
+  defp not_sent(_data, _receipt, _trunk, held_ms, why) when held_ms > 0, do: why
+  defp not_sent(data, receipt, trunk, _held_ms, why), do: hold(data, receipt, trunk, why)
+
+  # Held once per receipt (a copy the bus delivers again finds it held); one the session did not answer or refused for
+  # now waits before it is tried again.
+  defp hold(data, receipt, trunk, why) do
     now = System.os_time(:millisecond)
     hours = trunk[:dlr_hold_hours] || @default_hold_hours
     entry = %{data: data, receipt: receipt, held_at: now, until: now + hours * 3_600_000}
+    entry = if why == :hold, do: entry, else: retry_later(entry, now)
 
-    case Store.hold(data.trunk.id, entry, now) do
+    case Store.hold(data.trunk.id, entry, now, receipt_key(data, receipt)) do
       :ok -> :ok
       {:error, _} = error -> error
     end
+  end
+
+  @doc false
+  # S-5.14: a receipt tried again later, each time later: 15 s, 30 s, 1 min… up to 10 min.
+  @spec retry_later(map(), integer()) :: map()
+  def retry_later(entry, now) do
+    tries = Map.get(entry, :tries, 0)
+    wait = min(@retry_first_ms <<< min(tries, 6), @retry_max_ms)
+    Map.merge(entry, %{tries: tries + 1, retry_at: now + wait})
   end
 
   @doc false

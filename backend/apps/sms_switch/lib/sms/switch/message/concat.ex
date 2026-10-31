@@ -5,7 +5,8 @@ defmodule Sms.Switch.Message.Concat do
 
   Recognised concatenation: UDH IE 0x00 (8-bit reference) and IE 0x08 (16-bit reference), and SAR
   (`sar_msg_ref_num`, `sar_total_segments`, `sar_segment_seqnum`). Other UDH elements (ports, national language shift
-  tables, S-3.12) are kept and passed on with the part.
+  tables, S-3.12, D9) are kept and passed on with the message: on a single message as they came, in every part the
+  switch makes after its own concatenation element (`other_elements/2`).
   """
   import Bitwise
 
@@ -92,13 +93,40 @@ defmodule Sms.Switch.Message.Concat do
 
   defp info(_ref, _total, _seq, _kind), do: {:error, :invalid_concatenation}
 
-  @doc "A UDH with only an 8-bit concatenation element, for a part the switch made (S-3.1, S-3.10)."
-  @spec udh8(0..255, 2..255, 1..255) :: binary()
-  def udh8(ref, total, seq), do: <<5, 0x00, 3, ref, total, seq>>
+  @doc """
+  The elements of `udh` (a whole header with its length byte, or `<<>>`) but those whose IEI is in `drop` (by default
+  the concatenation ones), without the length byte: what a message's parts carry on beside the switch's own
+  concatenation (ports, national language shift tables, D9, S-3.12).
+  """
+  @spec other_elements(binary(), [byte()]) :: binary()
+  def other_elements(udh, drop \\ [0x00, 0x08])
+  def other_elements(<<>>, _drop), do: <<>>
+  def other_elements(<<_len, ies::binary>>, drop), do: keep(ies, drop, [])
 
-  @doc "A UDH with only a 16-bit concatenation element (S-3.10)."
-  @spec udh16(0..65_535, 1..255, 1..255) :: binary()
-  def udh16(ref, total, seq), do: <<6, 0x08, 4, ref::16, total, seq>>
+  defp keep(<<iei, len, rest::binary>>, drop, acc) when byte_size(rest) >= len do
+    <<value::binary-size(len), more::binary>> = rest
+    keep(more, drop, if(iei in drop, do: acc, else: [acc, iei, len, value]))
+  end
+
+  defp keep(_ies, _drop, acc), do: IO.iodata_to_binary(acc)
+
+  @doc "A UDH of these elements with its length byte; none (`<<>>`) for no elements."
+  @spec udh(binary()) :: binary()
+  def udh(<<>>), do: <<>>
+  def udh(ies), do: <<byte_size(ies), ies::binary>>
+
+  @doc """
+  A UDH with an 8-bit concatenation element, for a part the switch made (S-3.1, S-3.10), then the message's other
+  elements `ies`.
+  """
+  @spec udh8(0..255, 2..255, 1..255, binary()) :: binary()
+  def udh8(ref, total, seq, ies \\ <<>>),
+    do: <<5 + byte_size(ies), 0x00, 3, ref, total, seq, ies::binary>>
+
+  @doc "A UDH with a 16-bit concatenation element (S-3.10), then the message's other elements `ies`."
+  @spec udh16(0..65_535, 1..255, 1..255, binary()) :: binary()
+  def udh16(ref, total, seq, ies \\ <<>>),
+    do: <<6 + byte_size(ies), 0x08, 4, ref::16, total, seq, ies::binary>>
 
   @doc "esm_class with the UDHI bit set."
   @spec with_udhi(non_neg_integer()) :: non_neg_integer()

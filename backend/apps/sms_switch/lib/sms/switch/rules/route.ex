@@ -100,7 +100,8 @@ defmodule Sms.Switch.Rules.Route do
       vendor_category_mode: :all,
       vendor_category_ids: MapSet.new(),
       lcr_profile: nil,
-      skip_vendor_at_tps_pct: nil
+      skip_vendor_at_tps_pct: nil,
+      deny_multipart: false
     ]
 
     @condition_keys %Conditions{} |> Map.from_struct() |> Map.keys()
@@ -255,8 +256,11 @@ defmodule Sms.Switch.Rules.Route do
   def quick_match?(%Rule{status: status}, _m) when status != :active, do: false
 
   def quick_match?(%Rule{} = r, m) do
-    if live?(r, m.now), do: quick_conditions(r, m), else: false
+    if live?(r, m.now) and multipart_ok?(r, m), do: quick_conditions(r, m), else: false
   end
+
+  # Deny Multipart (§6.3, S-3.9): a message of more than one part never matches the rule, whatever its match mode.
+  defp multipart_ok?(r, m), do: not (r.deny_multipart and m[:multipart] == true)
 
   defp quick_conditions(%Rule{conditions: c} = r, m) do
     all = r.match_mode == :all
@@ -284,7 +288,7 @@ defmodule Sms.Switch.Rules.Route do
   def others_match?(%Rule{conditions: c} = r, m) do
     others = conditions(c) -- [:tps]
 
-    live?(r, m.now) and
+    live?(r, m.now) and multipart_ok?(r, m) and
       case others do
         [] -> true
         _ when r.match_mode == :all -> Enum.all?(others, &condition_ok?(&1, c, m))
@@ -400,8 +404,16 @@ defmodule Sms.Switch.Rules.Route do
       )
     ]
 
-    gates ++ Enum.map(conditions(r.conditions), &detailed(&1, r.conditions, m))
+    gates ++
+      multipart_gate(r, m) ++ Enum.map(conditions(r.conditions), &detailed(&1, r.conditions, m))
   end
+
+  defp multipart_gate(%Rule{deny_multipart: true} = r, m) do
+    ok = multipart_ok?(r, m)
+    [check("Multipart", ok, if(ok, do: "one part", else: "multipart messages denied"), true)]
+  end
+
+  defp multipart_gate(_rule, _m), do: []
 
   defp check(condition, ok, detail, gate \\ false),
     do: %{condition: condition, set: true, ok: ok, detail: detail, gate: gate}
