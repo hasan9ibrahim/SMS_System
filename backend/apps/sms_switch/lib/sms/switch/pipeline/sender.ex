@@ -38,7 +38,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   require Logger
   import Bitwise
   alias Sms.Core.Bus
-  alias Sms.Switch.Message.{Concat, Text}
+  alias Sms.Switch.Message.{Coding, Concat, Text}
 
   alias Sms.Switch.Pipeline.{
     Backlog,
@@ -485,28 +485,26 @@ defmodule Sms.Switch.Pipeline.Sender do
   # take it (no multipart, a maximum length) is skipped for the next one (S-3.9).
   defp submits(msg, route) do
     text = route.egress[:text]
-    {bytes, alphabet, coding} = encoding(msg, text)
     vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
-    ies = elements(msg, alphabet)
 
-    case skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
-      nil ->
-        base = fields(msg, route, coding)
-        tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
-        format = vt[:multipart_format] || :udh8
-        reference = fn -> reference(format, base.destination_addr) end
-        pieces = pieces(bytes, alphabet, format, ies, reference)
+    # A coding the vendor does not allow is converted when the text fits another it allows (S-2.11, S-4.4).
+    with {:ok, bytes, alphabet, coding} <- Coding.for_vendor(msg, text, vt[:allowed_data_codings]),
+         ies = elements(msg, alphabet),
+         nil <- skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
+      base = fields(msg, route, coding)
+      tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
+      format = vt[:multipart_format] || :udh8
+      reference = fn -> reference(format, base.destination_addr) end
+      pieces = pieces(bytes, alphabet, format, ies, reference)
 
-        # Billed per part as counted (153 / 67 / 134), also when one message_payload carries them all (S-3.1).
-        parts = max(length(pieces), Text.part_count(bytes, alphabet, byte_size(ies)))
-        {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding, parts}
-
-      reason ->
-        {:skip, reason}
+      # Billed per part as counted (153 / 67 / 134), also when one message_payload carries them all (S-3.1).
+      parts = max(length(pieces), Text.part_count(bytes, alphabet, byte_size(ies)))
+      {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding, parts}
+    else
+      {:error, reason} -> {:skip, reason}
+      reason -> {:skip, reason}
     end
   end
-
-  defp skip_reason(_msg, _text, {:error, _alphabet, _ies}, _vt), do: :unencodable
 
   defp skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
     cond do
@@ -600,35 +598,6 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp piece(:sar, ref, total, n, p, ies),
     do: single(p, ies, sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n)
 
-  defp encoding(msg, text), do: msg |> encoded(text) |> vendor_coding(text || msg.text)
-
-  defp encoded(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
-
-  defp encoded(msg, text) when text == msg.text or is_nil(text),
-    do: {msg.body, msg.alphabet, msg.data_coding}
-
-  defp encoded(msg, text) do
-    alphabet = Text.fit(text, msg.alphabet)
-
-    case Text.encode(text, alphabet) do
-      {:ok, bytes} -> {bytes, alphabet, Text.data_coding(alphabet, msg.data_coding)}
-      :error -> {:error, alphabet, msg.data_coding}
-    end
-  end
-
-  # S-2.11: Latin-1 bytes under data_coding 0 (a customer trunk whose Default Coding is Latin-1) would be read as GSM by
-  # the vendor: GSM when every character has one and it needs no more parts, else data_coding 3.
-  defp vendor_coding({bytes, :latin1, 0}, text) when is_binary(bytes) do
-    with {:ok, gsm} <- Text.encode(text, :gsm),
-         true <- Text.part_count(gsm, :gsm) <= Text.part_count(bytes, :latin1) do
-      {gsm, :gsm, 0}
-    else
-      _ -> {bytes, :latin1, 3}
-    end
-  end
-
-  defp vendor_coding(encoded, _text), do: encoded
-
   # Whether a changed text needs more parts than the customer sent (D3), counted like with like: the text as it goes
   # and as it came, both at 153 / 67 / 134 a part, or the parts the customer sent when it used more (a client's SAR
   # parts of 160 characters are counted again, never compared with the 153 we split at).
@@ -637,7 +606,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp grows_parts?(msg, text) when text == msg.text or is_nil(text), do: false
 
   defp grows_parts?(msg, text) do
-    case encoding(msg, text) do
+    case Coding.natural(msg, text) do
       {:error, _, _} ->
         false
 

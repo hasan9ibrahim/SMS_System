@@ -525,6 +525,8 @@ defmodule Sms.Switch.Pipeline.Intake do
   @doc false
   # What the router needs, from a message after ingress translation.
   def router_input(msg) do
+    f = msg.fields
+
     %{
       customer_trunk: msg.trunk,
       sender: msg.ingress.sender,
@@ -535,9 +537,16 @@ defmodule Sms.Switch.Pipeline.Intake do
       destination: msg.destination,
       sell: msg.sell,
       hlr_ported: msg[:hlr][:ported],
-      now_ms: System.os_time(:millisecond)
+      now_ms: System.os_time(:millisecond),
+      # What a vendor's capability filter and Deny Multipart look at (§5.5, §6.3, S-3.9, S-4.4).
+      parts: msg.parts,
+      message: Map.take(msg, [:body, :alphabet, :data_coding, :text]),
+      dest_ton: first_set([msg.ingress[:dest_ton], f[:dest_addr_ton]]),
+      dest_npi: first_set([msg.ingress[:dest_npi], f[:dest_addr_npi]])
     }
   end
+
+  defp first_set(values), do: Enum.find(values, &(&1 != nil))
 
   # Customer Sender ID rates (§6.2) match the sender as the customer sent it, the EDR's src_addr that Re-rating matches
   # too. A vendor's match the sender it receives (the router, after egress translation; EDR v_src_addr).

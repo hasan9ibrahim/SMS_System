@@ -176,6 +176,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
                                  AND b.status = 'stopped') AS active, e.account_manager_id, e.tier, t.dlr_timeout_s,
              t.dlr_timeout_stat, coalesce(t.dlr_timeout_mccmncs, '{}') AS dlr_timeout_mccmncs, t.reroute_on, t.tps, t.max_connections, t.support_multipart, t.max_msg_len,
              t.multipart_format, coalesce(t.overflow_buffer, 0) AS overflow_buffer,
+             -- Capability filter (§5.5, S-4.4): NULL = any.
+             t.allowed_data_codings, t.allowed_src_ton, t.allowed_src_npi, t.allowed_dst_ton, t.allowed_dst_npi,
              coalesce((SELECT array_agg(rt.id ORDER BY rt.id) FROM rate_tables rt
                         WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
         FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
@@ -331,6 +333,13 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   end
 
   @multipart_formats %{"udh8" => :udh8, "udh16" => :udh16, "sar" => :sar, "payload" => :payload}
+  @capabilities [
+    :allowed_data_codings,
+    :allowed_src_ton,
+    :allowed_src_npi,
+    :allowed_dst_ton,
+    :allowed_dst_npi
+  ]
 
   # A vendor trunk's TPS is per connection: the trunk's limit is tps × max_connections (migration 034).
   defp vendor_trunks(rows) do
@@ -341,6 +350,8 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
        |> Map.put(:dlr_timeout_mccmncs, MapSet.new(Map.get(t, :dlr_timeout_mccmncs) || []))
        # A service trunk (team trial round 12) sends nothing: the client gets its receipt from the switch.
        |> Map.put(:service, Map.get(t, :protocol) == "service")
+       # What the vendor accepts (§5.5): nil = any.
+       |> Map.merge(Map.new(@capabilities, &{&1, Map.get(t, &1)}))
        |> Map.put(:tps_limit, t.tps * t.max_connections)}
     end
   end
@@ -394,7 +405,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
         starts_at: r.starts_at,
         stops_at: r.stops_at,
         continue_routing: enum!(r.continue_routing, %{"yes" => :yes, "stop" => :stop}),
-        match_mode: enum!(r.match_mode, %{"all" => :all, "any" => :any})
+        match_mode: enum!(r.match_mode, %{"all" => :all, "any" => :any}),
+        # Advance Settings: a multipart message never matches the rule (§6.3, S-3.9).
+        deny_multipart: r[:deny_multipart] == true
       ] ++ route_conditions(r) ++ route_vendors(r, vendors, whitelists, lcr)
     )
   end

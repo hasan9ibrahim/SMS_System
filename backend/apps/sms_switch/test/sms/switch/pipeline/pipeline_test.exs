@@ -1469,6 +1469,71 @@ defmodule Sms.Switch.Pipeline.PipelineTest do
     end
   end
 
+  describe "vendor capability filter (§5.5, S-2.11, S-4.4) and Deny Multipart (§6.3, S-3.9)" do
+    test "a coding the vendor does not allow: converted when the text fits one it allows, else the next vendor" do
+      config = vendors_v1(allowed_data_codings: [0])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+
+      # Latin-1 (3) whose characters are all in GSM: to vendor 1 as GSM.
+      {client, %{status: 0}} =
+        submit(client, %{data_coding: 3, short_message: <<"caf", 0xE9>>}, 2)
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.data_coding, sent.fields.short_message} == {0, <<"caf", 0x05>>}
+
+      # UCS-2 Cyrillic: vendor 1 cannot take it; vendor 2 gets it as sent.
+      text = :unicode.characters_to_binary("Привет", :utf8, {:utf16, :big})
+      {_, %{status: 0}} = submit(client, %{data_coding: 8, short_message: text}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.data_coding, sent.fields.short_message} == {8, text}
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+    end
+
+    test "a sender or destination TON / NPI the vendor does not allow passes it over" do
+      config = vendors_v1(allowed_src_ton: [1, 2], allowed_dst_npi: [1])
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+
+      # An alphanumeric sender (TON 5): vendor 2.
+      {client, %{status: 0}} = submit(client, %{short_message: "alpha"}, 2)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+
+      # An international one (TON 1): vendor 1.
+      {_, %{status: 0}} =
+        submit(client, %{source_addr: "4930123456", source_addr_ton: 1, short_message: "num"}, 3)
+
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c2, %Pdu{command: :submit_sm}}
+    end
+
+    test "no vendor can take it: refused at once with 0x45, nothing sent (Q15)" do
+      config = [vendor_trunks: [PipelineConfig.vendor_trunk(allowed_dst_ton: [1])]]
+      %{client: client, conns: [conn]} = start_all(config: config)
+      {_, resp} = submit(client, %{short_message: "unknown TON", dest_addr_ton: 0})
+      assert resp.status == 0x45
+      refute_receive {:smsc, ^conn, %Pdu{command: :submit_sm}}, 300
+    end
+
+    test "a rule with Deny Multipart never matches a multipart message; the next rule routes it" do
+      config =
+        two_vendors(
+          route_rules: [%{id: 1, priority: 200, deny_multipart: true}, %{id: 2, priority: 100}],
+          route_vendors: [PipelineConfig.route_vendor(1, 1), PipelineConfig.route_vendor(2, 2)]
+        )
+
+      %{client: client, conns: [c1, c2]} = start_all(smscs: 2, config: config)
+      {client, %{status: 0}} = submit(client, %{short_message: "one part"}, 2)
+      assert_receive {:smsc, ^c1, %Pdu{command: :submit_sm}}, 2_000
+
+      {_, %{status: 0}} = submit(client, %{short_message: String.duplicate("m", 200)}, 3)
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      assert_receive {:smsc, ^c2, %Pdu{command: :submit_sm}}, 2_000
+      refute_received {:smsc, ^c1, %Pdu{command: :submit_sm}}
+
+      assert_eventually(fn -> length(edr("edr.attempt")) == 2 end)
+      assert Enum.sort(Enum.map(edr("edr.attempt"), & &1["route_rule_id"])) == [1, 2]
+    end
+  end
+
   # Two vendors at levels 1 and 2; vendor 1's trunk fields as given.
   defp vendors_v1(v1_fields) do
     [

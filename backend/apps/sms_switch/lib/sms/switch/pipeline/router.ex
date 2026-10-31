@@ -10,11 +10,18 @@ defmodule Sms.Switch.Pipeline.Router do
     3. the same for a vendor with no bound connection on either server, so a message no connected vendor can take is
        refused before the customer's resp (0x45, decided Q15; backend step 7);
     4. the same for a vendor whose rate line in force is blocked (blocked means blocked, decided 2026-10-30), priced
-       with the sender it would receive after its egress translation (§6.2, decided 2026-10-30).
+       with the sender it would receive after its egress translation (§6.2, decided 2026-10-30);
+    5. the same for a vendor that cannot take the message as it would get it after its egress translation (§5.5
+       capability filter, S-3.9, S-4.4): a data coding it does not allow (unless the text fits one it allows,
+       `Sms.Switch.Message.Coding`), a source or destination TON / NPI it does not allow, a multipart message when it
+       does not support multipart, or longer than its Max Msg Len.
+
+  A rule with Deny Multipart never matches a message of more than one part (§6.3, S-3.9).
 
   Vendors already tried for this message (a refusal, a timeout, no connection) are skipped the same way, so a re-route
   (S-5.2, D4) follows the rules' own order to the next vendor.
   """
+  alias Sms.Switch.Message.{Coding, Text}
   alias Sms.Switch.Pipeline.{Config, LiveTps, Revenue, Warmup}
   alias Sms.Switch.Rules.{Route, Translation}
   alias Sms.Switch.Vendor
@@ -25,6 +32,9 @@ defmodule Sms.Switch.Pipeline.Router do
           optional(:hlr_ported) => boolean() | nil,
           optional(:count_rule_tps) => boolean(),
           optional(:parts) => pos_integer(),
+          optional(:message) => Coding.message() | nil,
+          optional(:dest_ton) => non_neg_integer() | nil,
+          optional(:dest_npi) => non_neg_integer() | nil,
           customer_trunk: map(),
           sender: String.t(),
           receiver: String.t(),
@@ -83,7 +93,9 @@ defmodule Sms.Switch.Pipeline.Router do
       warmup_sent: fn rule, v ->
         Warmup.sent(rule.id, v, input.customer_trunk.id, input.now_ms)
       end,
-      list_has?: &Config.list_has?/3
+      list_has?: &Config.list_has?/3,
+      # Deny Multipart (§6.3, S-3.9).
+      multipart: (input[:parts] || 1) > 1
     }
 
     _ = if input[:count_rule_tps], do: count_rule_tps(rules, context, input)
@@ -179,8 +191,52 @@ defmodule Sms.Switch.Pipeline.Router do
 
   defp vendor_check(vendor_trunk_id, mccmnc, egress, input) do
     case vendor_price(vendor_trunk_id, mccmnc, egress, input) do
-      :blocked -> :rate_blocked
-      price -> if bound?(vendor_trunk_id), do: {:ok, price}, else: :unbound
+      :blocked ->
+        :rate_blocked
+
+      price ->
+        cond do
+          not capable?(Config.vendor_trunk(vendor_trunk_id) || %{}, egress.after, input) ->
+            :incapable
+
+          bound?(vendor_trunk_id) ->
+            {:ok, price}
+
+          true ->
+            :unbound
+        end
+    end
+  end
+
+  # §5.5, S-3.9, S-4.4: whether the vendor can take the message as it would get it after its egress translation (nil
+  # lists allow any). Without the message (the Route Simulator's tests), every vendor can.
+  defp capable?(_trunk, _after, %{message: nil}), do: true
+
+  defp capable?(trunk, after_, %{message: %{}} = input) do
+    allowed?(trunk[:allowed_src_ton], first([after_.sender_ton, input.sender_ton])) and
+      allowed?(trunk[:allowed_src_npi], first([after_.sender_npi, input.sender_npi])) and
+      allowed?(trunk[:allowed_dst_ton], first([after_[:dest_ton], input[:dest_ton]])) and
+      allowed?(trunk[:allowed_dst_npi], first([after_[:dest_npi], input[:dest_npi]])) and
+      fits?(trunk, input.message, after_.text)
+  end
+
+  defp capable?(_trunk, _after, _input), do: true
+
+  defp allowed?(nil, _value), do: true
+  defp allowed?(list, value), do: value in list
+
+  # The value the vendor gets: the first one set, else 0 (as the sender fills the PDU).
+  defp first(values), do: Enum.find(values, 0, &(&1 != nil))
+
+  # The coding (converted when it must be), the length and the part count the vendor would get.
+  defp fits?(trunk, message, text) do
+    case Coding.for_vendor(message, text, trunk[:allowed_data_codings]) do
+      {:ok, bytes, alphabet, _coding} ->
+        not (is_integer(trunk[:max_msg_len]) and Text.units(bytes, alphabet) > trunk[:max_msg_len]) and
+          not (trunk[:support_multipart] == false and Text.part_count(bytes, alphabet) > 1)
+
+      {:error, _reason} ->
+        false
     end
   end
 
