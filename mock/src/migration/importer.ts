@@ -21,7 +21,8 @@ import { csvTable } from "./csv.js";
 import { BUILT_IN_MAPPINGS, CHOICE_SYNONYMS, ENTITY, HEADER_ALIASES, IMPORT_ENTITIES } from "./entities.js";
 import { entryProblem } from "../api/numberLists.js";
 import { checkRule, insertRule, normalise } from "../api/translationRules.js";
-import { operations } from "../contract.js";
+import { document, operations } from "../contract.js";
+import { normWebsite } from "../api/enterprises.js";
 import { compilePattern } from "../routing/pattern.js";
 
 type Db = pg.Pool | pg.PoolClient;
@@ -48,6 +49,10 @@ export interface PlanRow {
   /** For updates: the current values of the columns that change. */
   before: Record<string, Value>;
   extra: Record<string, Value>;
+  /** For updates: every value the row planned, before it was narrowed to the columns that change (format checks). */
+  full?: Record<string, Value>;
+  /** What the import changed to take a value (§13.22): "Username "John.Smith" → "john.smith"", one warning per row. */
+  notes: string[];
 }
 export interface Plan {
   sourceSystem: string;
@@ -238,7 +243,7 @@ export function choiceOf(allowed: string[], value: string): string {
  * Rows of one file as template fields (team trial round 11: any header the field is known by works). Each field
  * takes the first column found, in this order: the chosen mapping's column, the field key, its label, the reference
  * platform's name, then the other names it is known by; a column serves one field. Choices are written the
- * template's way.
+ * template's way. `notes` says, per row, what that changed (§13.22: spaces trimmed, a choice read as its value).
  */
 export function mapRows(file: MigrationFileInput, mapping: Record<string, string> | null) {
   const info = ENTITY.get(file.entity)!;
@@ -275,17 +280,30 @@ export function mapRows(file: MigrationFileInput, mapping: Record<string, string
       const want = mapping?.[f.field];
       return `${f.label} (a column named "${want ?? f.field}"${want ? ` or "${f.field}"` : ""} or "${f.label}")`;
     });
+  const notes: string[][] = [];
   const out = rows.map((cells) => {
     const o: Record<string, string> = {};
+    const changed: string[] = [];
     for (const f of info.fields) {
       const i = col.get(f.field);
-      const v = i == null ? "" : (cells[i] ?? "").trim();
+      const raw = i == null ? "" : (cells[i] ?? "");
+      const v = raw.trim();
       o[f.field] = f.allowed.length ? choiceOf(f.allowed, v) : v;
+      if (o[f.field] !== raw) changed.push(asNote(f.label, raw, o[f.field]!));
     }
+    notes.push(changed);
     return o;
   });
-  return { rows: out, missing };
+  return { rows: out, missing, notes };
 }
+
+/** A value shown in a message: quoted, long ones cut. */
+const shown = (v: unknown) => {
+  const s = typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
+  return `"${s.length > 60 ? `${s.slice(0, 57)}…` : s}"`;
+};
+/** One change the import made to take a value (§13.22), for the row's warning: Username "Jo.Smith" imported as "jo.smith". */
+const asNote = (label: string, from: string, to: string) => `${label} ${shown(from)} imported as ${shown(to)}`;
 
 class Planner {
   readonly issues: MigrationIssue[] = [];
@@ -381,7 +399,17 @@ const UPDATABLE: Partial<Record<Ent, { table: string; columns: string[] }>> = {
   },
   enterprises: {
     table: "enterprises",
-    columns: ["alias", "type", "tier", "status", "account_manager_id", "address_line1", "country_id", "vat_number"],
+    columns: [
+      "alias",
+      "type",
+      "tier",
+      "status",
+      "account_manager_id",
+      "address_line1",
+      "country_id",
+      "vat_number",
+      "website",
+    ],
   },
   customer_trunks: {
     table: "customer_trunks",
@@ -425,6 +453,7 @@ async function diffUpdates(c: Db, entity: Ent, rows: PlanRow[]) {
       }
     }
     if (!Object.keys(after).length) r.action = "skip";
+    r.full = r.values;
     r.values = after;
     r.before = before;
   }
@@ -441,6 +470,7 @@ const row = (line: number, ext: string | null): PlanRow => ({
   values: {},
   before: {},
   extra: {},
+  notes: [],
 });
 
 function required(p: Planner, entity: Ent, line: number, r: Raw): boolean {
@@ -466,13 +496,20 @@ function required(p: Planner, entity: Ent, line: number, r: Raw): boolean {
  * the contract's, not a copy: `body` is what the app's form would send for the row, checked by that create's request
  * schema (the validator the API applies to the form), and `fields` names the import field of each body path. `server`
  * adds what the create handler checks beyond the schema. A record of this import stands in as id 1 (its id is not
- * known before Apply). Only lacking values count here; the planners check the values themselves.
+ * known before Apply).
+ *
+ * The same validator checks the values' formats (§13.22, product owner 2026-10-31): e-mail addresses, patterns,
+ * choices, lengths, limits, dates. A new record is checked on every value; an update only on the cells it changes,
+ * `columns` naming the column each import field writes (the edit form takes the same body). `then` is a second create
+ * the row makes (a number list's values).
  */
 interface NewRecord {
   operation: string;
   body: (v: Record<string, Value>, x: Record<string, Value>) => Record<string, unknown>;
   fields: Record<string, string>;
   server?: (v: Record<string, Value>) => (string | false)[];
+  columns?: Record<string, string>;
+  then?: NewRecord;
 }
 const idOf = (v: Value): number | null => (v instanceof Ref ? 1 : v == null ? null : Number(v));
 const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
@@ -480,16 +517,80 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
     operation: "createDepartment",
     body: (v) => ({ name: v.name, status: v.status, managerId: null, description: v.description ?? null }),
     fields: { "/name": "name", "/status": "status", "/description": "description" },
+    columns: { description: "description", status: "status" },
   },
   product_categories: {
     operation: "createProductCategory",
     body: (v) => ({ name: v.name }),
     fields: { "/name": "name" },
+    columns: { name: "name" },
   },
   number_lists: {
     operation: "createNumberList",
     body: (v) => ({ name: v.name, listType: v.list_type }),
     fields: { "/name": "name", "/listType": "type" },
+    then: {
+      operation: "addNumberListEntries",
+      body: (v, x) => {
+        const entries = (x.entries as { value: string; content: string | null }[] | undefined) ?? [];
+        return {
+          values: entries.map((e) => e.value),
+          ...(v.list_type === "sender_id_template" ? { contents: entries.map((e) => e.content) } : {}),
+        };
+      },
+      fields: { "/values": "value", "/contents": "content" },
+    },
+  },
+  translation_rules: {
+    operation: "createTranslationRule",
+    // The rule form's body (translationInput); a list the file names stands in as id 1, as a record of this import.
+    body: (_v, x) =>
+      normalise(translationInput(x, (l) => (l ? 1 : null))) as unknown as Record<string, unknown>,
+    fields: {
+      "/name": "name",
+      "/direction": "direction",
+      "/action": "action",
+      "/status": "status",
+      "/continueAfter": "continueAfter",
+      "/senderPattern": "senderPattern",
+      "/receiverPattern": "receiverPattern",
+      "/contentPattern": "contentPattern",
+      "/mccmncs": "mccmncs",
+      "/senderListId": "senderList",
+      "/receiverListId": "receiverList",
+      "/senderConversion": "senderConversion",
+      "/senderConversionValue": "senderConversionValue",
+      "/senderConversionListId": "senderConversionList",
+      "/receiverConversion": "receiverConversion",
+      "/receiverConversionValue": "receiverConversionValue",
+      "/senderTon": "senderTon",
+      "/senderNpi": "senderNpi",
+      "/destTon": "destTon",
+      "/destNpi": "destNpi",
+    },
+  },
+  rate_lines: {
+    // A line is what a Rate Manager save sends for one destination (changeRateLines, action set).
+    operation: "changeRateLines",
+    body: (v) => ({
+      items: [
+        {
+          action: "set",
+          mccmnc: v.mccmnc,
+          senderId: v.sender_id,
+          rate: v.rate,
+          effectiveFrom: v.valid_from,
+          blocked: v.is_blocked,
+        },
+      ],
+    }),
+    fields: {
+      "/items/0/mccmnc": "mccmnc",
+      "/items/0/senderId": "senderId",
+      "/items/0/rate": "rate",
+      "/items/0/effectiveFrom": "validFrom",
+      "/items/0/blocked": "blocked",
+    },
   },
   users: {
     operation: "createUser",
@@ -532,6 +633,17 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
     // createUser (api/admin.ts checkUser): the access group and the business company must exist. The temporary
     // password the form asks for is not needed: imported users get a random one and set their own (password links).
     server: (v) => [v.access_group_id == null && "accessGroup", v.business_company_id == null && "businessCompany"],
+    columns: {
+      firstName: "first_name",
+      lastName: "last_name",
+      email: "email",
+      department: "department_id",
+      accessGroup: "access_group_id",
+      businessCompany: "business_company_id",
+      address: "address1",
+      country: "country_iso",
+      status: "status",
+    },
   },
   enterprises: {
     operation: "createEnterprise",
@@ -548,7 +660,10 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
         creditAlertPercent: { notice: 50, warning: 70, critical: 90 },
         address: { line1: v.address_line1, countryId: idOf(v.country_id) },
         vatNumber: v.vat_number ?? null,
-        contacts: Object.fromEntries(CONTACT_FIELDS.map(([, type]) => [type, { emails: contacts[type] ?? [] }])),
+        website: v.website ?? null,
+        contacts: Object.fromEntries(
+          CONTACT_FIELDS.map(([, type]) => [type, { emails: contacts?.[type] ?? [] }]),
+        ),
       };
     },
     fields: {
@@ -562,10 +677,22 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       "/address": "address",
       "/address/countryId": "country",
       "/vatNumber": "vatNumber",
+      "/website": "website",
       ...Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [`/contacts/${type}`, field])),
     },
     // createEnterprise (api/enterprises.ts checkInput): the country and the account manager are required on create.
     server: (v) => [v.country_id == null && "country", v.account_manager_id == null && "accountManager"],
+    columns: {
+      alias: "alias",
+      type: "type",
+      tier: "tier",
+      status: "status",
+      accountManager: "account_manager_id",
+      address: "address_line1",
+      country: "country_id",
+      vatNumber: "vat_number",
+      website: "website",
+    },
   },
   customer_trunks: {
     operation: "createCustomerTrunk",
@@ -595,6 +722,16 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       "/password": "password",
       "/sslType": "sslType",
       "/tps": "tps",
+    },
+    columns: {
+      hostIps: "host_ips",
+      sslType: "ssl_type",
+      protocol: "protocol",
+      tps: "tps",
+      category: "product_category_id",
+      billingType: "billing_type",
+      username: "username",
+      password: "password",
     },
   },
   vendor_trunks: {
@@ -626,11 +763,22 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       "/password": "password",
       "/tps": "tps",
     },
+    columns: {
+      host: "host",
+      port: "port",
+      username: "username",
+      password: "password",
+      protocol: "protocol",
+      tps: "tps",
+      category: "product_category_id",
+      billingType: "billing_type",
+    },
   },
   rate_tables: {
     operation: "createRateTable",
     body: (v) => ({ name: v.name, categoryId: idOf(v.product_category_id), currency: v.currency }),
     fields: { "/name": "name", "/categoryId": "category", "/currency": "currency" },
+    columns: { category: "product_category_id" },
   },
   route_rules: {
     operation: "createRouteRule",
@@ -651,6 +799,7 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       "/customerTrunkIds": "customerTrunks",
       "/mccmncs": "destinations",
     },
+    columns: { priority: "priority", status: "status", customerTrunks: "customer_trunk_ids", destinations: "mccmncs" },
   },
   hlr_rules: {
     operation: "createHlrRule",
@@ -663,6 +812,7 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       targets: [],
     }),
     fields: { "/name": "name", "/providerId": "provider", "/dnidPattern": "dnidPattern", "/status": "status" },
+    columns: { provider: "hlr_provider_id", dnidPattern: "dnid_pattern", status: "status" },
   },
   opening_balances: {
     operation: "createTransaction",
@@ -689,25 +839,41 @@ const NEW_RECORD: Partial<Record<Ent, NewRecord>> = {
       "/currency": "currency",
     },
   },
-  // Translation rules: the rule form's own checks run on each new rule (checkTranslationRows). Rates: lines go through
-  // no create of their own; the template's required fields are the Rate Manager upload's (table, MCCMNC, rate).
 };
 const createOperations = new Map(operations.map((o) => [o.operationId, o]));
 
+/** A value the contract refuses, in the template's words: `field` is the import field, `message` plain text. */
+export interface Invalid {
+  field: string;
+  message: string;
+}
+
 /**
- * The import fields a new record would lack (§13.22): a value its create needs that is absent, empty, an empty list or
- * null. A body path no import field stands for is returned as the path, so a field the contract starts to require
- * shows up instead of passing unnoticed.
+ * What the contract says of a row's record (§13.22): `missing`, the import fields a new record would lack (a value its
+ * create needs that is absent, empty, an empty list or null), and `invalid`, the values in the wrong format. A body
+ * path no import field stands for is given as the path, so a field the contract starts to require shows up instead of
+ * passing unnoticed.
  */
-export function lacking(entity: Ent, values: Record<string, Value>, extra: Record<string, Value> = {}): string[] {
-  const spec = NEW_RECORD[entity];
-  if (!spec) return [];
-  const validate = createOperations.get(spec.operation)?.validateBody;
-  if (!validate) throw new Error(`the contract has no request body for ${spec.operation}`);
-  const body = spec.body(values, extra);
-  const out = new Set<string>();
-  // A copy: the validator fills in schema defaults.
-  if (!validate(structuredClone(body)))
+export function checkRecord(
+  entity: Ent,
+  values: Record<string, Value>,
+  extra: Record<string, Value> = {},
+): { missing: string[]; invalid: Invalid[] } {
+  const missing = new Set<string>();
+  const invalid: Invalid[] = [];
+  const label = (f: string) => ENTITY.get(entity)!.fields.find((x) => x.field === f)?.label ?? f;
+  for (let spec = NEW_RECORD[entity]; spec; spec = spec.then) {
+    const validate = createOperations.get(spec.operation)?.validateBody;
+    if (!validate) throw new Error(`the contract has no request body for ${spec.operation}`);
+    const body = spec.body(values, extra);
+    // A copy: the validator fills in schema defaults.
+    if (validate(structuredClone(body))) continue;
+    const fieldOf = (path: string) => {
+      const key = Object.keys(spec!.fields)
+        .filter((k) => path === k || path.startsWith(`${k}/`))
+        .sort((a, b) => b.length - a.length)[0];
+      return key ? spec!.fields[key]! : path.slice(1);
+    };
     for (const e of validate.errors ?? []) {
       const path =
         e.keyword === "required"
@@ -717,14 +883,102 @@ export function lacking(entity: Ent, values: Record<string, Value>, extra: Recor
         .split("/")
         .slice(1)
         .reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), body);
-      if (!(value == null || value === "" || (Array.isArray(value) && value.length === 0))) continue;
-      const key = Object.keys(spec.fields)
-        .filter((k) => path === k || path.startsWith(`${k}/`))
-        .sort((a, b) => b.length - a.length)[0];
-      out.add(key ? spec.fields[key]! : path.slice(1));
+      if (value == null || value === "" || (Array.isArray(value) && value.length === 0)) {
+        missing.add(fieldOf(path));
+        continue;
+      }
+      const reason = plainReason(e.keyword, e.params as Record<string, unknown>);
+      if (!reason) continue;
+      const field = fieldOf(path);
+      // A password is never repeated in the report (§13.22: credentials stay out of what others can read).
+      const message = field === "password" ? `${label(field)} ${reason}` : `${label(field)} ${shown(value)} ${reason}`;
+      if (!invalid.some((x) => x.field === field && x.message === message)) invalid.push({ field, message });
     }
-  for (const f of spec.server?.(values) ?? []) if (f) out.add(f);
-  return [...out];
+  }
+  for (const f of NEW_RECORD[entity]?.server?.(values) ?? []) if (f) missing.add(f);
+  return { missing: [...missing], invalid };
+}
+
+/** The import fields a new record would lack (checkRecord). */
+export const lacking = (entity: Ent, values: Record<string, Value>, extra: Record<string, Value> = {}) =>
+  checkRecord(entity, values, extra).missing;
+
+/** A validator's complaint in plain words; null for the ones that only repeat another (oneOf, a nullable branch). */
+function plainReason(keyword: string, params: Record<string, unknown>): string | null {
+  const limit = params.limit;
+  switch (keyword) {
+    case "format":
+      return (
+        {
+          email: "is not an e-mail address",
+          date: "is not a date (YYYY-MM-DD)",
+          "date-time": "is not a date and time",
+          uri: "is not a web address",
+          ipv4: "is not an IP address",
+          ipv6: "is not an IP address",
+        }[String(params.format)] ?? `is not a valid ${String(params.format)}`
+      );
+    case "pattern":
+      return describePattern(String(params.pattern));
+    case "maxLength":
+      return `is longer than ${limit} characters`;
+    case "minLength":
+      return `is shorter than ${limit} characters`;
+    case "minimum":
+      return `must be ${limit} or more`;
+    case "maximum":
+      return `must be ${limit} or less`;
+    case "exclusiveMinimum":
+      return `must be more than ${limit}`;
+    case "exclusiveMaximum":
+      return `must be less than ${limit}`;
+    case "maxItems":
+      return `has more than ${limit} values`;
+    case "enum":
+      return `is not one of ${(params.allowedValues as unknown[]).join(", ")}`;
+    case "type":
+      if (params.type === "null") return null;
+      return params.type === "integer"
+        ? "is not a whole number"
+        : params.type === "number"
+          ? "is not a number"
+          : `is not a ${String(params.type)}`;
+    case "oneOf":
+    case "anyOf":
+    case "if":
+      return null;
+    default:
+      return "is not valid";
+  }
+}
+
+/**
+ * A contract pattern in words when it is a simple one: "^[0-9]{3,6}$" → "must be 3 to 6 digits", "^[a-z0-9._-]+$" →
+ * "may only hold lower-case letters, digits, dot, underscore and dash"; other patterns "is not in the right form".
+ */
+function describePattern(pattern: string): string {
+  const m = /^\^\[([^\]]+)\](\+|\*|\{(\d+)(?:,(\d+))?\})\$$/.exec(pattern);
+  if (!m) return "is not in the right form";
+  const words: string[] = [];
+  let set = m[1]!;
+  for (const [token, word] of [
+    ["a-z", "lower-case letters"],
+    ["A-Z", "capital letters"],
+    ["0-9", "digits"],
+    [".", "dot"],
+    ["_", "underscore"],
+    [" ", "space"],
+    ["+", "plus"],
+    ["-", "dash"],
+  ] as const)
+    if (set.includes(token)) {
+      words.push(word);
+      set = set.replace(token, "");
+    }
+  if (set || !words.length) return "is not in the right form";
+  const kinds = andList(words);
+  if (m[3] == null) return `may only hold ${kinds}`;
+  return `must be ${m[4] ? `${m[3]} to ${m[4]}` : m[3]} ${kinds}`;
 }
 
 const NEW_NOUN: Record<Ent, string> = {
@@ -745,24 +999,44 @@ const NEW_NOUN: Record<Ent, string> = {
 const andList = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
 
 /**
- * Refuses a row that would add a record lacking what the app needs: one error naming everything missing, in the
- * template's words ("Not imported: a new enterprise needs Address, Country and Rates e-mails"). False when refused.
+ * Refuses a row that would add a record lacking what the app needs or holding a value in the wrong format: one error
+ * naming everything missing, in the template's words ("Not imported: a new enterprise needs Address, Country and Rates
+ * e-mails"), and one per wrong value ("Finance / billing e-mails "bob@" is not an e-mail address"). False when refused.
  */
 function refuseIncomplete(p: Planner, entity: Ent, pr: PlanRow): boolean {
   if (pr.action !== "create") return true;
-  const missing = lacking(entity, pr.values, pr.extra);
-  if (!missing.length) return true;
-  // In the template's order and words.
-  const fields = ENTITY.get(entity)!.fields;
-  const at = (f: string) => {
-    const i = fields.findIndex((x) => x.field === f);
-    return i < 0 ? fields.length : i;
-  };
-  const label = (f: string) => fields.find((x) => x.field === f)?.label ?? f;
-  missing.sort((a, b) => at(a) - at(b));
-  p.issue(entity, pr.line, null, `Not imported: a new ${NEW_NOUN[entity]} needs ${andList(missing.map(label))}`);
+  const { missing, invalid } = checkRecord(entity, pr.values, pr.extra);
+  if (!missing.length && !invalid.length) return true;
+  if (missing.length) {
+    // In the template's order and words.
+    const fields = ENTITY.get(entity)!.fields;
+    const at = (f: string) => {
+      const i = fields.findIndex((x) => x.field === f);
+      return i < 0 ? fields.length : i;
+    };
+    const label = (f: string) => fields.find((x) => x.field === f)?.label ?? f;
+    missing.sort((a, b) => at(a) - at(b));
+    p.issue(entity, pr.line, null, `Not imported: a new ${NEW_NOUN[entity]} needs ${andList(missing.map(label))}`);
+  }
+  for (const x of invalid) p.issue(entity, pr.line, x.field, x.message);
   pr.action = "error";
   return false;
+}
+
+/**
+ * An update writes only the cells it changes (diffUpdates), so only those are checked (§13.22): a wrong value refuses
+ * the row and nothing of it is written. Called once the row is narrowed to its changes.
+ */
+function refuseInvalidChanges(p: Planner, entity: Ent, pr: PlanRow) {
+  const spec = NEW_RECORD[entity];
+  if (pr.action !== "update" || !spec?.columns || !pr.full) return;
+  const changed = (field: string) => {
+    const col = spec.columns![field];
+    return col !== undefined && col in pr.values;
+  };
+  const bad = checkRecord(entity, pr.full, pr.extra).invalid.filter((x) => changed(x.field));
+  for (const x of bad) p.issue(entity, pr.line, x.field, x.message);
+  if (bad.length) pr.action = "error";
 }
 
 /** refuseIncomplete for the planners that return their rows. */
@@ -785,6 +1059,19 @@ function unknownRef(p: Planner, entity: Ent, pr: PlanRow, field: string, what: s
   } else p.issue(entity, pr.line, field, `${what}; kept as it is`, "warning");
 }
 
+/** The username rule of Add user, from the contract (UserFields.username.pattern). */
+const USERNAME = new RegExp(
+  String(
+    (document.components.schemas as Record<string, { properties: Record<string, { pattern?: string }> }>).UserFields!
+      .properties.username!.pattern,
+  ),
+);
+/** An e-mail address with its domain in lower case (§13.22): a domain is not case-sensitive, the part before @ may be. */
+const lowerDomain = (e: string) => {
+  const at = e.lastIndexOf("@");
+  return at < 0 ? e : e.slice(0, at + 1) + e.slice(at + 1).toLowerCase();
+};
+
 function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
   const out: PlanRow[] = [];
   const seen = new Set<string>();
@@ -794,6 +1081,16 @@ function planUsers(p: Planner, raws: Raw[]): PlanRow[] {
     const pr = row(line, ext);
     out.push(pr);
     if (!required(p, "users", line, r)) return void (pr.action = "error");
+    // Taken the way Add user takes them (§13.22): a username in capitals in lower case when the username rule then
+    // accepts it, an e-mail address with its domain in lower case.
+    const username = r.username!.trim();
+    if (username !== username.toLowerCase() && !USERNAME.test(username) && USERNAME.test(username.toLowerCase())) {
+      pr.notes.push(asNote("Username", username, username.toLowerCase()));
+      r.username = username.toLowerCase();
+    }
+    const email = lowerDomain(r.email!.trim());
+    if (email !== r.email!.trim()) pr.notes.push(asNote("E-mail", r.email!.trim(), email));
+    r.email = email;
     const uname = lower(r.username!);
     if (seen.has(uname)) {
       p.issue("users", line, "username", `Username "${r.username}" appears twice in the file`);
@@ -886,7 +1183,28 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
     const country = r.country?.trim() ? (p.lk.countries.get(r.country.trim().toUpperCase()) ?? null) : null;
     if (r.country?.trim() && country == null)
       unknownRef(p, "enterprises", pr, "country", `Country "${r.country}" not found`);
+    // The website as the Add form takes it (api/enterprises.ts normWebsite, §5.1): a bare domain gets https://.
+    const website = normWebsite(r.website ?? "");
+    if (website instanceof Error && pr.action !== "skip") {
+      p.issue("enterprises", line, "website", `Website ${shown(r.website)} is not ${website.message}`);
+      pr.action = "error";
+    } else if (typeof website === "string" && website !== r.website)
+      pr.notes.push(asNote("Website", r.website!, website));
     if (pr.action === "error") return;
+    // E-mail domains in lower case, as for users.
+    const contacts = Object.fromEntries(
+      CONTACT_FIELDS.map(([field, type]) => {
+        const label = ENTITY.get("enterprises")!.fields.find((f) => f.field === field)!.label;
+        return [
+          type,
+          list(r[field]).map((e) => {
+            const lowered = lowerDomain(e);
+            if (lowered !== e) pr.notes.push(asNote(label, e, lowered));
+            return lowered;
+          }),
+        ];
+      }),
+    );
     pr.values = {
       business_company_id: company.id,
       name,
@@ -904,12 +1222,10 @@ function planEnterprises(p: Planner, raws: Raw[]): PlanRow[] {
       address_line1: r.address?.trim() ?? "",
       country_id: country,
       vat_number: r.vatNumber?.trim() || null,
+      website: typeof website === "string" ? website : null,
     };
-    pr.extra = {
-      currency: company.currency,
-      contacts: Object.fromEntries(CONTACT_FIELDS.map(([field, type]) => [type, list(r[field])])),
-    };
-    keepCurrent(pr, ["account_manager_id", "address_line1", "country_id"]);
+    pr.extra = { currency: company.currency, contacts };
+    keepCurrent(pr, ["account_manager_id", "address_line1", "country_id", "website"]);
     refuseIncomplete(p, "enterprises", pr);
   });
   out.forEach((r, i) => r.action !== "error" && p.index("enterprises", i, r.externalId, lower(String(r.values.name))));
@@ -1166,6 +1482,7 @@ function planRateLines(p: Planner, raws: Raw[], tables: PlanRow[]): PlanRow[] {
       valid_to: null,
       is_blocked: yes(r.blocked),
     };
+    if (!refuseIncomplete(p, "rate_lines", pr)) return;
     const g = `${ref.row}|${mccId}|${sender ?? ""}`;
     (groups.get(g) ?? groups.set(g, []).get(g)!).push(pr);
   });
@@ -1524,13 +1841,13 @@ function planTranslationRules(p: Planner, raws: Raw[]): PlanRow[] {
       destTon: ton.destTon,
       destNpi: ton.destNpi,
     };
-    return {
+    return checked(p, "translation_rules", {
       ...pr,
       action: m.action,
       existingId: m.id,
       values: { name },
       extra: { input, lists, targets: [...customer, ...vendor] },
-    };
+    });
   });
   out.forEach(
     (r, i) => r.action !== "error" && p.index("translation_rules", i, r.externalId, lower(String(r.values.name))),
@@ -1651,6 +1968,7 @@ export async function planImport(
   const lk = await loadLookups(c, settings.sourceSystem);
   const p = new Planner(lk, settings.conflicts, settings.trunksInactive);
   const raws = new Map<Ent, Raw[]>();
+  const rawNotes = new Map<Ent, string[][]>();
   const source = new Map<Ent, number>();
   for (const f of settings.files) {
     if (raws.has(f.entity)) {
@@ -1662,13 +1980,14 @@ export async function planImport(
       p.issue(f.entity, 0, null, `Mapping ${f.mappingId} is not a mapping for ${f.entity}`);
       continue;
     }
-    const { rows, missing } = mapRows(f, mapping?.columns ?? null);
+    const { rows, missing, notes } = mapRows(f, mapping?.columns ?? null);
     source.set(f.entity, rows.length);
     if (missing.length) {
       p.issue(f.entity, 1, null, `${f.fileName}: missing columns ${missing.join(", ")}`);
       continue;
     }
     raws.set(f.entity, rows);
+    rawNotes.set(f.entity, notes);
   }
   // Number lists: the values the file's lists already hold, so only new ones are added (team trial round 12).
   const listValues = new Map<string, Set<string>>();
@@ -1739,6 +2058,14 @@ export async function planImport(
     // Rows must be visible to resolve() as soon as they are indexed.
     p.rows.set(e, planned);
     await diffUpdates(c, e, planned);
+    for (const r of planned) refuseInvalidChanges(p, e, r);
+    // What was changed to take a value (§13.22), one warning per row that goes ahead: the file's own spaces and
+    // choices (mapRows), then the planner's (a username in lower case, a website with https://).
+    const fromFile = rawNotes.get(e) ?? [];
+    planned.forEach((r, i) => {
+      const notes = [...(fromFile[i] ?? []), ...r.notes];
+      if (notes.length && r.action !== "error") p.issue(e, r.line, null, notes.join("; "), "warning");
+    });
   }
   // Lines of a rate table that failed or was skipped follow it.
   const tables = p.rows.get("rate_tables") ?? [];

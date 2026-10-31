@@ -103,6 +103,7 @@ export function packageFiles(frames: Map<string, string>): { files: MigrationFil
       accountManager: e.account_manager_id ? (usersById.get(e.account_manager_id)?.id ?? "") : "",
       country: e.country_id ? (countries.get(e.country_id)?.iso ?? "") : "",
       vatNumber: e.vat_number ?? "",
+      website: e.website ?? "",
       address: e.address_line1 ?? "",
       emails: emailsOf("commercial", e.id!),
       technicalEmails: emailsOf("technical", e.id!),

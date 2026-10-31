@@ -341,7 +341,8 @@ describe("migration center", { skip }, () => {
               "TPS",
               "Product Category",
             ],
-            ["C1", "E1", `LEG_C_${run}`, `leg_${run}`, "pw-example", ips, "20", "OTP"],
+            // An SMPP 3.4 password holds 9 characters at most (§13.22: the import takes the trunk form's formats).
+            ["C1", "E1", `LEG_C_${run}`, `leg_${run}`, "pw-exampl", ips, "20", "OTP"],
           ]),
         },
         {
@@ -918,7 +919,7 @@ describe("rows lacking what the app needs to add a record are refused (§13.22)"
     const complete: [MigrationImportEntity, Record<string, unknown>, Record<string, unknown>?][] = [
       ["departments", { name: "Fake dept", status: "active", description: null }],
       ["product_categories", { name: "Fake category" }],
-      ["number_lists", { name: "Fake list", list_type: "tag" }],
+      ["number_lists", { name: "Fake list", list_type: "tag" }, { entries: [{ value: "FAKETAG", content: null }] }],
       [
         "users",
         {
