@@ -42,7 +42,6 @@ defmodule Sms.Switch.Customer.Session do
   alias Sms.Switch.Customer
   alias Sms.Switch.Customer.{Events, Firewall, Intake, Sessions, Trunk, TrunkStore}
   alias Sms.Switch.Smpp.{Command, Pdu}
-  alias Sms.Switch.Throttle
 
   @task_supervisor Sms.Switch.Customer.Tasks
   @max_sequence 0x7FFFFFFF
@@ -779,18 +778,14 @@ defmodule Sms.Switch.Customer.Session do
   # Over the TPS limit, a trunk with an overflow buffer has the message accepted and queued while the buffer has room
   # (S-2.4); the pipeline sends it when the trunk's TPS allows.
   defp throttled(state) do
-    cond do
-      Customer.draining?() ->
-        :esme_rthrottled
-
-      Throttle.acquire(Trunk.tps_counters(state.trunk)) == :ok ->
-        nil
-
-      Throttle.buffer_take(Trunk.buffer_key(state.trunk), state.trunk.overflow_buffer) ->
-        :buffered
-
-      true ->
-        :esme_rthrottled
+    if Customer.draining?() do
+      :esme_rthrottled
+    else
+      case Trunk.admit(state.trunk) do
+        :ok -> nil
+        :buffered -> :buffered
+        :full -> :esme_rthrottled
+      end
     end
   end
 

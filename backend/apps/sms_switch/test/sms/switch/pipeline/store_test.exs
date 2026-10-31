@@ -119,6 +119,59 @@ defmodule Sms.Switch.Pipeline.StoreTest do
         Store.command(["DEL", "q:#{ent}:#{b}"])
       end
 
+      test "scheduled messages waiting for their trunk's TPS: moved under the lease, taken by one, cancellable (S-2.12, S-2.4)",
+           %{id: id, vt: ent} do
+        now = System.os_time(:millisecond)
+        # Unique to this test, as the enterprise.
+        trunk = ent
+        [a, b, c] = ["#{id}a", "#{id}b", "#{id}c"]
+
+        for {m, at} <- [{a, now - 3_000}, {b, now - 2_000}, {c, now - 1_000}] do
+          assert :ok = Store.schedule(m, ent, [m], "blob-#{m}", at, 60)
+          assert Store.claim_scheduled(:waiting, m, now, now + 60_000)
+        end
+
+        # Only by the server whose lease is on it; by its time, not by when it was moved.
+        refute Store.defer_scheduled(a, trunk, now - 3_000, now + 1, ent, [a], 600)
+        assert Store.defer_scheduled(c, trunk, now - 1_000, now + 60_000, ent, [c], 600)
+        assert Store.defer_scheduled(a, trunk, now - 3_000, now + 60_000, ent, [a], 600)
+        assert Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
+        refute Store.defer_scheduled(b, trunk, now - 2_000, now + 60_000, ent, [b], 600)
+
+        assert {:ok, trunks} = Store.waiting_trunks()
+        assert trunk in trunks
+        assert {:ok, [^a, ^b, ^c]} = Store.waiting_scheduled(trunk, 10)
+        assert {:ok, [^a]} = Store.waiting_scheduled(trunk, 1)
+        # No longer leased (no other server takes it over), still held: query_sm finds it.
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 120_000, 1_000)
+        refute Enum.any?([a, b, c], &(&1 in leased))
+        assert {:ok, ^a} = Store.scheduled_id(ent, a)
+
+        # One server takes it (leased again); then cancel_sm cannot.
+        assert Store.claim_waiting(trunk, a, now + 60_000)
+        refute Store.claim_waiting(trunk, a, now + 60_000)
+        assert {:ok, leased} = Store.due_scheduled(:leased, now + 60_000, 1_000)
+        assert a in leased
+        assert :none = Store.take_scheduled(a)
+        assert :ok = Store.finish_scheduled(a, ent, [a])
+
+        # cancel_sm takes a waiting one out.
+        assert {:ok, %{blob: blob, ids: [^b]}} = Store.take_scheduled(b)
+        assert blob == "blob-#{b}"
+        assert {:ok, nil} = Store.scheduled_id(ent, b)
+        refute Store.claim_waiting(trunk, b, now + 60_000)
+
+        # The trunk stays listed while it has any waiting.
+        assert :ok = Store.forget_waiting(trunk)
+        assert {:ok, trunks} = Store.waiting_trunks()
+        assert trunk in trunks
+        assert Store.claim_waiting(trunk, c, now + 60_000)
+        assert :ok = Store.finish_scheduled(c, ent, [c])
+        assert :ok = Store.forget_waiting(trunk)
+        assert {:ok, trunks} = Store.waiting_trunks()
+        refute trunk in trunks
+      end
+
       test "queued marks: cancel while queued, the sender's take, query (S-2.15, D8)", %{
         id: id,
         vt: ent

@@ -767,6 +767,111 @@ defmodule Sms.Switch.Pipeline.Store do
   defp scheduled_set(:waiting), do: "sch"
   defp scheduled_set(:leased), do: "schl"
 
+  # A message waiting for its trunk's TPS is due already: taken whatever the time.
+  @any_time 9_000_000_000_000_000
+
+  # Moves a leased message to its trunk's waiting set (S-2.12, S-2.4) while the lease is still this server's. KEYS: the
+  # leases, the trunk's waiting set, the set of trunks with any, the message's hash, then its query keys; ARGV: member,
+  # lease, its time (the score), trunk, how long its keys are kept (s).
+  @defer_scheduled """
+  local lease = redis.call('ZSCORE', KEYS[1], ARGV[1])
+  if lease and tonumber(lease) == tonumber(ARGV[2]) then
+    redis.call('ZREM', KEYS[1], ARGV[1])
+    redis.call('ZADD', KEYS[2], ARGV[3], ARGV[1])
+    redis.call('SADD', KEYS[3], ARGV[4])
+    if redis.call('EXISTS', KEYS[4]) == 1 then redis.call('HSET', KEYS[4], 't', ARGV[4]) end
+    for i = 4, #KEYS do redis.call('EXPIRE', KEYS[i], ARGV[5]) end
+    return 1
+  end
+  return 0
+  """
+
+  # Drops a trunk from the trunks with waiting messages once it has none. KEYS: its waiting set, the trunks; ARGV:
+  # the trunk.
+  @forget_waiting """
+  if redis.call('ZCARD', KEYS[1]) == 0 then
+    redis.call('SREM', KEYS[2], ARGV[1])
+    return 1
+  end
+  return 0
+  """
+
+  @doc false
+  # S-2.12, S-2.4: a due message its customer trunk cannot take now (its TPS used, its overflow buffer full or none)
+  # waits in the trunk's own set (`schq:<trunk>`, by its time; `schq` the trunks with any) instead of the shared one,
+  # so a sweep never reads again what the trunk cannot take. Only while this server's lease (`lease_until_ms`) is still
+  # on it (`false` otherwise: another server took it over); its keys are then kept `keep_s`.
+  @spec defer_scheduled(
+          String.t(),
+          integer(),
+          integer(),
+          integer(),
+          integer(),
+          [String.t()],
+          pos_integer()
+        ) :: boolean() | {:error, term()}
+  def defer_scheduled(id, trunk_id, at_ms, lease_until_ms, enterprise_id, ids, keep_s) do
+    keys =
+      ["schl", "schq:#{trunk_id}", "schq", "sch:#{id}"] ++
+        Enum.map(ids, &"sp:#{enterprise_id}:#{&1}")
+
+    args = [id, lease_until_ms, at_ms, Integer.to_string(trunk_id), keep_s]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @defer_scheduled, length(keys) | keys ++ args]
+        :local -> ["SCHDEFER", keys, args]
+      end
+
+    case run(command) do
+      {:ok, n} -> n == 1
+      error -> error
+    end
+  end
+
+  @doc false
+  # The customer trunks with messages waiting for their TPS.
+  @spec waiting_trunks() :: {:ok, [integer()]} | {:error, term()}
+  def waiting_trunks do
+    with {:ok, members} <- run(["SMEMBERS", "schq"]), do: {:ok, Enum.map(members, &int/1)}
+  end
+
+  @doc false
+  # Up to `limit` of a trunk's waiting messages, the earliest first.
+  @spec waiting_scheduled(integer(), pos_integer()) :: {:ok, [String.t()]} | {:error, term()}
+  def waiting_scheduled(trunk_id, limit), do: run(["ZRANGE", "schq:#{trunk_id}", 0, limit - 1])
+
+  @doc false
+  # Takes a trunk's waiting message to release it, leased as `claim_scheduled/4` does: true for the one server that
+  # gets it.
+  @spec claim_waiting(integer(), String.t(), integer()) :: boolean()
+  def claim_waiting(trunk_id, id, lease_until_ms) do
+    keys = ["schq:#{trunk_id}", "schl"]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @move_due, 2 | keys ++ [id, @any_time, lease_until_ms]]
+        :local -> ["ZMOVE" | keys ++ [id, @any_time, lease_until_ms]]
+      end
+
+    match?({:ok, 1}, run(command))
+  end
+
+  @doc false
+  # Forgets a trunk without waiting messages (a message deferred meanwhile keeps it).
+  @spec forget_waiting(integer()) :: :ok | {:error, term()}
+  def forget_waiting(trunk_id) do
+    keys = ["schq:#{trunk_id}", "schq"]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @forget_waiting, 2 | keys ++ [Integer.to_string(trunk_id)]]
+        :local -> ["SCHQFORGET" | keys ++ [Integer.to_string(trunk_id)]]
+      end
+
+    ok(run(command))
+  end
+
   @doc false
   # A scheduled message's data, enterprise and customer message ids.
   @spec scheduled(String.t()) ::
@@ -805,25 +910,42 @@ defmodule Sms.Switch.Pipeline.Store do
     do: run(["GET", "sp:#{enterprise_id}:#{customer_id}"])
 
   @doc false
-  # Takes a scheduled message out before its release (cancel_sm): its data, or `:none` when a server is releasing it
-  # already or it is gone.
+  # Takes a scheduled message out before its release (cancel_sm), also while it waits for its trunk's TPS: its data, or
+  # `:none` when a server is releasing it already or it is gone.
   @spec take_scheduled(String.t()) ::
           {:ok, %{blob: binary(), enterprise_id: integer(), ids: [String.t()]}}
           | :none
           | {:error, term()}
   def take_scheduled(id) do
     case run(["ZREM", "sch", id]) do
-      {:ok, 1} ->
-        with {:ok, held} <- scheduled(id) do
-          _ = finish_scheduled(id, held.enterprise_id, held.ids)
-          {:ok, held}
-        end
+      {:ok, 1} -> taken_scheduled(id)
+      {:ok, 0} -> take_waiting(id)
+      error -> error
+    end
+  end
 
-      {:ok, 0} ->
+  # Its trunk is on its hash once it waits (`defer_scheduled/7`).
+  defp take_waiting(id) do
+    case run(["HGET", "sch:#{id}", "t"]) do
+      {:ok, nil} ->
         :none
+
+      {:ok, trunk} ->
+        case run(["ZREM", "schq:#{trunk}", id]) do
+          {:ok, 1} -> taken_scheduled(id)
+          {:ok, 0} -> :none
+          error -> error
+        end
 
       error ->
         error
+    end
+  end
+
+  defp taken_scheduled(id) do
+    with {:ok, held} <- scheduled(id) do
+      _ = finish_scheduled(id, held.enterprise_id, held.ids)
+      {:ok, held}
     end
   end
 
@@ -1086,6 +1208,34 @@ defmodule Sms.Switch.Pipeline.Store do
 
       _ ->
         0
+    end
+  end
+
+  # `@defer_scheduled`.
+  defp exec([
+         "SCHDEFER",
+         [leases, queue, trunks, hash | _] = keys,
+         [id, lease, at, trunk, keep_s]
+       ]) do
+    if Map.get(lookup(leases) || %{}, id) == lease do
+      exec(["ZREM", leases, id])
+      exec(["ZADD", queue, at, id])
+      exec(["SADD", trunks, trunk])
+      if lookup(hash), do: exec(["HSET", hash, "t", trunk])
+      keys |> Enum.drop(3) |> Enum.each(&exec(["EXPIRE", &1, keep_s]))
+      1
+    else
+      0
+    end
+  end
+
+  # `@forget_waiting`.
+  defp exec(["SCHQFORGET", queue, trunks, trunk]) do
+    if map_size(lookup(queue) || %{}) == 0 do
+      exec(["SREM", trunks, trunk])
+      1
+    else
+      0
     end
   end
 

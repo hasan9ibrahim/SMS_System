@@ -816,10 +816,13 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   # ---------------------------------------------------------------- stored, or refused
 
+  @doc false
   # S-2.2: answered only once the bus has stored the message; if it cannot, 0x14 at once (S-2.3). A message accepted
   # over the trunk's TPS goes to the trunk's own overflow buffer, which releases it at the trunk's TPS (S-2.4,
-  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender.
-  defp store(msg) do
+  # `Sms.Switch.Pipeline.Buffers`); every other one straight to the sender. A scheduled message is stored this way when
+  # its time comes (`Sms.Switch.Pipeline.Scheduled`, S-2.12).
+  @spec store(map()) :: :ok | {:error, term()}
+  def store(msg) do
     data = event_data(msg)
 
     # Queued until the sender takes it: what cancel_sm and query_sm see (S-2.15, D8). Without Redis the message still
