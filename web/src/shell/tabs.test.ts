@@ -2,7 +2,7 @@
 // duplicated, pinned tabs stay left, closing picks a neighbour, split view follows tabs.
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { HOME_TAB_ID, canGoBack, toWorkspace, useTabs } from "./tabs";
+import { HOME_TAB_ID, canGoBack, parentPath, toWorkspace, useTabs } from "./tabs";
 
 const s = () => useTabs.getState();
 const paths = () => s().tabs.map((t) => t.path);
@@ -116,6 +116,23 @@ test("Back: previous page and section in the tab (filters kept); never another t
   assert.equal(s().goBack(second), true);
   assert.equal(s().activeId, second);
   assert.equal(s().tabs.find((t) => t.id === second)!.path, "/enterprises/customer-trunks");
+});
+
+test("Back from a record a list opens in place (?list=12) returns to the list (team trial round 13)", () => {
+  const tab = s().open("/switch/number-lists", { newTab: true });
+  s().setPath(tab, "/switch/number-lists?q=fake");
+  s().setPath(tab, "/switch/number-lists?list=12", { step: true });
+  assert.equal(canGoBack(s(), tab), true);
+  assert.equal(s().goBack(tab), true);
+  assert.equal(s().tabs.find((t) => t.id === tab)!.path, "/switch/number-lists?q=fake", "the list with its filters");
+  // Opened straight into its own tab: Back goes up to the list, in that tab.
+  const own = s().open("/switch/number-lists?list=7", { forceNew: true });
+  assert.equal(s().goBack(own), true);
+  assert.equal(s().tabs.find((t) => t.id === own)!.path, "/switch/number-lists");
+  assert.equal(parentPath("/rates/manager?table=5&view=log&kind=customer"), "/rates/manager?kind=customer");
+  assert.equal(parentPath("/rates/incoming?rn=3"), "/rates/incoming");
+  assert.equal(parentPath("/switch/hlr?view=providers&provider=2"), "/switch/hlr?view=providers");
+  assert.equal(parentPath("/switch/number-lists?q=fake"), null, "a list with filters has no parent");
 });
 
 test("closing the tab in view goes back to the tab used before it (team trial round 12)", () => {

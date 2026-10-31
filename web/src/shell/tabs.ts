@@ -75,7 +75,8 @@ interface TabsState {
   duplicate: (id: string) => void;
   togglePin: (id: string) => void;
   move: (id: string, toIndex: number) => void;
-  setPath: (id: string, path: string) => void;
+  /** `step`: a step for Back even on the same page (a list opening one of its records in place, ?list=12). */
+  setPath: (id: string, path: string, opts?: { step?: boolean }) => void;
   setTitle: (id: string, title: string) => void;
   setDirty: (id: string, dirty: boolean) => void;
   setAlert: (id: string, alert: boolean) => void;
@@ -109,18 +110,32 @@ const BACK_DEPTH = 30;
 const pathname = (p: string) => p.split("?")[0];
 /** A record page's section (?tab=billing): a step for Back, unlike a filter change. */
 const sectionOf = (p: string) => new URLSearchParams(p.split("?")[1] ?? "").get("tab");
-/** Remembers the page a tab leaves; filter changes on the same page are not steps, a new section is. */
-function pushBack(back: TabsState["back"], id: string, from: string, to: string): TabsState["back"] {
-  if (pathname(from) === pathname(to) && sectionOf(from) === sectionOf(to)) return back;
+/** Remembers the page a tab leaves; filter changes on the same page are not steps, a new section is, and so is a
+ * record a list opens in place (`step`). */
+function pushBack(back: TabsState["back"], id: string, from: string, to: string, step = false): TabsState["back"] {
+  if (!step && pathname(from) === pathname(to) && sectionOf(from) === sectionOf(to)) return back;
   const cur = back[id] ?? { paths: [] };
   return { ...back, [id]: { ...cur, paths: [...cur.paths, from].slice(-BACK_DEPTH) } };
 }
 
+/** Query parameters naming a record a list page opens in place, with the parameters that belong to that record (a
+ * rate table's ?view=): ?list=12 on Number lists, ?profile= on the Master Table, ?rn= on Incoming RNs, ?table= on the
+ * Rate Manager, ?provider= on HLR. */
+const RECORD_PARAMS: Record<string, string[]> = { list: [], profile: [], rn: [], table: ["view"], provider: [] };
+
 /**
- * Where Back goes in a tab with no earlier page: a record's list (/enterprises/12 → /enterprises), else nowhere.
- * Back stays in its tab; it never jumps to another tab (team trial round 12).
+ * Where Back goes in a tab with no earlier page: a record's list (/enterprises/12 → /enterprises,
+ * /switch/number-lists?list=12 → /switch/number-lists), else nowhere. Back stays in its tab; it never jumps to another
+ * tab (team trial round 12).
  */
 export function parentPath(path: string): string | null {
+  const query = new URLSearchParams(path.split("?")[1] ?? "");
+  const record = Object.keys(RECORD_PARAMS).find((k) => query.has(k));
+  if (record && pageForPath(pathname(path)!)) {
+    for (const k of [record, ...RECORD_PARAMS[record]!]) query.delete(k);
+    const rest = query.toString();
+    return `${pathname(path)}${rest ? `?${rest}` : ""}`;
+  }
   const parts = pathname(path)!.split("/").filter(Boolean);
   if (parts.length < 2 || !/^(\d+|new)$/.test(parts.at(-1)!)) return null;
   const up = `/${parts.slice(0, -1).join("/")}`;
@@ -353,9 +368,9 @@ export const useTabs = create<TabsState>((set, get) => ({
     set({ tabs: next, groups: pruned(get().groups, next) });
   },
 
-  setPath: (id, path) => {
+  setPath: (id, path, opts = {}) => {
     const from = get().tabs.find((t) => t.id === id)?.path;
-    if (from !== undefined && from !== path) set({ back: pushBack(get().back, id, from, path) });
+    if (from !== undefined && from !== path) set({ back: pushBack(get().back, id, from, path, opts.step) });
     set({
       tabs: get().tabs.map((t) => {
         if (t.id !== id || t.path === path) return t;

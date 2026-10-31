@@ -114,12 +114,12 @@ function SectionMenu({ section, current }: { section: SectionKey; current: boole
                 setShown(false);
                 open(pg.path, e);
               }}
-              // Middle button on press (team trial round 12): closes the dropdown and opens the page in a new tab
-              // behind; on press, so Windows' autoscroll cannot swallow it and leave the dropdown open.
+              // Middle button on press: opens the page in a new tab behind and keeps the dropdown open, so more pages
+              // can be opened from it (team trial round 13); on press, so Windows' autoscroll cannot swallow it.
               onMouseDown={(e) => {
                 if (e.button === 1) {
                   e.preventDefault();
-                  setShown(false);
+                  cancelClose();
                   open(pg.path, e);
                 }
               }}

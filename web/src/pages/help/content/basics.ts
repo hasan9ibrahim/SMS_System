@@ -349,7 +349,7 @@ export const topics: HelpTopic[] = [
             items: [
               "A menu item or link opens in a new tab or in the current tab, depending on your setting in the avatar menu (**Open pages in a new tab** / **in the current tab**). The default is a new tab.",
               "If the page is already open in a tab, that tab is brought to the front instead of opening a second copy. A plain menu link keeps the filters you set on that tab.",
-              "**Ctrl-click** (Cmd-click on a Mac) or **middle-click** always opens a new tab. Middle-click on a menu item opens the tab in the background, without switching to it.",
+              "**Ctrl-click** (Cmd-click on a Mac) or **middle-click** always opens a new tab. Middle-click on a menu item opens the tab in the background, without switching to it, and leaves the menu open so you can open more pages from it.",
               "**+** at the end of the tabs opens **Search or jump to…**; what you pick there opens in a new tab.",
               "The Home tab is pinned: a link clicked on Home always opens a new tab.",
             ],

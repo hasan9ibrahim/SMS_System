@@ -560,7 +560,7 @@ function useOpenRn() {
   return (id: number | null, newTab = false) =>
     navigate(
       id === null ? "/rates/incoming" : `/rates/incoming?rn=${id}`,
-      newTab ? { forceNew: true, title: `RN ${id}` } : {},
+      newTab ? { forceNew: true, title: `RN ${id}` } : { replace: false },
     );
 }
 
