@@ -458,6 +458,26 @@ describe("route rule record (§6.3, §13.8–13.10, §13.27)", { skip }, () => {
     assert.ok(sum <= t.total.messages);
     assert.ok(t.series.length > 0);
   });
+
+  // The day windows come from the 15-minute totals (QA 2026-10-31): the grid's figures, the rule's breakdown, and
+  // no "Trunk 0" among the vendors (not routed is not a vendor).
+  test("7 and 30 day traffic from the totals: grid and breakdown agree; no trunk 0 (§13.27)", async () => {
+    await refreshRouteTraffic();
+    for (const w of ["7d", "30d"]) {
+      const busiest = await query({
+        ...and({ field: "window", op: "eq", value: w }),
+        sort: [{ field: "messages", dir: "desc" }],
+        limit: 1,
+      });
+      const row = busiest.rows[0];
+      const t = await ok("getRouteRuleTraffic", call("GET", `/route-rules/${row.id}/traffic?window=${w}`));
+      if (!t.available) continue;
+      assert.ok(row.messages > 0, w);
+      assert.ok(Math.abs(t.total.messages - row.messages) <= Math.max(5, row.messages * 0.01), w);
+      for (const v of t.byVendor) assert.ok(v.vendorTrunkId >= 1, `${w}: vendor trunk ${v.vendorTrunkId}`);
+      for (const c of t.byCustomer) assert.ok(c.customerTrunkId >= 1, `${w}: customer trunk ${c.customerTrunkId}`);
+    }
+  });
 });
 
 describe("rule Test and Route Simulator", { skip }, () => {
