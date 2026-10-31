@@ -4,7 +4,7 @@
 //   useUndoShortcut(scope) Ctrl+Z on the page undoes the user's last change
 //   notifySaved(change)    the 10-second "Undo" toast right after a save
 //   <HistoryDrawer>        a record's or page's History list with Undo per change
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Change, ChangeField, FilterGroup, ListQuery, UndoConflict } from "@sms/contract";
 import { api, ApiError, unwrap } from "../api/client";
@@ -380,8 +380,20 @@ export function HistoryList({ scope }: { scope: HistoryScope }) {
 
 /** Side drawer with the History list of a record or page scope. */
 export function HistoryDrawer({ scope, title, onClose }: { scope: HistoryScope; title: string; onClose: () => void }) {
+  const backdrop = useRef<HTMLDivElement>(null);
+  // Escape closes it like a dialog (functional QA round 13): only the drawer of the tab in view (a hidden tab's has
+  // no layout box), and not while a dialog opened from it (an undo question) is on top.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !backdrop.current?.getClientRects().length) return;
+      if ([...document.querySelectorAll(".modal-backdrop")].some((m) => m.getClientRects().length)) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <div className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div ref={backdrop} className="drawer-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside className="drawer" role="dialog" aria-label={`History: ${title}`}>
         <div className="drawer-head">
           <Icon name="history" />
