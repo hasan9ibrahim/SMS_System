@@ -749,6 +749,13 @@ What the Phoenix backend must match so the screens need no change:
 
 ## Open questions
 
+- **SMS to voice in the switch (§8, asked 2026-10-31; the product owner asked for it to be built).** The spec lists the rule
+  fields (Sender ID / ANI, Receiver ID / DNID, Prefix, a .wav recording, Repeat 1–5, Destination) but not how a call is
+  made. Asked: (1) how calls are placed: a voice provider's HTTP API set up like the HLR providers (proposed) or SIP to
+  a voice switch with a media server for text-to-speech; (2) what the call says: the recording, then the text or only the
+  code read out, repeated Repeat times, and in which language; (3) receipt and billing: DELIVRD when answered, UNDELIV
+  after one retry, the customer charged the SMS rate and the provider's charge recorded as cost (proposed); (4) always a
+  call instead of the SMS for a matching message, as the spec reads, or only when the SMS fails.
 - **EDR de-duplication on redelivery (QA round 13, proposal).** A bus batch redelivered after a slow insert writes its
   EDRs twice. Proposal: keep the bus `row_key` (edr_id + attempt, or edr_id + receipt kind + sequence) as a column in
   `edr` and `edr_receipt` with a bloom-filter index; the writer drops keys already stored for the same days and sends
