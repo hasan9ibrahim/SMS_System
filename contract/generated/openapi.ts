@@ -18860,6 +18860,7 @@ export type components = {
       /** @description Buy rate for the destination in the platform currency. */
       cost: number | null;
       margin: number | null;
+      /** @description Its share or role, or why it was passed over: margin below the rule's, its rate for the destination blocked, blocked by its vendor translation rule, or "cannot take the message: …" when it would get the message in a form its capability filter refuses - a source or destination TON / NPI, a data coding the text fits no other way, multipart it does not support, longer than its Max Msg Len (§5.5, QA 2026-10-31, as the switch routes). A rule with Deny Multipart reports a failed "Multipart" gate check for a message of more than one part. */
       note: string | null;
     };
     RouteDecision: {

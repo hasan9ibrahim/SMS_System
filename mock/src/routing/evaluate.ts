@@ -2,6 +2,9 @@
 // §13.24, §13.27). Pure: the caller loads the rule, the message context and vendor costs.
 // The switch evaluates the same way: conditions (all or any must match), then the vendor:
 // number whitelist first, then the warm-up threshold, then the normal split / LCR / QBR.
+// Deny Multipart is a gate (a multipart message never matches the rule, whatever its match mode), and a vendor that
+// cannot take the message as it would get it is passed over (capability filter, routing/coding.ts), as the switch
+// does (sms_switch rules/route.ex, pipeline/router.ex).
 import { rankLcr, splitPick, type LcrProfileCore } from "../lcr/rank.js";
 import type { RouteCandidate, RouteCheck, RouteDecision, RouteRuleDetail, ValueMatch } from "@sms/contract";
 import { compilePattern } from "./pattern.js";
@@ -47,6 +50,13 @@ export interface MessageContext {
    * (decided 2026-10-30): skipped the same way.
    */
   rateBlocked?: ReadonlySet<number>;
+  /**
+   * Vendor trunks that cannot take the message as they would get it after their egress translation (§5.5 capability
+   * filter: TON / NPI, data coding, multipart, Max Msg Len; S-3.9, S-4.4), with why: skipped the same way.
+   */
+  incapable?: ReadonlyMap<number, string>;
+  /** SMS parts of the message as the customer sent it (Deny Multipart, §6.3); 1 when not given. */
+  parts?: number;
 }
 
 /**
@@ -141,6 +151,8 @@ type Rule = Pick<
   | "vendorCategoryMode"
   | "vendorCategoryIds"
 > & {
+  /** Deny Multipart (§6.3, S-3.9); older callers leave it out. */
+  denyMultipart?: boolean;
   /** Sender ID / receiver value rows (team trial round 8); older callers leave them out. */
   senderValues?: ValueMatch[];
   receiverValues?: ValueMatch[];
@@ -254,6 +266,7 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
   if (rule.status !== "active") return false;
   const t = liveWindow(rule);
   if (!(t[0] <= m.now && m.now < t[1])) return false;
+  if (!multipartOk(rule, m)) return false;
   const all = rule.matchMode === "all";
   let set = false;
   let ok: boolean;
@@ -337,6 +350,9 @@ export function quickMatch(rule: Rule, m: MessageContext): boolean {
   return all || !set;
 }
 
+/** Deny Multipart (§6.3, S-3.9): a message of more than one part never matches the rule, whatever its match mode. */
+const multipartOk = (rule: Rule, m: MessageContext) => !(rule.denyMultipart && (m.parts ?? 1) > 1);
+
 /** Sorted least-cost / quality pools per vendor options map and rule (they don't depend on the message). */
 const pools = new WeakMap<Map<number, VendorOption>, WeakMap<object, VendorOption[]>>();
 
@@ -364,6 +380,10 @@ export function conditionChecks(rule: Rule, m: MessageContext): (RouteCheck & { 
   add("Status", true, rule.status === "active", rule.status === "active" ? "active" : "the rule is off", true);
   const live = Date.parse(rule.startsAt) <= m.now && m.now < Date.parse(rule.stopsAt);
   add("Time", true, live, live ? "within start and stop time" : "outside the rule's start and stop time", true);
+  if (rule.denyMultipart) {
+    const ok = multipartOk(rule, m);
+    add("Multipart", true, ok, ok ? "one part" : `${m.parts} parts: multipart messages denied`, true);
+  }
 
   if (rule.categoryMode !== "all") {
     const hit = m.categoryId !== null && rule.categoryIds.includes(m.categoryId);
@@ -549,13 +569,16 @@ export function decide(rule: Rule, m: MessageContext, options: Map<number, Vendo
   const marginText = `${rule.margin}${pct ? " %" : ""}`;
   const rateBlocked = (c: RouteCandidate) =>
     !!options.get(c.vendorTrunkId)?.blocked || !!m.rateBlocked?.has(c.vendorTrunkId);
-  const usable = (c: RouteCandidate) => !m.egressBlocked?.has(c.vendorTrunkId) && !rateBlocked(c) && marginOk(c);
+  const usable = (c: RouteCandidate) =>
+    !m.egressBlocked?.has(c.vendorTrunkId) && !rateBlocked(c) && !m.incapable?.has(c.vendorTrunkId) && marginOk(c);
   const skipWhy = (c: RouteCandidate) =>
     m.egressBlocked?.has(c.vendorTrunkId)
       ? "blocked by its vendor translation rule"
       : rateBlocked(c)
         ? "its rate for this destination is blocked"
-        : `margin below ${marginText}`;
+        : m.incapable?.has(c.vendorTrunkId)
+          ? `cannot take the message: ${m.incapable.get(c.vendorTrunkId)}`
+          : `margin below ${marginText}`;
 
   // 1. Number whitelist pinned to a vendor (§13.27).
   for (const w of rule.whitelists) {
