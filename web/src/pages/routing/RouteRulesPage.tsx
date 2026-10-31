@@ -28,7 +28,13 @@ import { qualityClass, qualityTone } from "../../ui/quality";
 import { formatPct } from "../rates/format";
 import { AddCondition, ConditionsSection, DraftRuleContext, RuleTitle, useRuleSaver as useSaver } from "./Conditions";
 import { BulkDialog, DEFAULT_PRIORITY, RuleGeneralForm, VendorSplitEditor, problemText } from "./dialogs";
-import { InlineCondition, NewDraftContext, PendingCategoryContext } from "./ConditionEditor";
+import {
+  InlineCondition,
+  NewDraftContext,
+  PendingCategoryContext,
+  PendingDestinationContext,
+  type PendingDestination,
+} from "./ConditionEditor";
 import { codesText, useDestinationTree } from "../rates/DestinationTree";
 import { compact, conditionChips, CONFIG_KEYS, routeTypeOf, toInput, type ConditionKey } from "./ruleModel";
 import { SimulateDialog, TestSection } from "./TestPanel";
@@ -129,6 +135,22 @@ function ConfigurationSection({
         : null,
     [expanded, r, pendingCat],
   );
+  // And the vendors' Cost follows the destination picked there (functional QA round 13).
+  const [pendingDest, setPendingDest] = useState<PendingDestination | null>(null);
+  const destCtx = useMemo(
+    () =>
+      expanded && r
+        ? {
+            dest: pendingDest ?? {
+              mccmncMode: r.mccmncMode,
+              mccmncs: r.mccmncs ?? [],
+              mccmncPattern: r.mccmncPattern ?? null,
+            },
+            set: (d: PendingDestination) => setPendingDest((p) => (JSON.stringify(p) === JSON.stringify(d) ? p : d)),
+          }
+        : null,
+    [expanded, r, pendingDest],
+  );
   if (rule.isError) return <p className="error-text">{(rule.error as Error).message}</p>;
   if (!r) return <p className="muted">Loading…</p>;
   const locked = !!r.archived;
@@ -140,6 +162,7 @@ function ConfigurationSection({
   const LABEL: Record<string, string> = { category: "Category", trunk: "Customer trunks", destination: "Destination" };
   return (
     <PendingCategoryContext.Provider value={catCtx}>
+    <PendingDestinationContext.Provider value={destCtx}>
     <div className={`cfg${expanded ? " cfg-expanded" : ""}`}>
       {CONFIG_KEYS.map((k) => (
         <section key={k} className={`cfg-block cfg-${k}`}>
@@ -187,6 +210,7 @@ function ConfigurationSection({
         )}
       </section>
     </div>
+    </PendingDestinationContext.Provider>
     </PendingCategoryContext.Provider>
   );
 }
