@@ -208,6 +208,25 @@ defmodule Sms.Switch.Rules.Translation do
     %{before: before, after: state, blocked: blocked, steps: Enum.reverse(steps)}
   end
 
+  @ton_npi [:sender_ton, :sender_npi, :dest_ton, :dest_npi]
+
+  @doc """
+  The TON / NPI fields (`:sender_ton`, `:sender_npi`, `:dest_ton`, `:dest_npi`) the rules that applied in a run set
+  (matched and did not block), whatever value they set: they win over a trunk's automatic TON / NPI (S-4.7).
+  """
+  @spec ton_npi_set([Rule.t() | {Rule.t(), boolean() | nil}], result()) :: [atom()]
+  def ton_npi_set(rules, %{steps: steps}) do
+    applied = for s <- steps, s.matched, not s.blocked, into: MapSet.new(), do: s.rule_id
+
+    for entry <- rules,
+        {rule, _} = entry(entry),
+        rule.id in applied,
+        field <- @ton_npi,
+        Map.fetch!(rule, field) != nil,
+        uniq: true,
+        do: field
+  end
+
   @doc """
   Whether a rule only maps receipts: a DLR map and no other action (team trial round 12: such a rule with no
   conditions, set to Stop, matched every message and left every rule after it unreached).

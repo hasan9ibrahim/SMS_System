@@ -63,6 +63,11 @@ const PERIOD = [
   { value: "billing_cycle", label: "Per billing cycle" },
 ];
 const TON = [0, 1, 2, 3, 4, 5, 6].map((v) => ({ value: v, label: String(v) }));
+// S-4.7: TON / NPI as the message has them, or set from the addresses after the trunk's translation.
+const TON_NPI_MODES = [
+  { value: "as_sent", label: "As sent" },
+  { value: "auto", label: "Auto (fix after translation)" },
+];
 const NPI = [0, 1, 3, 4, 6, 8, 9, 10, 14, 18].map((v) => ({ value: v, label: String(v) }));
 const CODINGS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 13, 14].map((v) => ({ value: v, label: String(v) }));
 const DLR_STATS = ["DELIVRD", "EXPIRED", "UNDELIV", "REJECTD", "UNKNOWN"].map((v) => ({ value: v, label: v }));
@@ -111,6 +116,7 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     tps: 50,
     overflowBuffer: 10_000,
     billingTimezone: null,
+    tonNpiMode: "as_sent" as const,
   };
   if (kind === "customer")
     return {
@@ -180,6 +186,8 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     allowedDstTon: null,
     allowedSrcNpi: null,
     allowedDstNpi: null,
+    // A sender a handset cannot show is not sent to the vendor unless switched off (S-2.10, S-4.7).
+    refuseInvalidSenders: true,
     maxMsgLen: null,
     supportMultipart: true,
     multipartFormat: "udh8",
@@ -662,6 +670,14 @@ export function CustomerTrunkFields({
                     { value: 3, label: "3 – Latin-1" },
                   ]}
                 />
+                <SelectField
+                  form={form}
+                  path="tonNpiMode"
+                  label="TON / NPI"
+                  required
+                  options={TON_NPI_MODES}
+                  hint="Auto sets them from the sender and receiver after this trunk's translation rules"
+                />
                 <FormField
                   label="Express vendor trunk"
                   hint="Bypasses routing for every message"
@@ -934,6 +950,20 @@ export function VendorTrunkFields({
           <MultiCheck form={form} path="allowedDstTon" any label="Allowed destination TON" options={TON} />
           <MultiCheck form={form} path="allowedSrcNpi" any label="Allowed source NPI" options={NPI} />
           <MultiCheck form={form} path="allowedDstNpi" any label="Allowed destination NPI" options={NPI} />
+          <SelectField
+            form={form}
+            path="tonNpiMode"
+            label="TON / NPI"
+            required
+            options={TON_NPI_MODES}
+            hint="Auto sets them from the addresses after this trunk's translation rules, before the allowed lists are checked"
+          />
+          <CheckField
+            form={form}
+            path="refuseInvalidSenders"
+            label="Refuse invalid senders"
+            hint="Text senders over 11 characters or with non-Latin characters, numbers over 20 digits"
+          />
           <NumberField
             form={form}
             path="maxMsgLen"

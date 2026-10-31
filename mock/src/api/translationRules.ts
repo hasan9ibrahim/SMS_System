@@ -21,6 +21,7 @@ import { withDb } from "../db.js";
 import { translationUsedBySql } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
 import { compile, runRules, type EngineContext, type EngineRule } from "../routing/translate.js";
+import { pinnedBy, type TonNpiField } from "../routing/tonNpi.js";
 import { archiveGate } from "./enterprises.js";
 import { notFound, setArchived } from "./masterData.js";
 import { dependencies, iso, recordChange, same, type DiffEntry, type FieldError } from "./records.js";
@@ -675,6 +676,19 @@ export async function runTrunkRules(
   id: number,
   message: TrunkRulesTestInput["message"],
 ): Promise<TrunkRulesTestResult | null> {
+  return (await runTrunkTranslation(pool, kind, id, message))?.result ?? null;
+}
+
+/**
+ * The trunk's translation (runTrunkRules), with the TON / NPI fields its rules set: they win over the trunk's auto
+ * TON / NPI (S-4.7).
+ */
+export async function runTrunkTranslation(
+  pool: pg.Pool,
+  kind: TrunkKind,
+  id: number,
+  message: TrunkRulesTestInput["message"],
+): Promise<{ result: TrunkRulesTestResult; pinned: Set<TonNpiField> } | null> {
   const order = await trunkRuleOrder(pool, kind, "translation", id);
   if (!order) return null;
   const running = order.filter((r) => r.enabled && r.ruleActive);
@@ -715,7 +729,13 @@ export async function runTrunkRules(
       }
     }
   }
-  return { ...result, hlr };
+  return {
+    result: { ...result, hlr },
+    pinned: pinnedBy(
+      list.map((x) => x.rule),
+      result.steps,
+    ),
+  };
 }
 
 export function testTrunkRules(kind: TrunkKind) {

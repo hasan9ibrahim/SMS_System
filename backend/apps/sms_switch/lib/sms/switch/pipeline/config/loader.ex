@@ -160,7 +160,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       SELECT t.id, t.name, t.enterprise_id, e.business_company_id, trim(bc.base_currency) AS base_currency,
              t.product_category_id, t.billing_type, t.status = 'active' AND e.status = 'active' AS active,
              e.account_manager_id, t.default_coding, t.dlr_session_affinity, t.dlr_hold_hours, t.delayed_submit,
-             t.loop_detection, t.reassembly_timeout_s, t.duplicate_window_s, t.allow_empty_messages,
+             t.loop_detection, t.reassembly_timeout_s, t.duplicate_window_s, t.allow_empty_messages, t.ton_npi_mode,
              coalesce((SELECT array_agg(x.rate_table_id ORDER BY x.position, x.rate_table_id)
                          FROM customer_trunk_rate_tables x JOIN rate_tables rt ON rt.id = x.rate_table_id
                         WHERE x.customer_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
@@ -178,6 +178,9 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
              t.multipart_format, coalesce(t.overflow_buffer, 0) AS overflow_buffer,
              -- Capability filter (§5.5, S-4.4): NULL = any.
              t.allowed_data_codings, t.allowed_src_ton, t.allowed_src_npi, t.allowed_dst_ton, t.allowed_dst_npi,
+             -- TON / NPI as sent or fixed after the egress translation; a sender a handset cannot show refused or
+             -- taken (S-4.7, migration 101).
+             t.ton_npi_mode, t.refuse_invalid_senders,
              coalesce((SELECT array_agg(rt.id ORDER BY rt.id) FROM rate_tables rt
                         WHERE rt.vendor_trunk_id = t.id AND rt.deleted_at IS NULL), '{}') AS rate_table_ids
         FROM vendor_trunks t JOIN enterprises e ON e.id = t.enterprise_id
@@ -325,12 +328,18 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
   end
 
   @affinities %{"strict" => :strict, "same_ip" => :same_ip, "same_trunk" => :same_trunk}
+  # S-4.7: TON / NPI as the message has them, or fixed from the address after the trunk's translation.
+  @ton_npi_modes %{"as_sent" => :as_sent, "auto" => :auto}
 
   defp customer_trunks(rows) do
     for t <- maps(rows), into: %{} do
-      {t.id, %{t | dlr_session_affinity: enum!(t.dlr_session_affinity, @affinities)}}
+      {t.id,
+       %{t | dlr_session_affinity: enum!(t.dlr_session_affinity, @affinities)}
+       |> Map.put(:ton_npi_mode, ton_npi_mode(t))}
     end
   end
+
+  defp ton_npi_mode(t), do: enum!(Map.get(t, :ton_npi_mode) || "as_sent", @ton_npi_modes)
 
   @multipart_formats %{"udh8" => :udh8, "udh16" => :udh16, "sar" => :sar, "payload" => :payload}
   @capabilities [
@@ -347,6 +356,7 @@ defmodule Sms.Switch.Pipeline.Config.Loader do
       {t.id,
        t
        |> Map.put(:multipart_format, enum!(t.multipart_format, @multipart_formats))
+       |> Map.put(:ton_npi_mode, ton_npi_mode(t))
        |> Map.put(:dlr_timeout_mccmncs, MapSet.new(Map.get(t, :dlr_timeout_mccmncs) || []))
        # A service trunk (team trial round 12) sends nothing: the client gets its receipt from the switch.
        |> Map.put(:service, Map.get(t, :protocol) == "service")

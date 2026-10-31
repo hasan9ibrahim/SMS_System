@@ -308,8 +308,17 @@ describe("migration center", { skip }, () => {
           fileName: "vt.csv",
           mappingId: ref("vendor_trunks"),
           content: csv([
-            ["Vendor Trunk ID", "Enterprise Name", "Vendor Trunk Name", "Host", "TPS", "Product Category"],
-            ["V1", ent, `LEG_V_${run}`, "smsc.example.net", "50", "DIRECT"],
+            [
+              "Vendor Trunk ID",
+              "Enterprise Name",
+              "Vendor Trunk Name",
+              "Host",
+              "TPS",
+              "Product Category",
+              "TON/NPI",
+              "Refuse invalid senders",
+            ],
+            ["V1", ent, `LEG_V_${run}`, "smsc.example.net", "50", "DIRECT", "Automatic", "no"],
           ]),
         },
         {
@@ -452,6 +461,14 @@ describe("migration center", { skip }, () => {
       `LEG_C_${run}`,
     ]);
     assert.deepEqual(ips[0].ips, ["192.0.2.10/31", "192.0.2.12/31", "198.51.100.0/24"]);
+    // TON / NPI (S-4.7): "Automatic" in the file is auto; a file without the column leaves a new trunk as sent.
+    const { rows: modes } = await db().query(
+      `SELECT (SELECT ton_npi_mode FROM customer_trunks WHERE name = $1) AS c,
+              (SELECT ton_npi_mode FROM vendor_trunks WHERE name = $2) AS v,
+              (SELECT refuse_invalid_senders FROM vendor_trunks WHERE name = $2) AS refuse`,
+      [`LEG_C_${run}`, `LEG_V_${run}`],
+    );
+    assert.deepEqual([modes[0].c, modes[0].v, modes[0].refuse], ["as_sent", "auto", false]);
     assert.equal(new Date(lines[0].valid_to).toISOString(), "2026-06-01T00:00:00.000Z");
     const { rows: refs } = await db().query("SELECT entity, external_id FROM migration_refs WHERE import_id = $1", [
       dry.id,
