@@ -118,6 +118,28 @@ describe("route rules grid (§15.4)", { skip }, () => {
     assert.equal(bad.statusCode, 200, "an unknown window falls back to 24h");
   });
 
+  test("DLR target filters and sorts agree with the target each row shows, at seeded volume (§13.8)", async () => {
+    type R = { id: number; dlrTarget: number | null };
+    const all = (await query({ limit: 4000, withTotal: true })) as { rows: R[]; total: number };
+    const withTarget = all.rows.filter((r) => r.dlrTarget !== null);
+    const set = (await query({ ...and({ field: "dlrTarget", op: "not_empty" }), limit: 4000 })) as { rows: R[]; total: number };
+    assert.equal(set.total, withTarget.length);
+    assert.deepEqual(new Set(set.rows.map((r) => r.id)), new Set(withTarget.map((r) => r.id)));
+    const high = (await query({ ...and({ field: "dlrTarget", op: "gte", value: 80 }), limit: 4000 })) as { rows: R[] };
+    assert.equal(high.rows.length, withTarget.filter((r) => r.dlrTarget! >= 80).length);
+    for (const dir of ["asc", "desc"] as const) {
+      const sorted = ((await query({ sort: [{ field: "dlrTarget", dir }], limit: 200 })) as { rows: R[] }).rows;
+      const values = sorted.map((r) => r.dlrTarget).filter((v): v is number => v !== null);
+      assert.deepEqual(values, [...values].sort((a, b) => (dir === "asc" ? a - b : b - a)), dir);
+    }
+    // A page of the grid: was 4–6 s with a subquery per rule, one aggregate pass now (QA 2026-10-31). Generous for a
+    // shared database.
+    const t0 = Date.now();
+    await query({ ...and({ field: "dlrTarget", op: "not_empty" }), sort: [{ field: "dlrTarget", dir: "desc" }], limit: 100 });
+    const ms = Date.now() - t0;
+    assert.ok(ms < 2000, `filter and sort on the DLR target took ${ms} ms`);
+  });
+
   test("the category filter lists categories from the database", async () => {
     const fields = await ok("getListFields", call("GET", "/meta/lists/route_rules/fields"));
     const category = fields.fields.find((f: { field: string }) => f.field === "category");

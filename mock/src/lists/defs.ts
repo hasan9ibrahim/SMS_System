@@ -1026,6 +1026,22 @@ const dlrTargetSql = `CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r
     SELECT min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) FROM unnest(r.mccmncs) AS c(code)
       LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)) END) END`;
 
+/**
+ * The same target for every rule in one pass (QA 2026-10-31, §13.8): filtering or sorting on the per-row subquery
+ * above ran it for every rule, 2–6 s at the seeded volume. Joined only when the list filters or sorts on the target;
+ * the page's rows keep the subquery.
+ */
+const DESTINATION_TARGETS = `LEFT JOIN (
+    SELECT x.id, min(COALESCE(dm.dlr_target_pct, dc.dlr_target_pct)) AS pct
+      FROM route_rules x CROSS JOIN LATERAL unnest(x.mccmncs) AS c(code)
+      LEFT JOIN mccmnc dm ON dm.mccmnc = c.code LEFT JOIN mccmnc dc ON dc.mccmnc = left(c.code, 3)
+     WHERE x.mccmnc_mode = 'inclusive' AND x.dlr_target_pct IS NULL AND x.route_type <> 'block'
+     GROUP BY x.id) dt ON dt.id = r.id`;
+const dlrTargetJoinedSql = "CASE WHEN r.route_type = 'block' THEN NULL ELSE COALESCE(r.dlr_target_pct, dt.pct) END";
+const usesDlrTarget = (query: ListQuery) =>
+  /"field":"dlr(Target|BelowTarget)"/.test(JSON.stringify(query.filter ?? {})) ||
+  (query.sort ?? []).some((s) => s.field === "dlrTarget" || s.field === "dlrBelowTarget");
+
 const ruleTrunkName = vis(trunkMask("t", "Customer trunk"));
 const ruleVendorName = vis(trunkMask("vt", "Vendor trunk"));
 /** A rule is own when it names only own clients' trunks. */
@@ -1089,7 +1105,7 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
   // The window is one of five fixed values (checked in trafficWindow), so it is inlined.
   from: (query) => `route_rules r
     LEFT JOIN route_rule_traffic tr ON tr.route_rule_id = r.id AND tr.time_window = '${trafficWindow(query)}'
-    LEFT JOIN users ub ON ub.id = r.updated_by_id`,
+    LEFT JOIN users ub ON ub.id = r.updated_by_id${usesDlrTarget(query) ? `\n    ${DESTINATION_TARGETS}` : ""}`,
   baseWhere: "r.deleted_at IS NULL",
   archivedField: "archived",
   columns: {
@@ -1165,8 +1181,8 @@ export const routeRuleList: ListDef<RouteRuleRow> = {
     messages: visCol(hide("traffic", "tr.messages", ownedRule)),
     asr: { sql: "tr.asr" },
     dlr: { sql: "tr.dlr" },
-    dlrTarget: { sql: dlrTargetSql },
-    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetSql})` },
+    dlrTarget: { sql: dlrTargetJoinedSql },
+    dlrBelowTarget: { sql: `(tr.dlr < ${dlrTargetJoinedSql})` },
     margin: visCol(hide("margin", "tr.margin", ownedRule)),
     status: { sql: "r.status" },
     window: { sql: "NULL", where: () => "TRUE" },
