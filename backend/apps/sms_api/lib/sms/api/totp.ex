@@ -1,33 +1,43 @@
 defmodule Sms.Api.Totp do
   @moduledoc """
   Authenticator codes (§13.28): RFC 6238 TOTP with SHA-1, 6 digits and 30-second steps, the secret in base32 as the
-  mock stores it (mock/src/admin/passwords.ts). The current step and one either side are accepted.
+  mock stores it (mock/src/admin/passwords.ts). The current step and one either side are accepted. A code works once:
+  `step/3` names the step a code belongs to, and the caller keeps the user's last accepted step (users.totp_last_step,
+  migration 102) so a code whose step is not later is refused (Sms.Api.SignIn).
   """
   import Bitwise
 
-  @step 30
+  @period 30
 
   @doc "Whether `code` is the code of `secret` at `now` (unix seconds), or one step before or after."
-  @spec valid?(String.t() | nil, String.t(), integer()) :: boolean()
-  def valid?(secret, code, now \\ System.os_time(:second))
+  @spec valid?(String.t() | nil, String.t() | nil, integer()) :: boolean()
+  def valid?(secret, code, now \\ System.os_time(:second)), do: step(secret, code, now) != :error
 
-  def valid?(secret, code, now) when is_binary(secret) and is_binary(code) do
-    case decode32(secret) do
-      {:ok, key} ->
-        Enum.any?([-1, 0, 1], &:crypto.hash_equals(code(key, div(now, @step) + &1), pad(code)))
+  @doc """
+  The 30-second step (RFC 6238 counter) whose code `code` is: the step of `now` (unix seconds) or one either side, the
+  latest when several match; `:error` when none does.
+  """
+  @spec step(String.t() | nil, String.t() | nil, integer()) :: {:ok, integer()} | :error
+  def step(secret, code, now \\ System.os_time(:second))
 
-      :error ->
-        false
+  def step(secret, code, now) when is_binary(secret) and is_binary(code) do
+    with {:ok, key} <- decode32(secret) do
+      current = div(now, @period)
+      want = pad(code)
+      Enum.find_value([current + 1, current, current - 1], :error, &matching(key, &1, want))
     end
   end
 
-  def valid?(_secret, _code, _now), do: false
+  def step(_secret, _code, _now), do: :error
+
+  defp matching(key, step, want),
+    do: if(:crypto.hash_equals(code(key, step), want), do: {:ok, step})
 
   @doc "The code of `secret` at `now` (unix seconds)."
   @spec code_at(String.t(), integer()) :: String.t()
   def code_at(secret, now \\ System.os_time(:second)) do
     {:ok, key} = decode32(secret)
-    code(key, div(now, @step))
+    code(key, div(now, @period))
   end
 
   defp code(key, counter) do

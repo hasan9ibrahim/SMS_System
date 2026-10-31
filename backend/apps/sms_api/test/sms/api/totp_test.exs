@@ -30,5 +30,15 @@ defmodule Sms.Api.TotpTest do
     refute Totp.valid?(@secret, "12345")
     refute Totp.valid?(@secret, "1234567")
     refute Totp.valid?(@secret, nil)
+    assert Totp.step(@secret, nil) == :error
+  end
+
+  test "the step a code belongs to, which the sign-in remembers so the code works once (§13.28)" do
+    now = 1_700_000_015
+    step = div(now, 30)
+    assert Totp.step(@secret, Totp.code_at(@secret, now), now) == {:ok, step}
+    assert Totp.step(@secret, Totp.code_at(@secret, now - 30), now) == {:ok, step - 1}
+    assert Totp.step(@secret, Totp.code_at(@secret, now + 30), now) == {:ok, step + 1}
+    assert Totp.step(@secret, Totp.code_at(@secret, now + 60), now) == :error
   end
 end
