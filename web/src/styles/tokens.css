@@ -1,7 +1,8 @@
-/* Colour tokens. Light is the default; dark applies with [data-theme="dark"] on <html>. Use these variables
-   everywhere, never raw colours. Design refresh (team trial round 2, decision 2026-10-22): a white header and
-   white cards on a soft grey page, a brighter accent and roomier rows, replacing the §15.2 palette. Colour still
-   carries meaning only: green good, amber warning, red problem. */
+/* Design tokens, as spec §15.2 / §15.3 list them. Light is the default; dark and blue-grey apply with
+   [data-theme="dark"] / [data-theme="bluegrey"] on <html>. Use these variables everywhere, never raw colours.
+   Design refresh (team trial round 2, decision 2026-10-22): a white header and white cards on a soft grey page, a
+   brighter accent and roomier rows. Colour carries meaning only: green good, amber warning, red problem; categories
+   are neutral (§15.3). */
 :root {
   --color-page-bg: #f6f7f9;
   --color-panel: #ffffff;
@@ -21,9 +22,9 @@
   --color-error-fill: var(--color-error);
   /* Dark surfaces on a light page: toasts, the bulk bar, terminals. */
   --color-menu-bar: #1f2937;
-  /* The two-row header (logo, search and status; the main menu). */
+  /* The top bar (logo, main menu, search and status in one row, team trial round 3). */
   --color-header: #ffffff;
-  /* Selected pill (sibling page links): dark in light mode, light in dark mode. */
+  /* Strong selection (selected pill or segment): dark in light mode, light in dark mode. */
   --color-strong: #18202f;
   --color-on-strong: #ffffff;
   /* Table and card headers (team trial round 3): a light shade of the accent pill fill breaks up the white. */
@@ -56,9 +57,10 @@
   --leading-xl: 1.2727;
   /* Inputs on phones stay at 16 px so mobile Safari does not zoom in on focus. */
   --text-touch-input: 16px;
+  /* Corners (§15.3): buttons and inputs 8-10 px, cards 14 px (design refresh, decision 2026-10-22). */
   --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
   /* Names some styles use (phone drawer, portal, incident facts) for the tokens above (design QA round 13). */
   --radius: var(--radius-md);
   --color-bg: var(--color-page-bg);
@@ -77,8 +79,9 @@
   --tg-cyan: #007b83;
   --tg-orange: #fa7b17;
 
-  --menu-bar-height: 96px;
-  --tab-strip-height: 40px;
+  /* Window zones (§15.1). */
+  --menu-bar-height: 50px;
+  --tab-strip-height: 36px;
   --grid-row-height: 42px;
   --status-bar-height: 28px;
 

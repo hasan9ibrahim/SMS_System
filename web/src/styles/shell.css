@@ -2212,7 +2212,7 @@ select.chip-select {
   width: 36px;
 }
 .tabstrip {
-  height: 36px;
+  height: var(--tab-strip-height);
 }
 .tab {
   margin-top: 4px;
@@ -2286,7 +2286,7 @@ select.chip-select {
 
 /* ---------- one top bar (team trial round 3): logo, main menu, search and status in a single row ---------- */
 .topbar-main {
-  height: 50px;
+  height: var(--menu-bar-height);
   gap: 18px;
   padding: 0 18px;
   border-bottom: 0;
