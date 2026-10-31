@@ -61,6 +61,19 @@ export function unsafeInput(value: unknown, path: string): { path: string; messa
   return null;
 }
 
+/**
+ * A record's name, alias or username of spaces only: every service trims them, and saved the record nameless
+ * (QA 2026-10-31). Empty text is the schema's to refuse (minLength); spaces only pass it.
+ */
+export function blankName(body: unknown): { path: string; message: string } | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  for (const key of ["name", "alias", "username"]) {
+    const v = (body as Record<string, unknown>)[key];
+    if (typeof v === "string" && v.length > 0 && v.trim() === "") return { path: `/${key}`, message: "required" };
+  }
+  return null;
+}
+
 const clearRouteCaches = () => {
   clearRoutingCostCache();
   clearRouteMaps();
@@ -152,7 +165,7 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
             }
             // A missing or null body is an empty one, for the handler too (QA 2026-10-31: it got null and failed).
             if (op.validateBody && request.body == null) request.body = {};
-            const unsafe = unsafeInput(request.body, "") ?? unsafeInput(query, "");
+            const unsafe = unsafeInput(request.body, "") ?? unsafeInput(query, "") ?? blankName(request.body);
             if (unsafe) return sendProblem(reply, 400, "Check the highlighted fields", { errors: [unsafe] });
             if (op.validateBody && !op.validateBody(request.body)) {
               return sendProblem(reply, 400, "Request body does not match the contract", {

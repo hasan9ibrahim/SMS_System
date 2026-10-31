@@ -3,7 +3,7 @@
 // body, a regular expression PostgreSQL refuses. One check per class.
 import { test, after, describe } from "node:test";
 import assert from "node:assert/strict";
-import { buildServer, API_PREFIX, unsafeInput } from "../src/server.js";
+import { buildServer, API_PREFIX, blankName, unsafeInput } from "../src/server.js";
 import { closeDb, db, dbReady } from "../src/db.js";
 import { checkListQuery, isIsoTime } from "../src/lists/validate.js";
 import { listFields } from "../src/lists/fields.js";
@@ -46,7 +46,28 @@ test("the checks themselves", () => {
   assert.equal(searchPattern("ab\\"), "%ab\\\\%");
 });
 
+test("names of spaces only are refused; other text is not", () => {
+  assert.deepEqual(blankName({ name: "   " }), { path: "/name", message: "required" });
+  assert.deepEqual(blankName({ name: "Acme", alias: " \t" }), { path: "/alias", message: "required" });
+  assert.equal(blankName({ name: "", description: "  " }), null);
+});
+
 describe("the API answers 400 for each class (QA 2026-10-31)", { skip }, () => {
+  test("a name of spaces only is not saved nameless", async () => {
+    for (const [method, url] of [
+      ["POST", "/enterprises"],
+      ["PUT", "/enterprises/1"],
+      ["POST", "/departments"],
+    ] as const) {
+      const r = await call(method, url, { name: "   " });
+      assert.equal(r.statusCode, 400, `${url}: ${r.body}`);
+      assert.ok(
+        r.json().errors.some((e: { path: string }) => e.path === "/name"),
+        r.body,
+      );
+    }
+  });
+
   test("IDs past 2^53: in the path (404, no such record) and in a body or filter (400)", async () => {
     assert.equal((await call("GET", "/enterprises/99999999999999999999")).statusCode, 404);
     const r = await call("PUT", "/enterprises/1", { businessCompanyId: 99999999999999999999 });
