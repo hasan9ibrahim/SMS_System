@@ -95,10 +95,9 @@ defmodule Sms.Switch.Throttle do
       end
 
     # The local count (used while Redis was unavailable) too, never below zero.
-    for {_name, key, _limit} <- counters,
-        do: :ets.update_counter(@table, {key, second}, {2, -1, 0, 0}, {{key, second}, 0})
-
-    :ok
+    Enum.each(counters, fn {_name, key, _limit} ->
+      :ets.update_counter(@table, {key, second}, {2, -1, 0, 0}, {{key, second}, 0})
+    end)
   end
 
   @doc """

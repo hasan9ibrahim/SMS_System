@@ -31,7 +31,14 @@ defmodule Sms.Switch.Message.Address do
     cond do
       not ton?(ton || 0) -> :esme_rinvsrcton
       not npi?(npi || 0) -> :esme_rinvsrcnpi
-      sender in [nil, ""] -> :esme_rinvsrcadr
+      true -> sender_problem(sender, ton)
+    end
+  end
+
+  defp sender_problem(sender, _ton) when sender in [nil, ""], do: :esme_rinvsrcadr
+
+  defp sender_problem(sender, ton) do
+    cond do
       ton == 5 or not Regex.match?(~r/\A\+?[0-9]+\z/, sender) -> alphanumeric(sender)
       digits(sender) > 20 -> :esme_rinvsrcadr
       true -> nil

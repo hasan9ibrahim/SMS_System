@@ -474,19 +474,12 @@ defmodule Sms.Switch.Vendor.Session do
         {:error, _} -> nil
       end
 
-    # The vendor's address as connected (its host name resolved), for the EDR's vendor IP and port.
-    peer =
-      case peername(transport, socket) do
-        {:ok, {ip, port}} -> %{ip: ip, port: port}
-        {:error, _} -> nil
-      end
-
     state = %{
       state
       | tags: tags(transport),
         phase: :binding,
         local_port: local_port,
-        peer: peer,
+        peer: peer(transport, socket),
         tls: negotiated_tls(transport, socket),
         buffer: <<>>,
         armed: false,
@@ -515,6 +508,14 @@ defmodule Sms.Switch.Vendor.Session do
 
   defp sockname(:gen_tcp, socket), do: :inet.sockname(socket)
   defp sockname(:ssl, socket), do: :ssl.sockname(socket)
+
+  # The vendor's address as connected (its host name resolved), for the EDR's vendor IP and port.
+  defp peer(transport, socket) do
+    case peername(transport, socket) do
+      {:ok, {ip, port}} -> %{ip: ip, port: port}
+      {:error, _} -> nil
+    end
+  end
 
   defp peername(:gen_tcp, socket), do: :inet.peername(socket)
   defp peername(:ssl, socket), do: :ssl.peername(socket)
