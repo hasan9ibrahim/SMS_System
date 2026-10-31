@@ -13,7 +13,7 @@ import { Chart, useChartColors } from "../ui/Chart";
 import { BrandLogo } from "../ui/BrandLogo";
 import { Icon } from "../ui/Icon";
 import { Button } from "../ui/primitives";
-import { UsernameHint } from "../ui/UsernameHint";
+import { UsernameHint, looksLikeCode } from "../ui/UsernameHint";
 import {
   downloadRates,
   fetchMessages,
@@ -97,8 +97,16 @@ function SignIn() {
             spellCheck={false}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            aria-describedby={looksLikeCode(username) ? "username-code-hint" : undefined}
           />
         </label>
+        {/* A browser that saved an earlier sign-in code as the username fills it in here (§13.28). */}
+        {looksLikeCode(username) && (
+          <p id="username-code-hint" className="muted small">
+            This looks like a sign-in code, not a username. If your browser filled it in, type your username instead
+            and let the browser update its saved login.
+          </p>
+        )}
         <label className="portal-field">
           <span>Password</span>
           <input

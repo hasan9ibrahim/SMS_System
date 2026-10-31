@@ -19,3 +19,6 @@ export function UsernameHint({ username }: { username: string }) {
     />
   );
 }
+
+/** A username of 4–8 digits only: most likely a sign-in code a password manager saved as the username before. */
+export const looksLikeCode = (username: string) => /^\d{4,8}$/.test(username.trim());

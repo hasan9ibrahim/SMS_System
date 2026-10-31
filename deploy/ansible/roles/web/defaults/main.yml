@@ -14,14 +14,16 @@ letsencrypt_email: ""
 # browser only reports what the policy would block, to /api/v1/csp-reports (one line each in the service log). Set
 # web_csp_enforce: true to send the same policy as Content-Security-Policy, which blocks. $host is nginx's (the name
 # the browser used). style-src needs 'unsafe-inline' for the e-mail previews and designer (sandboxed srcdoc frames
-# take this policy and e-mails are styled inline); the screens themselves set styles only through the DOM.
+# take this policy and e-mails are styled inline); the screens themselves set styles only through the DOM. The
+# Google Fonts hosts are for the e-mail designer's web fonts (a template's font stylesheet and its font files) in those
+# previews; the app's own fonts are bundled.
 web_csp_enforce: false
 web_csp_policy: >-
   default-src 'self';
   script-src 'self';
-  style-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   img-src 'self' data: blob:;
-  font-src 'self';
+  font-src 'self' https://fonts.gstatic.com;
   connect-src 'self' wss://$host;
   frame-src 'none';
   frame-ancestors 'self';

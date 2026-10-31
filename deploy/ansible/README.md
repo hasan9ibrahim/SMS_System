@@ -172,7 +172,9 @@ and write to `/var/lib/sms-pcap/captures`, kept 30 days unless kept on the scree
 
 nginx sends a Content-Security-Policy with every page (`roles/web/templates/sms.conf.j2`, policy in
 `roles/web/defaults/main.yml` as `web_csp_policy`). It allows only what the screens use: scripts, fonts and styles
-from the site itself (fonts are bundled, nothing comes from a CDN), images from the site plus `data:` / `blob:`
+from the site itself (the app's fonts are bundled), the Google Fonts stylesheet and font hosts
+(`fonts.googleapis.com`, `fonts.gstatic.com`) for web fonts an e-mail template uses, shown in its preview and the
+designer, images from the site plus `data:` / `blob:`
 (QR codes, downloads), the API and the live WebSocket on the same name, no frames from anywhere (the e-mail previews
 are sandboxed `srcdoc` frames, which need none) and no embedding by other sites. Inline styles stay allowed because
 the e-mail previews and the e-mail designer show e-mails as they are written, styled inline.
