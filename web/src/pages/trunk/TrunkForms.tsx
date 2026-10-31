@@ -186,6 +186,8 @@ export function blankTrunk(kind: TrunkKind, enterpriseId: number, categoryId: nu
     allowedDstTon: null,
     allowedSrcNpi: null,
     allowedDstNpi: null,
+    // A sender a handset cannot show is not sent to the vendor unless switched off (S-2.10, S-4.7).
+    refuseInvalidSenders: true,
     maxMsgLen: null,
     supportMultipart: true,
     multipartFormat: "udh8",
@@ -955,6 +957,12 @@ export function VendorTrunkFields({
             required
             options={TON_NPI_MODES}
             hint="Auto sets them from the addresses after this trunk's translation rules, before the allowed lists are checked"
+          />
+          <CheckField
+            form={form}
+            path="refuseInvalidSenders"
+            label="Refuse invalid senders"
+            hint="Text senders over 11 characters or with non-Latin characters, numbers over 20 digits"
           />
           <NumberField
             form={form}

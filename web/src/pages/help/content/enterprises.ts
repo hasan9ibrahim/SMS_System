@@ -1631,13 +1631,18 @@ export const topics: HelpTopic[] = [
               },
               {
                 name: "Allowed destination NPI",
-                what: "Receiver numbering plans the vendor accepts.",
+                what: "Receiver numbering plans the vendor accepts. When the message's TON / NPI is not in these lists, the vendor gets the single equivalent they take instead of being skipped: an alphanumeric sender 5 / 0, an international number (a sender of 9 or more digits or starting with +, a receiver of 8–15 digits) 1 / 1.",
                 values: "**Any**, or tick 0, 1, 3, 4, 6, 8, 9, 10, 14, 18. Default Any.",
               },
               {
                 name: "TON / NPI",
                 what: "As sent, or set from the addresses after this vendor trunk's translation rules, the same way as on a customer trunk (see Customer trunk: Routing). The allowed TON / NPI above, the sender check and what the vendor is sent all use the values set: with Auto, a vendor that takes destination TON 1 only also gets a full international number sent with TON 0. A sender Auto cannot fix (over 11 characters) still passes the vendor over.",
                 values: "**As sent** (default) or **Auto (fix after translation)**.",
+              },
+              {
+                name: "Refuse invalid senders",
+                what: "Whether senders a handset cannot show are kept from this vendor: text senders over 11 characters or with non-Latin characters, numbers over 20 digits. When on, such a message goes to the next vendor; a message every vendor refuses for its sender is refused with 0x0A. When off, this vendor takes such senders as they are. A sender with a TON or NPI outside SMPP, or no sender, is refused whatever this says.",
+                values: "Tick box. On by default.",
               },
               {
                 name: "Max message length",
