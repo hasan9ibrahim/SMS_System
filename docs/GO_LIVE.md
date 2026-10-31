@@ -21,7 +21,9 @@ Copy `deploy/ansible/inventories/production.example` to `inventories/production`
 
 * `hosts.yml`: public and private addresses.
 * `group_vars/all/main.yml`: `admin_cidrs`, `smpp_cidrs` (the partners' ranges, Q33), S3, Telegram chat ids,
-  `web_domain`, `smtp_from`, the certificate paths.
+  `web_domain`, `smtp_from`, the certificate paths. If SMS to voice is used: `sms_voice_enabled: true`,
+  `voice_switch_cidrs` (the voice switch's addresses) and `vault_asterisk_ami_secret` in the secrets
+  (`deploy/ansible/README.md` "SMS to voice (Asterisk)").
 * `group_vars/all/secrets.yml` (from `secrets.example.yml`): every `CHANGE_ME` (`openssl rand -hex 24`), and
   `vault_smtp_url` (`smtp://user:password@host:587` or `smtps://user:password@host:465`). Then
   `ansible-vault encrypt` it.
@@ -102,4 +104,5 @@ sign-in code: the new password still needs an e-mailed one, so platform e-mail m
 | The 1,000 TPS test and the drills on the real servers | `docs/LOAD_TEST_RESULTS.md`, `docs/FAILOVER_DRILLS.md` |
 | Sign-in codes are e-mailed | Switch › Email logs shows them as sent |
 | EDR retention (BACKEND_PLAN §3.7) | `SELECT name, engine_full FROM system.tables WHERE name IN ('edr', 'edr_receipt')` shows `storage_policy = 'edr_tiered'` and the TTL `TO VOLUME 'cold'` after 6 months, deleted after 12; `edr_totals` has none |
+| SMS to voice (if used) | Switch tools › Voice gateways has the voice switch; on each server `asterisk -rx "pjsip show endpoints"` lists it and `asterisk -rx "manager show connected"` the switch; a message matching a rule to a phone you hold rings and says the code, and EDR search shows route type Voice, Answered |
 | Recording archive | `systemctl list-timers sms-pcap-archive`; after its first run `/var/lib/sms-pcap/archive.index` exists and finished files end in `.pcapng.gz`; `RCLONE_CONFIG=/etc/sms/rclone.conf rclone lsd offsite:` reaches the bucket |

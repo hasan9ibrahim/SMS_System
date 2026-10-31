@@ -1,0 +1,50 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). SMS to voice (docs/SMS_TO_VOICE.md).
+; Only what the calls need: SIP over res_pjsip (pjsip.conf), audio, and the dialplan in extensions.conf. Ubuntu
+; installs every other module too (other channel drivers, dialplan engines, voicemail, ARI, database back ends that
+; would try the local PostgreSQL): none of them is loaded. The manager interface (manager.conf) is part of the core.
+[modules]
+autoload = no
+
+; SIP
+load => res_pjproject.so
+load => res_sorcery_config.so
+load => res_sorcery_memory.so
+load => res_sorcery_astdb.so
+load => res_pjsip.so
+load => res_pjsip_session.so
+load => res_pjsip_pubsub.so
+load => chan_pjsip.so
+; the gateways: user and password, recognised by address, optional registration
+load => res_pjsip_outbound_authenticator_digest.so
+load => res_pjsip_authenticator_digest.so
+load => res_pjsip_endpoint_identifier_ip.so
+load => res_pjsip_endpoint_identifier_user.so
+load => res_pjsip_outbound_registration.so
+; caller ID, the hang-up reason, OPTIONS within a call, NAT, and "pjsip set logger on" for checks
+load => res_pjsip_caller_id.so
+load => res_pjsip_rfc3326.so
+load => res_pjsip_dlg_options.so
+load => res_pjsip_nat.so
+load => res_pjsip_logger.so
+
+; Audio: RTP (SRTP when a gateway asks for it), A-law / µ-law, the prompts' WAV files
+load => res_pjsip_sdp_rtp.so
+load => res_rtp_asterisk.so
+load => res_srtp.so
+load => res_timing_timerfd.so
+load => codec_alaw.so
+load => codec_ulaw.so
+load => codec_a_mu.so
+load => codec_resample.so
+load => codec_gsm.so
+load => format_wav.so
+load => format_wav_gsm.so
+load => format_gsm.so
+load => format_pcm.so
+load => format_sln.so
+
+; Dialplan (extensions_sms_voice.conf): Playback, While / EndWhile, IF
+load => pbx_config.so
+load => app_playback.so
+load => app_while.so
+load => func_logic.so

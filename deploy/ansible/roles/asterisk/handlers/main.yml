@@ -1,0 +1,8 @@
+# core reload: the manager users, the dialplan, RTP and the SIP endpoints (calls in progress go on).
+- name: asterisk reload
+  ansible.builtin.systemd_service: {name: asterisk, state: reloaded}
+
+# Modules, SIP transports and the TLS certificate are only read at start: calls in progress on this server end (the
+# switch tries each once more). site.yml runs this role on one server at a time.
+- name: asterisk restart
+  ansible.builtin.systemd_service: {name: asterisk, state: restarted}

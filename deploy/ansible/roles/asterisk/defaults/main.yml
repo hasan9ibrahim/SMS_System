@@ -1,0 +1,14 @@
+# SMS to voice (docs/SMS_TO_VOICE.md, §8): the shared settings (sms_voice_enabled, voice_switch_cidrs, the RTP range,
+# the AMI user, the sound folder, the gateways' include file) are in group_vars/all.yml, as the firewall and the
+# switch's settings use them too. These can be set in the inventory.
+
+# The default phrase said before the digits, recorded at install time with flite (8 kHz mono WAV). Changing it records
+# it again on the next site.yml.
+asterisk_prompt_phrase: Your verification code is
+# The address SIP listens on (every address; the firewall accepts SIP from voice_switch_cidrs only).
+asterisk_sip_bind: 0.0.0.0
+# SIP over TLS (a third transport on ports.sip_tls) with the server's certificate, when one is configured: the SMPP TLS
+# certificate by default. Asterisk keeps a copy in /etc/asterisk/keys made by site.yml: run site.yml again after the
+# certificate is replaced. Empty: UDP and TCP only.
+asterisk_tls_certfile: "{{ smpp_tls_certfile | default('') }}"
+asterisk_tls_keyfile: "{{ smpp_tls_keyfile | default('') }}"

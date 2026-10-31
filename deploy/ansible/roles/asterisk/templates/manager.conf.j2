@@ -1,0 +1,19 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). SMS to voice (docs/SMS_TO_VOICE.md): the switch's
+; connection only, on 127.0.0.1 (the firewall never opens it).
+[general]
+enabled = yes
+webenabled = no
+bindaddr = 127.0.0.1
+port = {{ ports.asterisk_ami }}
+displayconnects = no
+
+; read: call events (OriginateResponse, Hangup) and system notices (FullyBooted, Reload).
+; write: originate places the calls; command is the class of Action: Command, which the switch sends as
+; "module reload res_pjsip.so" after it rewrites the gateways file.
+[{{ asterisk_ami_user }}]
+secret = {{ vault_asterisk_ami_secret }}
+deny = 0.0.0.0/0.0.0.0
+permit = 127.0.0.1/255.255.255.255
+read = call,system
+write = originate,command
+writetimeout = 1000

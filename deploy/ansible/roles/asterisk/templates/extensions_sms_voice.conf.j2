@@ -1,0 +1,19 @@
+; {{ ansible_managed }} (deploy/ansible/roles/asterisk). SMS to voice (docs/SMS_TO_VOICE.md "Switch ⇄ Asterisk").
+; The switch places each call with AMI Originate into this context (Exten s, Priority 1) and the variables
+;   CODE    the digits to say
+;   REPEAT  how many times the whole phrase is said (1 to 5)
+;   PROMPT  the recording said before the digits: custom/sms-voice-rule-<sha256> for a rule with its own recording,
+;           empty for the default phrase custom/sms-voice-code ("{{ asterisk_prompt_phrase }}")
+; On answer: a second's pause, then REPEAT times the recording, the digits one by one and a second's pause; then hang up.
+[sms-voice]
+exten => s,1,Set(PROMPT=${IF($["${PROMPT}" = ""]?custom/sms-voice-code:${PROMPT})})
+ same => n,Set(REPEAT=${IF($["${REPEAT}" = ""]?1:${REPEAT})})
+ same => n,Wait(1)
+ same => n,Set(SAID=0)
+ same => n,While($[${SAID} < ${REPEAT} & ${SAID} < 5])
+ same => n,Playback(${PROMPT})
+ same => n,SayDigits(${CODE})
+ same => n,Wait(1)
+ same => n,Set(SAID=$[${SAID} + 1])
+ same => n,EndWhile()
+ same => n,Hangup()
