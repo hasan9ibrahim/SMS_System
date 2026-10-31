@@ -72,4 +72,16 @@ defmodule Sms.Core.Bus.NatsUnitTest do
     assert Nats.deliveries(%{reply_to: nil}) == 1
     assert Nats.deliveries(%{}) == 1
   end
+
+  test "the stream sequence comes from the reply subject, the same on every delivery (S-7.3)" do
+    assert Nats.stream_seq(%{reply_to: "$JS.ACK.SMS.test-msg.3.10.4.1700000000.0"}) == 10
+    assert Nats.stream_seq(%{reply_to: "$JS.ACK.SMS.test-msg.1.10.9.1700000000.0"}) == 10
+
+    assert Nats.stream_seq(%{reply_to: "$JS.ACK.hub.ACC1.SMS.test-msg.2.77.5.1700000000.0.tok"}) ==
+             77
+
+    assert Nats.stream_seq(%{reply_to: "$JS.ACK.SMS.test-msg.1.x.4.1700000000.0"}) == nil
+    assert Nats.stream_seq(%{reply_to: "$JS.ACK.short"}) == nil
+    assert Nats.stream_seq(%{}) == nil
+  end
 end

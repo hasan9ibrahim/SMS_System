@@ -3,10 +3,14 @@ defmodule Sms.Core.Bus.Event do
   The envelope of every event on the bus. `id` is unique and doubles as the de-duplication key: publishing the same
   id twice within the stream's duplicate window stores the event once. `version` is the version of `data`'s shape for
   that `type`, so consumers can read old and new events side by side during an upgrade.
+
+  `seq` is not part of the event: it is the bus's sequence number of a delivered event (the JetStream stream
+  sequence, the same on every delivery of it), set for batch consumers (`Sms.Core.Bus.Consumer`); nil on the local
+  bus.
   """
 
   @enforce_keys [:id, :type, :subject, :occurred_at, :version, :data]
-  defstruct [:id, :type, :subject, :occurred_at, :version, :source, :data]
+  defstruct [:id, :type, :subject, :occurred_at, :version, :source, :data, :seq]
 
   @type t :: %__MODULE__{
           id: String.t(),
@@ -15,7 +19,8 @@ defmodule Sms.Core.Bus.Event do
           occurred_at: DateTime.t(),
           version: pos_integer(),
           source: String.t() | nil,
-          data: map()
+          data: map(),
+          seq: pos_integer() | nil
         }
 
   @doc "A new event with a fresh id and the current time."

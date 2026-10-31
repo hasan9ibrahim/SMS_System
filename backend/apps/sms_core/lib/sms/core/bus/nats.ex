@@ -571,15 +571,43 @@ defmodule Sms.Core.Bus.Nats do
 
   def deliveries(_), do: 1
 
+  @doc false
+  # The message's stream sequence number, the same on every delivery of it (nil when the reply subject has none):
+  # $JS.ACK.<stream>.<consumer>.<delivered>.<stream seq>.<consumer seq>.<time>.<pending>, or the newer form with the
+  # domain and account first ($JS.ACK.<domain>.<account>.<stream>.<consumer>.<delivered>.<stream seq>...).
+  @spec stream_seq(map()) :: pos_integer() | nil
+  def stream_seq(%{reply_to: "$JS.ACK." <> rest}) do
+    case String.split(rest, ".") do
+      [_stream, _consumer, _n, seq, _cseq, _time, _pending] ->
+        positive(seq)
+
+      [_domain, _account, _stream, _consumer, _n, seq, _cseq, _time, _pending | _] ->
+        positive(seq)
+
+      _ ->
+        nil
+    end
+  end
+
+  def stream_seq(_), do: nil
+
+  defp positive(text) do
+    case Integer.parse(text) do
+      {n, ""} when n > 0 -> n
+      _ -> nil
+    end
+  end
+
   defmodule Batcher do
     @moduledoc false
     # Collects a batch consumer's messages and hands them to `handle_batch/1` when `batch_size` are waiting or
     # `batch_wait_ms` after the first one. Stored → every message acknowledged; failed → none is, so JetStream delivers
-    # them all again after ack_wait. Unreadable messages are terminated (never delivered again).
+    # them all again after ack_wait. Unreadable messages are terminated (never delivered again). Each event carries its
+    # stream sequence number (`seq`), so a handler can tell a batch delivered again (S-7.3, EdrWriter).
     use GenServer
     require Logger
     alias Gnat.Jetstream
-    alias Sms.Core.Bus.{Consumer, Event}
+    alias Sms.Core.Bus.{Consumer, Event, Nats}
 
     def name(module), do: Module.concat(module, Batcher)
 
@@ -628,7 +656,10 @@ defmodule Sms.Core.Bus.Nats do
       _ = if state.timer, do: Process.cancel_timer(state.timer)
       entries = Enum.reverse(state.batch)
 
-      case Consumer.run_batch(state.module, Enum.map(entries, &elem(&1, 0))) do
+      events =
+        Enum.map(entries, fn {event, message} -> %{event | seq: Nats.stream_seq(message)} end)
+
+      case Consumer.run_batch(state.module, events) do
         :ok ->
           Enum.each(entries, fn {_event, message} -> Jetstream.ack(message) end)
 

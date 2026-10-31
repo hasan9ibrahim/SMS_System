@@ -244,7 +244,8 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
 
       batch = fn data, type ->
         %Sms.Core.Bus.Event{
-          id: "x",
+          # A real event's id: the insert's de-duplication token comes from it on the local bus (ClickHouse 010).
+          id: Edr.new_id(),
           type: type,
           subject: "sms.#{type}",
           data: data,
@@ -590,6 +591,143 @@ defmodule Sms.Switch.Pipeline.IntegrationTest do
         status: "UNDELIV",
         source: source
       })
+    end
+
+    # S-7.3, ClickHouse 010: rows of a trunk no other test uses (unique across runs: ClickHouse keeps earlier runs'
+    # rows), removed with what the views took from them when the test ends.
+    defp own_trunk do
+      trunk = 3_000_000_000 + :rand.uniform(1_000_000_000)
+      base = msg()
+      {trunk, %{base | trunk: %{base.trunk | id: trunk, enterprise_id: trunk}}}
+    end
+
+    defp remove_trunk(trunk) do
+      for t <- ~w(edr edr_receipt edr_hourly edr_totals edr_sender_daily) do
+        {:ok, _} =
+          ClickHouse.query(
+            "ALTER TABLE #{t} DELETE WHERE c_trunk_id = {t:UInt32}",
+            %{"t" => trunk},
+            settings: [mutations_sync: 1]
+          )
+      end
+    end
+
+    # Bus events as the NATS batcher hands them over: JSON data and the stream sequence number.
+    defp events(rows) do
+      for {type, row, seq} <- rows do
+        %Sms.Core.Bus.Event{
+          id: Edr.new_id(),
+          type: type,
+          subject: "sms.#{type}",
+          data: row |> Jason.encode!() |> Jason.decode!(),
+          occurred_at: nil,
+          version: 1,
+          seq: seq
+        }
+      end
+    end
+
+    defp stored(trunk) do
+      {:ok, %{rows: [row]}} =
+        ClickHouse.query(
+          """
+          SELECT (SELECT count() FROM edr WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT count() FROM edr_receipt WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(attempts)) FROM edr_hourly WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(rows)) FROM edr_totals WHERE c_trunk_id = {t:UInt32}),
+                 (SELECT toInt64(sum(rows)) FROM edr_sender_daily WHERE c_trunk_id = {t:UInt32})
+          """,
+          %{"t" => trunk}
+        )
+
+      Enum.zip([:attempts, :receipts, :hourly, :totals, :sender_daily], row) |> Map.new()
+    end
+
+    test "a batch delivered again writes nothing new, in the EDRs or the totals their views feed (S-7.3)" do
+      {trunk, m} = own_trunk()
+      seq = :rand.uniform(1_000_000_000_000)
+
+      attempt = fn id ->
+        Edr.attempt_row(m, %{edr_id: id, no: 1, final: true, success: true, command_status: 0})
+      end
+
+      first = Edr.new_id()
+
+      receipt =
+        Edr.receipt_row(%{
+          edr_id: first,
+          kind: "vendor",
+          at: m.received_at + 900,
+          msg: m,
+          part: 1,
+          status: "DELIVRD"
+        })
+
+      batch = events([{"edr.attempt", attempt.(first), seq}, {"edr.receipt", receipt, seq + 1}])
+
+      try do
+        assert :ok = EdrWriter.handle_batch(batch)
+        once = %{attempts: 1, receipts: 1, hourly: 1, totals: 1, sender_daily: 1}
+        assert stored(trunk) == once
+
+        # The bus hands the batch out again (its ack wait passed while the insert was slow).
+        assert :ok = EdrWriter.handle_batch(batch)
+        assert stored(trunk) == once
+
+        # Part of it again with a new row: the stored rows are left out by their keys, the new one is written.
+        second = Edr.new_id()
+
+        again =
+          events([
+            {"edr.attempt", attempt.(first), seq},
+            {"edr.attempt", attempt.(second), seq + 2}
+          ])
+
+        assert :ok = EdrWriter.handle_batch(again)
+        assert stored(trunk) == %{once | attempts: 2, hourly: 2, totals: 2, sender_daily: 2}
+        assert count("edr", first) == 1 and count("edr", second) == 1
+
+        # Every row keeps its key.
+        {:ok, %{rows: keys}} =
+          ClickHouse.query(
+            "SELECT row_key FROM edr WHERE c_trunk_id = {t:UInt32} ORDER BY row_key",
+            %{"t" => trunk}
+          )
+
+        assert Enum.sort(keys) == Enum.sort([[first <> ":1"], [second <> ":1"]])
+      after
+        remove_trunk(trunk)
+      end
+    end
+
+    test "ClickHouse drops a batch delivered again while its first insert is still running: same token (S-7.3)" do
+      {trunk, m} = own_trunk()
+      seq = :rand.uniform(1_000_000_000_000)
+
+      attempt = fn id ->
+        Edr.attempt_row(m, %{edr_id: id, no: 1, final: true, success: true, command_status: 0})
+      end
+
+      first = Edr.new_id()
+
+      try do
+        assert :ok = EdrWriter.handle_batch(events([{"edr.attempt", attempt.(first), seq}]))
+        assert stored(trunk).attempts == 1
+
+        # The same bus message as the first insert (same sequence number) that the key lookup cannot see yet, as when
+        # both inserts run at once: ClickHouse drops it by the token, and the views take nothing from it.
+        unseen = Edr.new_id()
+        assert :ok = EdrWriter.handle_batch(events([{"edr.attempt", attempt.(unseen), seq}]))
+        assert count("edr", unseen) == 0
+        assert %{attempts: 1, hourly: 1, totals: 1, sender_daily: 1} = stored(trunk)
+
+        # Rows written directly carry no token: a new row is written.
+        assert :ok = EdrWriter.write("edr", [Map.delete(attempt.(unseen), "row_key")])
+        assert count("edr", unseen) == 1
+        assert %{attempts: 2, hourly: 2, totals: 2} = stored(trunk)
+      after
+        remove_trunk(trunk)
+      end
     end
 
     test "a schema problem is retried, never dropped" do
