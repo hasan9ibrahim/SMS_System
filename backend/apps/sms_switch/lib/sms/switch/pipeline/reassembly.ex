@@ -13,6 +13,9 @@ defmodule Sms.Switch.Pipeline.Reassembly do
     * a message refused once put together (no rate, no route, a translation block) is answered the same way, with the
       refusal's status as the error: its parts were already accepted.
 
+  A part accepted over the trunk's TPS holds an overflow buffer place while it waits (S-2.4); when the group ends,
+  the parts give their places back, all but the one the message keeps while it waits in the trunk's buffer.
+
   The parts wait in Redis, not on the durable bus, for at most the reassembly timeout: Redis runs with append-only
   persistence and a replica (docs/BACKEND_PLAN.md).
   """
@@ -35,9 +38,14 @@ defmodule Sms.Switch.Pipeline.Reassembly do
     case Store.add_part(key, n, part.id, part, timeout_s + 600, deadline) do
       {:ok, count} when count >= part.concat.total -> complete(key, part)
       {:ok, _count} -> {:ok, %{message_id: part.id}, []}
-      {:duplicate, id} -> {:ok, %{message_id: id}, []}
+      {:duplicate, id} -> duplicate(part, id)
       {:error, reason} -> store_error(part, reason)
     end
+  end
+
+  defp duplicate(part, id) do
+    Intake.leave_buffer(part)
+    {:ok, %{message_id: id}, []}
   end
 
   defp key(part) do
@@ -48,6 +56,7 @@ defmodule Sms.Switch.Pipeline.Reassembly do
 
   defp store_error(part, reason) do
     Logger.error("part of #{part.id} not held, answered 0x08: #{inspect(reason)}")
+    Intake.leave_buffer(part)
     {:error, :esme_rsyserr}
   end
 
@@ -68,6 +77,8 @@ defmodule Sms.Switch.Pipeline.Reassembly do
 
     case Intake.process(msg) do
       :ok ->
+        # The message waits in the trunk's buffer on one place, if any part had one (S-2.4).
+        leave_buffer(Map.values(parts), if(msg.buffered, do: 1, else: 0))
         _ = Store.drop_group(key)
         {:ok, %{message_id: last.id}, []}
 
@@ -92,7 +103,16 @@ defmodule Sms.Switch.Pipeline.Reassembly do
     Logger.error("message of #{last.id} not stored, part answered 0x14: #{inspect(reason)}")
     _ = Store.drop_part(key, last.concat.seq)
     _ = Store.unclaim_group(key)
+    Intake.leave_buffer(last)
     {:error, :esme_rmsgqful}
+  end
+
+  # The overflow buffer places the group's parts held, but `kept` (S-2.4).
+  defp leave_buffer([], _kept), do: :ok
+
+  defp leave_buffer([part | _] = parts, kept) do
+    held = Enum.count(parts, & &1.buffered)
+    Intake.leave_buffer(%{part | buffered: true}, held - kept)
   end
 
   @doc false
@@ -147,8 +167,11 @@ defmodule Sms.Switch.Pipeline.Reassembly do
     end
   end
 
-  # Each part held: an EDR row (refused, not billed) and a REJECTD receipt if the customer asked for one.
+  # Each part held: an EDR row (refused, not billed) and a REJECTD receipt if the customer asked for one; its overflow
+  # buffer place back.
   defp fail(parts, command_status, error) do
+    leave_buffer(parts, 0)
+
     Enum.each(parts, fn part ->
       edr_id = Edr.new_id()
 

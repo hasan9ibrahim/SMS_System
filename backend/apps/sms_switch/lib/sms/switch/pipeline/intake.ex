@@ -60,14 +60,10 @@ defmodule Sms.Switch.Pipeline.Intake do
     reply =
       cond do
         # Overload protection (backend step 7): the sender is too far behind to take more now.
-        Backlog.over?() -> {:error, :esme_rthrottled}
-        not Config.ready?() -> {:error, :esme_rsyserr}
+        Backlog.over?() -> unread(context, :esme_rthrottled)
+        not Config.ready?() -> unread(context, :esme_rsyserr)
         true -> accept(context, pdu)
       end
-
-    # A refused message leaves the overflow buffer at once (S-2.4); an accepted one when it is sent on (Sender).
-    if Map.get(context, :buffered, false) and match?({:error, _}, reply),
-      do: Throttle.buffer_release(Trunk.buffer_key(context.trunk))
 
     Metrics.submit(reply)
     reply
@@ -77,6 +73,23 @@ defmodule Sms.Switch.Pipeline.Intake do
   def handle(context, %Pdu{command: :query_sm} = pdu), do: Queries.query(context, pdu.fields)
   def handle(context, %Pdu{command: :cancel_sm} = pdu), do: Queries.cancel(context, pdu.fields)
   def handle(context, pdu), do: NotReady.handle(context, pdu)
+
+  defp unread(context, status) do
+    leave_buffer(context)
+    {:error, status}
+  end
+
+  @doc false
+  # S-2.4: a message accepted over its trunk's TPS holds an overflow buffer place until the buffer releases it
+  # (`Sms.Switch.Pipeline.Buffers`). One that never reaches the buffer (refused, a duplicate, not stored) gives its
+  # place back at once; the parts of a multipart message give theirs back as their group ends (`Reassembly`).
+  @spec leave_buffer(map(), non_neg_integer()) :: :ok
+  def leave_buffer(msg_or_context, n \\ 1)
+
+  def leave_buffer(%{buffered: true, trunk: %{id: id}}, n),
+    do: Throttle.buffer_release(Trunk.buffer_key(id), n)
+
+  def leave_buffer(_msg, _n), do: :ok
 
   @doc """
   A message from the platform itself (backend step 11c): Test SMS from the Route Simulator or EDR Repush (§9.2), taken
@@ -122,7 +135,7 @@ defmodule Sms.Switch.Pipeline.Intake do
     case Config.customer_trunk(context.origin.trunk_id) do
       # The trunk is newer than the pipeline's configuration (loaded within seconds): the client retries.
       nil ->
-        {:error, :esme_rsyserr}
+        unread(context, :esme_rsyserr)
 
       trunk ->
         msg = new_message(context, pdu, trunk)
@@ -200,6 +213,7 @@ defmodule Sms.Switch.Pipeline.Intake do
           "duplicate of #{first} on trunk #{msg.trunk.id}: answered with its id, not sent (D6)"
         )
 
+        leave_buffer(msg)
         {:ok, %{message_id: first}, []}
 
       :new ->
@@ -293,6 +307,7 @@ defmodule Sms.Switch.Pipeline.Intake do
 
   defp answer(msg, {:error, reason}) do
     Logger.error("message #{msg.id} not stored, answered 0x14: #{inspect(reason)}")
+    leave_buffer(msg)
     {:error, :esme_rmsgqful}
   end
 
@@ -616,6 +631,7 @@ defmodule Sms.Switch.Pipeline.Intake do
   defp refuse(msg, status, reason) do
     code = Status.code(status)
     Logger.info("message refused (#{inspect(reason)}): 0x#{Integer.to_string(code, 16)}")
+    leave_buffer(msg)
 
     row =
       Edr.attempt_row(msg, %{

@@ -34,7 +34,8 @@ defmodule Sms.Switch.Throttle do
   @sha :crypto.hash(:sha, @script) |> Base.encode16(case: :lower)
 
   # Takes a place in an overflow buffer (S-2.4): KEYS[1] the buffer, ARGV[1] its size. 1 taken, 0 full. The count
-  # expires an hour after the last change, so a place never given back (a server lost mid-message) does not stay.
+  # expires an hour after the last change; on a trunk that keeps buffering, its drain sets it back to zero once it
+  # sees the buffer empty (`buffer_reset/1`). Either way a place never given back (a server lost mid-message) goes.
   @buffer_script """
   local n = redis.call('INCR', KEYS[1])
   redis.call('PEXPIRE', KEYS[1], 3600000)
@@ -94,19 +95,36 @@ defmodule Sms.Switch.Throttle do
     end
   end
 
-  @doc "Gives a buffered message's place back (it left the buffer: sent on, or refused)."
-  @spec buffer_release(String.t()) :: :ok
-  def buffer_release(key) do
+  @doc "Gives `n` places back (their messages left the buffer: sent on, refused, or never queued)."
+  @spec buffer_release(String.t(), non_neg_integer()) :: :ok
+  def buffer_release(key, n \\ 1)
+  def buffer_release(_key, n) when n < 1, do: :ok
+
+  def buffer_release(key, n) do
     _ =
       if config(:backend) == :redis and not redis_paused?() do
-        case Redis.command(["DECR", "buf:#{key}"], config(:redis_timeout_ms)) do
-          {:ok, n} when n < 0 -> Redis.command(["SET", "buf:#{key}", "0", "KEEPTTL"])
+        case Redis.command(["DECRBY", "buf:#{key}", n], config(:redis_timeout_ms)) do
+          {:ok, left} when left < 0 -> Redis.command(["SET", "buf:#{key}", "0", "KEEPTTL"])
           _ -> :ok
         end
       end
 
     # The local count (used while Redis was unavailable) is given back too, never below zero.
-    _ = :ets.update_counter(@table, {:buffer, key}, {2, -1, 0, 0}, {{:buffer, key}, 0})
+    _ = :ets.update_counter(@table, {:buffer, key}, {2, -n, 0, 0}, {{:buffer, key}, 0})
+    :ok
+  end
+
+  @doc """
+  Sets a buffer's count back to zero: its drain found the buffer empty for a while, so no place is in use but by a
+  message being queued at this moment (S-2.4). Clears places lost with a server that stopped mid-message.
+  """
+  @spec buffer_reset(String.t()) :: :ok
+  def buffer_reset(key) do
+    _ =
+      if config(:backend) == :redis and not redis_paused?(),
+        do: Redis.command(["SET", "buf:#{key}", "0", "XX", "KEEPTTL"], config(:redis_timeout_ms))
+
+    :ets.insert(@table, {{:buffer, key}, 0})
     :ok
   end
 
