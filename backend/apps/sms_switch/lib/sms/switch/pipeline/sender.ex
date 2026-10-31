@@ -397,12 +397,13 @@ defmodule Sms.Switch.Pipeline.Sender do
     text = route.egress[:text]
     {bytes, alphabet, coding} = encoding(msg, text)
     vt = Config.vendor_trunk(route.vendor_trunk_id) || %{}
+    ies = elements(msg, alphabet)
 
-    case skip_reason(msg, text, bytes, alphabet, vt) do
+    case skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
       nil ->
         base = fields(msg, route, coding)
         tlvs = Enum.filter(msg.tlvs, fn {name, _} -> name in @passed_tlvs end)
-        pieces = pieces(bytes, alphabet, vt[:multipart_format] || :udh8)
+        pieces = pieces(bytes, alphabet, vt[:multipart_format] || :udh8, ies)
         {:ok, Enum.map(pieces, &submit_pdu(base, tlvs, &1)), coding}
 
       reason ->
@@ -410,45 +411,70 @@ defmodule Sms.Switch.Pipeline.Sender do
     end
   end
 
-  defp skip_reason(_msg, _text, :error, _alphabet, _vt), do: :unencodable
+  defp skip_reason(_msg, _text, {:error, _alphabet, _ies}, _vt), do: :unencodable
 
-  defp skip_reason(msg, text, bytes, alphabet, vt) do
+  defp skip_reason(msg, text, {bytes, alphabet, ies}, vt) do
     cond do
       # Egress growing the part count: this vendor cannot take it unchanged (S-4.1, S-4.9).
-      grows_parts?(msg, text) -> :translation_grows
-      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] -> :too_long
-      vt[:support_multipart] == false and length(Text.split(bytes, alphabet)) > 1 -> :no_multipart
-      true -> nil
+      grows_parts?(msg, text) ->
+        :translation_grows
+
+      is_integer(vt[:max_msg_len]) and Text.units(bytes, alphabet) > vt[:max_msg_len] ->
+        :too_long
+
+      vt[:support_multipart] == false and Text.part_count(bytes, alphabet, byte_size(ies)) > 1 ->
+        :no_multipart
+
+      true ->
+        nil
     end
   end
+
+  # A client's UDH elements other than concatenation (ports, a language shift table) go with the message (D9,
+  # S-3.12); a shift table only means something in GSM 7-bit, so a text a translation moved to another alphabet goes
+  # without it.
+  defp elements(msg, :gsm), do: Concat.other_elements(msg.udh)
+  defp elements(msg, _alphabet), do: Concat.other_elements(msg.udh, [0x00, 0x08, 0x24, 0x25])
 
   defp submit_pdu(base, tlvs, {esm, short_message, extra}),
     do: {Map.merge(base, %{esm_class: esm, short_message: short_message}), tlvs ++ extra}
 
   @doc false
   # The parts as {esm_class, short_message, extra TLVs}: one when the message fits in one SMS, else per the format
-  # (UDH with an 8- or 16-bit reference, SAR TLVs, or the whole message in message_payload).
-  @spec pieces(binary(), Text.alphabet(), :udh8 | :udh16 | :sar | :payload) :: [
+  # (UDH with an 8- or 16-bit reference, SAR TLVs, or the whole message in message_payload). `ies`: the message's
+  # other UDH elements, in a UDH of their own on a single message, after the concatenation element in each part (D9).
+  @spec pieces(binary(), Text.alphabet(), :udh8 | :udh16 | :sar | :payload, binary()) :: [
           {byte(), binary(), list()}
         ]
-  def pieces(bytes, alphabet, :payload) do
-    case Text.split(bytes, alphabet) do
-      [single] -> [{0, single, []}]
-      _parts -> [{0, "", [message_payload: bytes]}]
+  def pieces(bytes, alphabet, format, ies \\ <<>>)
+
+  def pieces(bytes, alphabet, :payload, ies) do
+    case Text.split(bytes, alphabet, 6, byte_size(ies)) do
+      [single] -> [single(single, ies, [])]
+      _parts -> [{esm(ies), "", [message_payload: Concat.udh(ies) <> bytes]}]
     end
   end
 
-  def pieces(bytes, alphabet, format) do
-    case Text.split(bytes, alphabet, header_octets(format)) do
+  def pieces(bytes, alphabet, format, ies) do
+    case Text.split(bytes, alphabet, header_octets(format), byte_size(ies)) do
       [single] ->
-        [{0, single, []}]
+        [single(single, ies, [])]
 
       parts ->
         total = length(parts)
         ref = reference(format)
-        parts |> Enum.with_index(1) |> Enum.map(fn {p, n} -> piece(format, ref, total, n, p) end)
+
+        parts
+        |> Enum.with_index(1)
+        |> Enum.map(fn {p, n} -> piece(format, ref, total, n, p, ies) end)
     end
   end
+
+  # One PDU: the bytes after a UDH of the other elements, if any.
+  defp single(bytes, ies, tlvs), do: {esm(ies), Concat.udh(ies) <> bytes, tlvs}
+
+  defp esm(<<>>), do: 0
+  defp esm(_ies), do: @udhi
 
   defp header_octets(:udh8), do: 6
   defp header_octets(:udh16), do: 7
@@ -460,11 +486,13 @@ defmodule Sms.Switch.Pipeline.Sender do
   defp reference(:udh8), do: :rand.uniform(256) - 1
   defp reference(_format), do: :rand.uniform(65_536) - 1
 
-  defp piece(:udh8, ref, total, n, p), do: {@udhi, Concat.udh8(ref, total, n) <> p, []}
-  defp piece(:udh16, ref, total, n, p), do: {@udhi, Concat.udh16(ref, total, n) <> p, []}
+  defp piece(:udh8, ref, total, n, p, ies), do: {@udhi, Concat.udh8(ref, total, n, ies) <> p, []}
 
-  defp piece(:sar, ref, total, n, p),
-    do: {0, p, [sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n]}
+  defp piece(:udh16, ref, total, n, p, ies),
+    do: {@udhi, Concat.udh16(ref, total, n, ies) <> p, []}
+
+  defp piece(:sar, ref, total, n, p, ies),
+    do: single(p, ies, sar_msg_ref_num: ref, sar_total_segments: total, sar_segment_seqnum: n)
 
   defp encoding(%{text: nil} = msg, _text), do: {msg.body, msg.alphabet, msg.data_coding}
 
@@ -493,7 +521,11 @@ defmodule Sms.Switch.Pipeline.Sender do
         false
 
       {bytes, alphabet, _} ->
-        Text.part_count(bytes, alphabet) > max(Text.part_count(msg.body, msg.alphabet), msg.parts)
+        Text.part_count(bytes, alphabet, byte_size(elements(msg, alphabet))) >
+          max(
+            Text.part_count(msg.body, msg.alphabet, byte_size(elements(msg, msg.alphabet))),
+            msg.parts
+          )
     end
   end
 

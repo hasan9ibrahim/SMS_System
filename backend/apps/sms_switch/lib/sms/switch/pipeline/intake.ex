@@ -353,7 +353,11 @@ defmodule Sms.Switch.Pipeline.Intake do
         :binary -> nil
       end
 
-    parts = if concat, do: 1, else: max(1, Text.part_count(data, alphabet))
+    # A single message's other UDH elements (ports, a language shift table) go with it and take room (D9).
+    parts =
+      if concat,
+        do: 1,
+        else: max(1, Text.part_count(data, alphabet, byte_size(Concat.other_elements(udh))))
 
     {:ok,
      %{

@@ -20,6 +20,7 @@ defmodule Sms.Switch.Pipeline.Reassembly do
   persistence and a replica (docs/BACKEND_PLAN.md).
   """
   require Logger
+  alias Sms.Switch.Message.Concat
   alias Sms.Switch.Pipeline.{Edr, Forwarder, Intake, Store}
   alias Sms.Switch.Smpp.Status
 
@@ -127,7 +128,8 @@ defmodule Sms.Switch.Pipeline.Reassembly do
       first
       | body: Enum.map_join(ordered, & &1.body),
         text: if(Enum.all?(texts, &is_binary/1), do: Enum.join(texts), else: nil),
-        udh: <<>>,
+        # The parts' other UDH elements (ports, a language shift table) go on with the message (D9, S-3.12).
+        udh: Concat.udh(Concat.other_elements(first.udh)),
         concat: nil,
         parts: length(ordered),
         buffered: Enum.any?(ordered, & &1.buffered)

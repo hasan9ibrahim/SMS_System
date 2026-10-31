@@ -372,4 +372,56 @@ defmodule Sms.Switch.Pipeline.ScenariosTest do
       assert Enum.map(parts, &(byte_size(&1.fields.short_message) - 6)) == [134, 134, 12]
     end
   end
+
+  describe "UDH elements other than concatenation (D9, S-3.12)" do
+    test "a single message's language shift table and a binary message's ports reach the vendor" do
+      %{client: client, conn: conn} = start_all()
+      # National language single shift (IE 0x24, Turkish).
+      shift = <<3, 0x24, 1, 1>>
+      send_submit(client, %{esm_class: 0x40, short_message: shift <> "Merhaba"}, [], 2)
+      {[0], client} = resps(client, 1)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert sent.fields.esm_class == 0x40
+      assert sent.fields.short_message == shift <> "Merhaba"
+
+      # Application ports (IE 0x05: 2948 from 9200), 8-bit data.
+      ports = <<6, 0x05, 4, 0x0B, 0x84, 0x23, 0xF0>>
+      data = <<1, 6, 4, 3, 0xAE, 0x81, 0xEA>>
+
+      send_submit(
+        client,
+        %{esm_class: 0x40, data_coding: 0x04, short_message: ports <> data},
+        [],
+        3
+      )
+
+      {[0], _client} = resps(client, 1)
+      assert_receive {:smsc, ^conn, %Pdu{command: :submit_sm} = sent}, 2_000
+      assert {sent.fields.esm_class, sent.fields.data_coding} == {0x40, 0x04}
+      assert sent.fields.short_message == ports <> data
+    end
+
+    test "a multipart message's shift table is in every part the switch makes, and takes its room" do
+      %{client: client, conn: conn} = start_all()
+      # 149 characters a part: what a 9-octet header (concatenation + shift table) leaves.
+      a = String.duplicate("a", 149)
+      b = String.duplicate("b", 149)
+      udh = fn n -> <<8, 0x00, 3, 42, 2, n, 0x24, 1, 1>> end
+      send_submit(client, %{esm_class: 0x40, short_message: udh.(1) <> a}, [], 2)
+      send_submit(client, %{esm_class: 0x40, short_message: udh.(2) <> b}, [], 3)
+      {[0, 0], _client} = resps(client, 2)
+
+      parts = vendor_parts(conn)
+      assert length(parts) == 2
+
+      for {part, n} <- Enum.with_index(parts, 1) do
+        assert part.fields.esm_class == 0x40
+        assert <<8, 0x00, 3, _ref, 2, ^n, 0x24, 1, 1, text::binary>> = part.fields.short_message
+        # 9 octets of header pad to 11 septets: at most 149 characters.
+        assert byte_size(text) <= 149
+      end
+
+      assert Enum.map_join(parts, &binary_part(&1.fields.short_message, 9, 149)) == a <> b
+    end
+  end
 end

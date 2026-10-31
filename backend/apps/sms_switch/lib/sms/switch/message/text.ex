@@ -303,28 +303,39 @@ defmodule Sms.Switch.Message.Text do
   def units(bytes, :ucs2), do: div(byte_size(bytes) + 1, 2)
   def units(bytes, _alphabet), do: byte_size(bytes)
 
-  @doc "How many SMS parts `bytes` need (0 for no bytes, which still go as one empty part)."
-  @spec part_count(binary(), alphabet()) :: non_neg_integer()
-  def part_count(<<>>, _alphabet), do: 0
-  def part_count(bytes, alphabet), do: length(split(bytes, alphabet))
+  @doc """
+  How many SMS parts `bytes` need (0 for no bytes, which still go as one empty part), with `extra_octets` of other
+  UDH elements in every part (see `split/4`).
+  """
+  @spec part_count(binary(), alphabet(), non_neg_integer()) :: non_neg_integer()
+  def part_count(bytes, alphabet, extra_octets \\ 0)
+  def part_count(<<>>, _alphabet, _extra_octets), do: 0
+
+  def part_count(bytes, alphabet, extra_octets),
+    do: length(split(bytes, alphabet, 6, extra_octets))
 
   @doc """
   The bytes of each part, without the concatenation header: one part when the message fits in a single SMS, else
   parts that leave room for a header of `header_octets` in the 140-octet user data (6: UDH with an 8-bit reference,
   153 septets / 67 units / 134 bytes, also SAR, whose header the vendor's SMSC adds on air; 7: a 16-bit reference,
   152 / 66 / 133; 0: no header, 160 / 70 / 140), never cutting an escape sequence or a surrogate pair (S-3.1,
-  S-3.10).
+  S-3.10). `extra_octets`: the message's other UDH elements (ports, a language shift table, D9), which take room in
+  every part, and in a single SMS with the header's length byte.
   """
-  @spec split(binary(), alphabet(), 0..7) :: [binary()]
-  def split(bytes, alphabet, header_octets \\ 6) do
+  @spec split(binary(), alphabet(), non_neg_integer(), non_neg_integer()) :: [binary()]
+  def split(bytes, alphabet, header_octets \\ 6, extra_octets \\ 0) do
     kind = kind(alphabet)
 
-    if units(bytes, alphabet) <= @single[kind] do
+    if units(bytes, alphabet) <= single(kind, extra_octets) do
       [bytes]
     else
-      chunk(bytes, alphabet, size(alphabet, per_part(kind, header_octets)), [])
+      chunk(bytes, alphabet, size(alphabet, per_part(kind, header_octets + extra_octets)), [])
     end
   end
+
+  # Room in a single SMS: all of it, or what a header of the other elements and its length byte leave.
+  defp single(kind, 0), do: @single[kind]
+  defp single(kind, extra_octets), do: per_part(kind, extra_octets + 1)
 
   # Units left in one part after a header of `h` octets; a 7-bit header is padded to whole septets.
   defp per_part(:seven, h), do: 160 - div(h * 8 + 6, 7)
