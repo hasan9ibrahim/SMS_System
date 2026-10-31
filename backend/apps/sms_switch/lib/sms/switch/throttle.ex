@@ -8,6 +8,9 @@ defmodule Sms.Switch.Throttle do
   fixed one-second window lets at most one extra second of traffic through at a window edge, the tolerance Q13
   allows.
 
+  The same module shares overflow buffer places (`buffer_take/2`, S-2.4) and leased places (`lease_take/4`: a voice
+  gateway's calls at once, §8 SMS to voice; each place ends by itself if a server stops holding it).
+
   If Redis fails or is slow (over `:redis_timeout_ms`), each server counts on its own with every limit divided by
   `:cluster_size` (stricter, never looser: S-7.4), logs it, and tries Redis again after `:retry_redis_after_ms`.
   With `backend: :local` (one server, development, tests) the full limits are counted in memory.
@@ -55,6 +58,21 @@ defmodule Sms.Switch.Throttle do
   return 0
   """
   @release_sha :crypto.hash(:sha, @release_script) |> Base.encode16(case: :lower)
+
+  # Takes one of `limit` places, each held by a lease until it is given back or runs out (§8 SMS to voice: a voice
+  # gateway's calls at once). KEYS[1] the leases (a sorted set by expiry); ARGV: the lease id, the limit, now and the
+  # lease's end (ms). Leases past their end are dropped first, so a place held by a server that stopped comes back on
+  # its own. 1 taken (or renewed), 0 full.
+  @lease_script """
+  redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[3])
+  if not redis.call('ZSCORE', KEYS[1], ARGV[1]) and redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
+    return 0
+  end
+  redis.call('ZADD', KEYS[1], ARGV[4], ARGV[1])
+  redis.call('PEXPIREAT', KEYS[1], redis.call('ZREVRANGE', KEYS[1], 0, 0, 'WITHSCORES')[2])
+  return 1
+  """
+  @lease_sha :crypto.hash(:sha, @lease_script) |> Base.encode16(case: :lower)
 
   @typedoc "A counter: the name returned when it is the one over its limit, its key (e.g. `\"vt:7\"`) and its limit."
   @type counter :: {name :: atom(), key :: String.t(), limit :: pos_integer()}
@@ -202,6 +220,77 @@ defmodule Sms.Switch.Throttle do
     :ok
   end
 
+  @doc """
+  Takes one of `limit` places of `key` for `lease_ms`, as lease `id` (§8 SMS to voice: at most `max_calls` calls at
+  once per voice gateway on both servers): true when there was room. The places are shared like the TPS counters; a
+  lease not given back (`lease_release/2`) ends by itself after `lease_ms`. While Redis is unavailable each server
+  keeps its share of the places.
+  """
+  @spec lease_take(String.t(), String.t(), pos_integer(), pos_integer()) :: boolean()
+  def lease_take(key, id, limit, lease_ms) do
+    now = System.os_time(:millisecond)
+
+    if config(:backend) == :redis and not redis_paused?() do
+      args = [id, limit, now, now + lease_ms]
+
+      case run_script(
+             @lease_sha,
+             @lease_script,
+             ["lease:#{key}"],
+             args,
+             config(:redis_timeout_ms)
+           ) do
+        {:ok, 1} -> true
+        {:ok, 0} -> false
+        _error -> local_lease_take(key, id, share(limit, config(:cluster_size)), now, lease_ms)
+      end
+    else
+      local_lease_take(key, id, share(limit, divisor()), now, lease_ms)
+    end
+  end
+
+  @doc "Gives a place `lease_take/4` took back."
+  @spec lease_release(String.t(), String.t()) :: :ok
+  def lease_release(key, id) do
+    _ =
+      if config(:backend) == :redis and not redis_paused?(),
+        do: Redis.command(["ZREM", "lease:#{key}", id], config(:redis_timeout_ms))
+
+    :ets.delete(@table, {:lease, key, id})
+    :ok
+  end
+
+  @doc "How many places of `key` are held now (this server's count while Redis is unavailable)."
+  @spec leases(String.t()) :: non_neg_integer()
+  def leases(key) do
+    now = System.os_time(:millisecond)
+
+    with true <- config(:backend) == :redis and not redis_paused?(),
+         {:ok, n} when is_integer(n) <-
+           Redis.command(["ZCOUNT", "lease:#{key}", "(#{now}", "+inf"], config(:redis_timeout_ms)) do
+      n
+    else
+      _ -> local_leases(key, now)
+    end
+  end
+
+  defp local_lease_take(key, id, limit, now, lease_ms) do
+    held = :ets.member(@table, {:lease, key, id})
+
+    if held or local_leases(key, now) < limit do
+      :ets.insert(@table, {{:lease, key, id}, now + lease_ms})
+      true
+    else
+      false
+    end
+  end
+
+  defp local_leases(key, now) do
+    :ets.select_count(@table, [
+      {{{:lease, key, :_}, :"$1"}, [{:>, :"$1", now}], [true]}
+    ])
+  end
+
   defp local_buffer_take(key, size) do
     if :ets.update_counter(@table, {:buffer, key}, 1, {{:buffer, key}, 0}) > size do
       _ = :ets.update_counter(@table, {:buffer, key}, -1)
@@ -308,6 +397,10 @@ defmodule Sms.Switch.Throttle do
     :ets.select_delete(@table, [
       {{{:_, :"$1"}, :_}, [{:is_integer, :"$1"}, {:<, :"$1", old}], [true]}
     ])
+
+    # Leases that ran out (`lease_take/4`).
+    now = System.os_time(:millisecond)
+    :ets.select_delete(@table, [{{{:lease, :_, :_}, :"$1"}, [{:<, :"$1", now}], [true]}])
 
     {:noreply, state}
   end

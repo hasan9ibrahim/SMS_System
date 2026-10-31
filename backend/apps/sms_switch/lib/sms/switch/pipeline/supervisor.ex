@@ -2,12 +2,12 @@ defmodule Sms.Switch.Pipeline.Supervisor do
   @moduledoc """
   The message pipeline (build step 4, spec §2, §6, docs/SMPP_SCENARIOS.md): the shared message store, the routing
   configuration in memory, and the bus consumers that send accepted messages to vendors (`Sender`), forward receipts
-  to customers (`Forwarder`, `Held`), drain the customer and vendor trunks' overflow buffers (`Buffers`), answer DLR timeouts, late receipts and late vendor answers (`Timeouts`, `LateReceipts`, `LateResponses`) and write the EDRs (`EdrWriter`); `Backlog` refuses new messages while the
+  to customers (`Forwarder`, `Held`), drain the customer and vendor trunks' overflow buffers (`Buffers`), answer DLR timeouts, late receipts and late vendor answers (`Timeouts`, `LateReceipts`, `LateResponses`), write the EDRs (`EdrWriter`) and, where voice is on, place SMS-to-voice calls (`Sms.Switch.Voice.Supervisor`, §8); `Backlog` refuses new messages while the
   sender is too far behind. The customer side hands submits to
   `Sms.Switch.Pipeline.Intake`, the vendor side receipts to `Sms.Switch.Pipeline.Receipts`.
   """
   use Supervisor
-  alias Sms.Switch.Pipeline
+  alias Sms.Switch.{Pipeline, Voice}
 
   def start_link(opts \\ []), do: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -25,6 +25,12 @@ defmodule Sms.Switch.Pipeline.Supervisor do
       Pipeline.LateResponses,
       Pipeline.Buffers
     ]
+
+    # SMS to voice (§8): only where this server has an Asterisk to call through (SMS_ASTERISK_AMI_HOST).
+    consumers =
+      if Voice.enabled?(),
+        do: consumers ++ [Voice.Supervisor],
+        else: consumers
 
     children = [
       Pipeline.Delayed,

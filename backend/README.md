@@ -179,6 +179,14 @@ trunk's HLR rules); rated and routed by the network found; a provider timeout us
 Overflow buffers (step 7b, `Pipeline.Buffers`): one durable bus queue per customer and per vendor trunk, drained at the
 trunk's TPS. Not yet built (planned): e-mails for credit alerts (the API sends them from the events).
 
+SMS to voice (§8, `Sms.Switch.Voice`, docs/SMS_TO_VOICE.md, S-6.9): a message matching an active SMS-to-voice rule with
+a 4–8 digit code is a call instead of an SMS. The intake skips routing for it, holds one message's credit and puts it
+on its voice gateway's durable queue (`vg.<id>`); each server calls through its own Asterisk over AMI
+(`Voice.AmiClient`), at most `max_calls` at once per gateway on both servers, one retry when not answered, DELIVRD and
+billed when answered, else UNDELIV 001 and not billed (`Voice.Calls`). Each server writes its Asterisk's gateway file
+and the rules' recordings (`Voice.Files`). Voice is on where `SMS_ASTERISK_AMI_HOST` is set (with `_PORT`, `_USER`,
+`_SECRET`, `SMS_ASTERISK_PJSIP_FILE`, `SMS_ASTERISK_SOUNDS_DIR`); elsewhere a matching message goes as an SMS.
+
 ## Run it
 
 Versions are pinned in `.tool-versions` (Erlang/OTP 28.5, Elixir 1.19.6). From the repo root:

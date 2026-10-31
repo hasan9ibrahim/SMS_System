@@ -23,7 +23,10 @@ defmodule Sms.Switch.Pipeline.Store do
       have any, `hl:<customer trunk>` the lock of the node sending them;
     * `chh:<account>`: the credit held for each customer message in flight (message id → micro-units, §7, S-6.3),
       `chht:<account>` their total, `hx` when each hold expires (`<account>|<message id>` by Unix ms); read with the
-      ledger's `cht:<account>` (`Sms.Switch.Pipeline.Ledger`).
+      ledger's `cht:<account>` (`Sms.Switch.Pipeline.Ledger`);
+    * SMS to voice (§8, `Sms.Switch.Voice.Calls`): `vp:<message id>:<try>` a call try claimed before it is placed;
+      `vr:<message id>` a call's retry waiting for its time, `vr` those retries by time and `vrl` the ones being put
+      back on their gateway's queue (leased).
 
   A finished message (every part's final receipt in, the customer's receipt queued) is forgotten at once; one still
   waiting expires after its vendor trunk's DLR timeout plus an hour, so Redis holds only messages waiting for a
@@ -976,6 +979,66 @@ defmodule Sms.Switch.Pipeline.Store do
   def add(key, by, ttl_s) do
     with {:ok, _} <- run(["INCRBY", key, by]), do: ok(run(["EXPIRE", key, ttl_s]))
   end
+
+  # ---------------------------------------------------------------- SMS to voice (§8)
+
+  @doc false
+  # Claims a call try (`<message id>:<try>`) before it is placed, so a queue entry handed out again (a server that
+  # stopped, or a call longer than the queue's ack wait) never calls the person twice: true for the first claim. Kept
+  # `ttl_s`. Without Redis the call is placed (a second call is better than none).
+  @spec claim_voice_call(String.t(), pos_integer()) :: boolean()
+  def claim_voice_call(key, ttl_s) do
+    case run(["SET", "vp:#{key}", Atom.to_string(node()), "NX", "EX", ttl_s]) do
+      {:ok, nil} -> false
+      _ -> true
+    end
+  end
+
+  @doc false
+  # Gives a claim back: the try was not placed after all (Asterisk was not connected), so its entry can run again.
+  @spec unclaim_voice_call(String.t()) :: :ok | {:error, term()}
+  def unclaim_voice_call(key), do: ok(run(["DEL", "vp:#{key}"]))
+
+  @doc false
+  # Holds a call's retry until `at_ms` (`vr:<id>` its data, `vr` the sorted set by time), kept `ttl_s` at most.
+  @spec hold_voice_retry(String.t(), binary(), integer(), pos_integer()) :: :ok | {:error, term()}
+  def hold_voice_retry(id, blob, at_ms, ttl_s),
+    do: ok(transaction([["SET", "vr:#{id}", blob, "EX", ttl_s], ["ZADD", "vr", at_ms, id]]))
+
+  @doc false
+  # Up to `limit` retries due by `now_ms` (`:waiting`), or taken with a lease that ran out by then (`:leased`).
+  @spec due_voice_retries(:waiting | :leased, integer(), pos_integer()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def due_voice_retries(set, now_ms, limit),
+    do: run(["ZRANGEBYSCORE", voice_set(set), "-inf", now_ms, "LIMIT", 0, limit])
+
+  @doc false
+  # Takes a due retry, leased until `lease_until_ms` (as `claim_scheduled/4`): true for the one server that gets it.
+  @spec claim_voice_retry(:waiting | :leased, String.t(), integer(), integer()) :: boolean()
+  def claim_voice_retry(set, id, now_ms, lease_until_ms) do
+    keys = [voice_set(set), "vrl"]
+
+    command =
+      case backend() do
+        :redis -> ["EVAL", @move_due, 2 | keys ++ [id, now_ms, lease_until_ms]]
+        :local -> ["ZMOVE" | keys ++ [id, now_ms, lease_until_ms]]
+      end
+
+    match?({:ok, 1}, run(command))
+  end
+
+  @doc false
+  # A held retry's data.
+  @spec voice_retry(String.t()) :: {:ok, binary() | nil} | {:error, term()}
+  def voice_retry(id), do: run(["GET", "vr:#{id}"])
+
+  @doc false
+  # Forgets a retry that went back on its gateway's queue (or is gone).
+  @spec finish_voice_retry(String.t()) :: :ok | {:error, term()}
+  def finish_voice_retry(id), do: ok(transaction([["DEL", "vr:#{id}"], ["ZREM", "vrl", id]]))
+
+  defp voice_set(:waiting), do: "vr"
+  defp voice_set(:leased), do: "vrl"
 
   defp ok({:ok, _}), do: :ok
   defp ok(:ok), do: :ok

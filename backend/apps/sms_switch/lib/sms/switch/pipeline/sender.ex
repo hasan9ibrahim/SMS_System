@@ -64,6 +64,7 @@ defmodule Sms.Switch.Pipeline.Sender do
   alias Sms.Switch.Smpp.Status
   alias Sms.Switch.Smpp.Time, as: SmppTime
   alias Sms.Switch.{Throttle, Vendor}
+  alias Sms.Switch.Voice.Calls
 
   # How long a timed-out submit waits for a late answer (D4), and a sent message counts as in flight (S-5.16).
   @late_keep_s 3_600
@@ -151,6 +152,10 @@ defmodule Sms.Switch.Pipeline.Sender do
         {:ok, msg} ->
           go(msg)
 
+        # An SMS-to-voice rule turns it into a call now (§8): on its voice gateway's queue.
+        {:call, msg} ->
+          call(msg)
+
         {:reject, status, reason, msg} ->
           code = Status.code(status)
           Logger.info("scheduled message #{msg.id} refused at its time (#{inspect(reason)})")
@@ -162,6 +167,26 @@ defmodule Sms.Switch.Pipeline.Sender do
             reason: reason
           })
       end
+    end
+  end
+
+  # A scheduled message that became a call (§8, S-6.9): if its gateway's queue cannot take it, it fails as a refused
+  # one would (REJECTD if asked, not billed, its credit hold released).
+  defp call(msg) do
+    case Calls.enqueue(msg) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.error("scheduled message #{msg.id} not queued for its call: #{inspect(reason)}")
+        code = Status.code(:esme_rsubmitfail)
+
+        fail(msg, [], %{
+          status: "REJECTD",
+          error: err(code),
+          command_status: code,
+          reason: :voice_queue
+        })
     end
   end
 

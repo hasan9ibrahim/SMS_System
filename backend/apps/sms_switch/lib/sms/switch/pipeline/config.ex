@@ -98,6 +98,17 @@ defmodule Sms.Switch.Pipeline.Config do
         actions: %{}
       })
 
+  @doc """
+  SMS to voice (§8, `Sms.Switch.Voice`): the active rules in order of id (`Sms.Switch.Voice.Rules.rule()`) and the
+  active voice gateways by id, their passwords decrypted.
+  """
+  @spec voice() :: %{rules: [map()], gateways: %{integer() => map()}}
+  def voice, do: Map.get(snapshot(), :voice) || %{rules: [], gateways: %{}}
+
+  @doc "An active voice gateway, or nil."
+  @spec voice_gateway(integer()) :: map() | nil
+  def voice_gateway(id), do: Map.get(voice().gateways, id)
+
   @doc "The MCCMNC code of a number (for translation conditions), or nil."
   @spec mccmnc_of(String.t()) :: String.t() | nil
   def mccmnc_of(number) do

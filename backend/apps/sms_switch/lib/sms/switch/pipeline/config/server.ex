@@ -14,6 +14,7 @@ defmodule Sms.Switch.Pipeline.Config.Server do
   require Logger
   alias Sms.Switch.Pipeline.Config
   alias Sms.Switch.Pipeline.Config.Loader
+  alias Sms.Switch.Voice
 
   @retry_ms 1_000
   @rate_batch 200
@@ -155,6 +156,9 @@ defmodule Sms.Switch.Pipeline.Config.Server do
       {:ok, snapshot} ->
         Config.put_snapshot(snapshot)
         Logger.info("pipeline configuration loaded")
+
+        # SMS to voice (§8): this server's Asterisk files follow the gateways and recordings (where voice is on).
+        Voice.Files.changed()
         {:ok, %{state | fingerprint: fp}}
 
       {:error, reason} ->
