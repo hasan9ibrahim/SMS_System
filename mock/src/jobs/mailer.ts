@@ -11,13 +11,14 @@
 //
 // Runs on the server that runs the jobs; rows are claimed (FOR UPDATE SKIP LOCKED) so a second sender never sends one
 // twice.
-import nodemailer, { type Transporter } from "nodemailer";
+import nodemailer, { type SendMailOptions, type Transporter } from "nodemailer";
 import type pg from "pg";
 import { decryptSecret } from "../admin/passwords.js";
 import { db } from "../db.js";
 import { embedImages, isHtml } from "../email/html.js";
 import { platformDocument, platformLogoPart } from "../email/platform.js";
 import { forgetLinkToken, LINK_PLACEHOLDER, linkForEmail } from "../api/passwordLinks.js";
+import { OTP_HIDDEN } from "../api/emailLog.js";
 
 type Db = pg.Pool | pg.PoolClient;
 
@@ -152,7 +153,7 @@ async function inlineImages(c: Db, html: string) {
 export async function deliver(
   c: Db,
   row: Record<string, unknown>,
-  send: (m: Mailbox, message: nodemailer.SendMailOptions) => Promise<{ messageId?: string }> = (m, message) =>
+  send: (m: Mailbox, message: SendMailOptions) => Promise<{ messageId?: string }> = (m, message) =>
     transportFor(m).sendMail(message),
 ): Promise<"sent" | "queued" | "failed"> {
   const id = Number(row.id);
@@ -171,7 +172,7 @@ export async function deliver(
       tries,
       error,
     ]);
-    if (row.email_type === "password_setup") await forgetLinkToken(c, id);
+    await forgetSecrets(c, String(row.email_type), id);
     return "failed" as const;
   };
   const mailbox = await mailboxFor(c, (row.sender as string | null) ?? null);
@@ -201,7 +202,7 @@ export async function deliver(
     "SELECT file_name, content_type, content FROM email_attachments WHERE email_log_id = $1 ORDER BY id",
     [id],
   );
-  const message: nodemailer.SendMailOptions = {
+  const message: SendMailOptions = {
     from: mailbox.name ? { name: mailbox.name, address: mailbox.email } : mailbox.email,
     to: row.to_addresses as string[],
     cc: (row.cc_addresses as string[] | null) ?? [],
@@ -225,11 +226,21 @@ export async function deliver(
       [id, tries, info.messageId ?? null, mailbox.email],
     );
     await c.query("DELETE FROM email_attachments WHERE email_log_id = $1", [id]);
-    if (row.email_type === "password_setup") await forgetLinkToken(c, id);
+    await forgetSecrets(c, String(row.email_type), id);
     return "sent";
   } catch (err) {
     return fail(errorText(err), !permanent(err));
   }
+}
+
+/**
+ * After the last try, sent or given up: a set-password link and a sign-in code are not kept in the log (§13.28;
+ * the code since the round 13 security review).
+ */
+async function forgetSecrets(c: Db, type: string, id: number) {
+  if (type === "password_setup") await forgetLinkToken(c, id);
+  if (type === "otp")
+    await c.query("UPDATE email_logs SET body = $2, body_html = NULL WHERE id = $1", [id, OTP_HIDDEN]);
 }
 
 let busy = false;

@@ -47,10 +47,18 @@ import {
   TRAFFIC_ALERT_SELECT,
 } from "../lists/defs.js";
 import { sendProblem } from "../problem.js";
+import { contactsHidden, sellRatesHidden } from "../visibility/records.js";
 import { spreadsheetXml } from "../billing/files.js";
 import { contentDisposition, fillFileName, nowValues } from "../billing/fileNames.js";
 import { edrCoverage } from "../billing/edrFigures.js";
-import { companyDetails, companyMailbox, companyPlaceholders, companyTemplate, logEmail } from "./emailLog.js";
+import {
+  companyDetails,
+  companyMailbox,
+  companyPlaceholders,
+  companyTemplate,
+  logEmail,
+  OTP_HIDDEN,
+} from "./emailLog.js";
 import { exportList, notFound, setArchived } from "./masterData.js";
 import { recordChange, type DiffEntry, type FieldError } from "./records.js";
 import { getCurrentUser } from "./session.js";
@@ -109,11 +117,13 @@ export function getEmailLog(request: FastifyRequest, reply: FastifyReply) {
       [id],
     );
     if (!rows[0]) return notFound(reply, "E-mail log", id);
+    // A sign-in code is never shown: anyone with the log and a password would pass 2FA (§13.28, round 13 review).
+    const code = rows[0].email_type === "otp";
     return {
       ...mapEmailLog(rows[0]),
-      body: rows[0].body ?? "",
+      body: code ? OTP_HIDDEN : (rows[0].body ?? ""),
       sender: rows[0].sender ?? null,
-      bodyHtml: rows[0].body_html ?? null,
+      bodyHtml: code ? null : (rows[0].body_html ?? null),
       inlineImages: rows[0].inline_images ?? [],
     };
   });
@@ -298,6 +308,7 @@ export function downloadRateSheet(request: FastifyRequest, reply: FastifyReply) 
   return withDb(reply, async (pool) => {
     const t = await trunkInfo(pool, id);
     if (!t) return notFound(reply, "Customer trunk", id);
+    if (await sellRatesHidden(t.enterpriseId)) return refuseHidden(reply, "sell rates");
     if (!t.rateTableId) return sendProblem(reply, 409, `${t.name} has no rate table`);
     const f = sheetFile(t, await rateSheet(pool, t), fileType, (await getCurrentUser()).username);
     return reply.type(f.type).header("content-disposition", contentDisposition(f.name)).send(f.body);
@@ -320,6 +331,9 @@ async function rateMail(c: Db, t: TrunkInfo) {
   };
 }
 
+/** What a preview shows instead of the SMPP password: only the e-mail itself carries it (round 13 security review). */
+const PREVIEW_PASSWORD = "••••••••";
+
 /** One trunk's connection details as a text block (the {trunks} placeholder, team trial round 3). */
 const techBlock = (t: TrunkInfo) =>
   [
@@ -338,7 +352,9 @@ const techBlock = (t: TrunkInfo) =>
  * The Customer Tech Info e-mail for one trunk, or for several trunks of one enterprise in one e-mail (`trunks` =
  * all of them; the first gives the single-trunk placeholders).
  */
-async function techMail(c: Db, t: TrunkInfo, trunks: TrunkInfo[] = [t]) {
+async function techMail(c: Db, first: TrunkInfo, group: TrunkInfo[] = [first], preview = false) {
+  const trunks = preview ? group.map((x) => ({ ...x, password: PREVIEW_PASSWORD })) : group;
+  const t = trunks[0]!;
   const tpl = await templateFor(c, t.enterpriseId, "customer_tech_info");
   const many = trunks.length > 1;
   const vars = {
@@ -372,12 +388,25 @@ async function techMail(c: Db, t: TrunkInfo, trunks: TrunkInfo[] = [t]) {
   };
 }
 
+/** 403 for a viewer whose visibility policy withholds what the e-mail or file would carry (§13.17). */
+const refuseHidden = (reply: FastifyReply, what: string) =>
+  sendProblem(reply, 403, `Your visibility policy hides this client's ${what}`, {
+    detail: "Ask the account manager of this enterprise, or an administrator.",
+  });
+
+/**
+ * What the e-mail will look like. The recipients are the client's contacts and a rate e-mail carries its sell rates,
+ * so a viewer whose policy hides them is refused (§13.17); a tech info preview never shows the SMPP password, which
+ * only the e-mail itself carries (round 13 security review).
+ */
 export function previewNotification(request: FastifyRequest, reply: FastifyReply) {
   const b = request.body as NotificationPreviewInput;
   return withDb(reply, async (pool) => {
     const t = await trunkInfo(pool, b.trunkId);
     if (!t) return notFound(reply, "Customer trunk", b.trunkId);
-    const m = b.kind === "send_rate" ? await rateMail(pool, t) : await techMail(pool, t);
+    if (await contactsHidden(t.enterpriseId)) return refuseHidden(reply, "contacts and credentials");
+    if (b.kind === "send_rate" && (await sellRatesHidden(t.enterpriseId))) return refuseHidden(reply, "sell rates");
+    const m = b.kind === "send_rate" ? await rateMail(pool, t) : await techMail(pool, t, [t], true);
     return { recipients: m.to, subject: m.subject, body: m.body };
   });
 }
@@ -437,6 +466,11 @@ export async function emailRateSheets(pool: pg.Pool | pg.PoolClient, b: SendRate
       failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "no rate table" });
       continue;
     }
+    // §13.17: the e-mail carries the client's sell rates to its contacts.
+    if ((await contactsHidden(t.enterpriseId)) || (await sellRatesHidden(t.enterpriseId))) {
+      failed.push({ trunkId: id, trunk: t.name, enterprise: t.enterprise, reason: "your visibility policy hides it" });
+      continue;
+    }
     if (!b.sendEmail) continue;
     const m = await rateMail(pool, t);
     const lines = await rateSheet(pool, t);
@@ -472,8 +506,11 @@ export function sendTechInfoNotifications(request: FastifyRequest, reply: Fastif
     const found: TrunkInfo[] = [];
     for (const id of [...new Set(b.trunkIds)]) {
       const t = await trunkInfo(pool, id);
-      if (t) found.push(t);
-      else failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
+      if (!t) failed.push({ trunkId: id, trunk: `#${id}`, reason: "not found" });
+      // §13.17: the e-mail carries the trunk's credentials to the client's contacts.
+      else if (await contactsHidden(t.enterpriseId))
+        failed.push({ trunkId: id, trunk: t.name, reason: "your visibility policy hides its credentials" });
+      else found.push(t);
     }
     // One e-mail per trunk, or per enterprise with all its trunks (team trial round 3).
     const byEnterprise = new Map<number, TrunkInfo[]>();

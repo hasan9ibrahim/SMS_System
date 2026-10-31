@@ -216,6 +216,15 @@ export function privateAddress(ip: string): boolean {
  * Why a provider URL may not be used, or null (security audit, team trial round 12): http(s) to a public address only,
  * never this server's own services. In production the name is resolved too; the switch checks again at each lookup.
  */
+/** The host a provider address sends to (placeholders filled), or the raw text when it does not parse. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url.replace(/\{(DNID|USERNAME|PASSWORD)\}/g, "x")).host.toLowerCase();
+  } catch {
+    return url;
+  }
+}
+
 async function providerTarget(url: string): Promise<string | null> {
   let u: URL;
   try {
@@ -322,6 +331,13 @@ export function updateHlrProvider(request: FastifyRequest, reply: FastifyReply) 
     if (!diff.length) return { record: before, change: null };
     const check = await checkProvider(pool, input, id);
     if (typeof check === "string") return conflict(reply, check);
+    // The stored password goes to the provider's host on every lookup: it does not follow the address to another
+    // host unless it is typed again (round 13 security review, as the SMTP check's host binding).
+    if (!passwordChanged && hostOf(before.url) !== hostOf(input.url)) {
+      const { rows } = await pool.query("SELECT password FROM hlr_providers WHERE id = $1", [id]);
+      if (rows[0]?.password)
+        check.push({ path: "/password", message: "enter the password again: the address moved to another host" });
+    }
     if (check.length) return badInput(reply, check);
     const me = await getCurrentUser();
     const change = await inTransaction(pool, async (c) => {

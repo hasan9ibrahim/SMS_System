@@ -45,11 +45,8 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
         }
       }
       if (c.op === "regex" && typeof c.value === "string") {
-        try {
-          new RegExp(c.value, "i");
-        } catch {
-          errors.push({ path: `${at}/value`, message: "invalid regular expression" });
-        }
+        const problem = regexProblem(c.value);
+        if (problem) errors.push({ path: `${at}/value`, message: problem });
       }
     });
   };
@@ -61,4 +58,22 @@ export function checkListQuery(query: ListQuery, fields: ListFields): NonNullabl
     else if (!f.sortable) errors.push({ path: `/sort/${i}/field`, message: `"${s.field}" is not sortable` });
   });
   return errors;
+}
+
+/**
+ * Why a regex filter is refused, or null. PostgreSQL's engine backtracks on back references and on a repeated group
+ * that repeats inside, like (a+)+, so one such filter could hold a database connection for the whole statement
+ * timeout (round 13 security review); a long pattern is refused too.
+ */
+export function regexProblem(value: string): string | null {
+  if (value.length > 200) return "a regular expression may have at most 200 characters";
+  if (/\\[1-9]/.test(value)) return "back references (\\1 to \\9) are not allowed";
+  if (/\((?:[^()\\]|\\.)*[+*}]\)[+*{]/.test(value))
+    return "a repeated group inside a repetition, like (a+)+, is not allowed";
+  try {
+    new RegExp(value, "i");
+  } catch {
+    return "invalid regular expression";
+  }
+  return null;
 }
