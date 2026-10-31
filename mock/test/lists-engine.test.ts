@@ -127,7 +127,8 @@ test("quick search: plain text means contains, wildcards are used as typed", () 
 });
 
 test("sort uses the default, puts nulls last and ends with the ID tie-breaker", () => {
-  assert.match(q({}).sql, /ORDER BY e\.name ASC NULLS LAST, e\.id ASC/);
+  // Text sorts case-insensitively (QA 2026-10-31); other types as they are.
+  assert.match(q({}).sql, /ORDER BY lower\(\(e\.name\)::text\) ASC NULLS LAST, e\.id ASC/);
   assert.match(
     q({
       sort: [
@@ -135,7 +136,7 @@ test("sort uses the default, puts nulls last and ends with the ID tie-breaker", 
         { field: "name", dir: "asc" },
       ],
     }).sql,
-    /ORDER BY e\.updated_at DESC NULLS LAST, e\.name ASC NULLS LAST, e\.id DESC/,
+    /ORDER BY e\.updated_at DESC NULLS LAST, lower\(\(e\.name\)::text\) ASC NULLS LAST, e\.id DESC/,
   );
 });
 

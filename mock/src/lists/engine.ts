@@ -295,8 +295,12 @@ export function compileQuery(
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const sort = query.sort?.length ? query.sort : def.fields.defaultSort;
+  // Text sorts case-insensitively (QA 2026-10-31): "acme" sits next to "ACME", not after every capital. Only text
+  // fields: codes, prefixes and enums keep their plain order, and with it their indexes.
+  const sortSql = (field: string) =>
+    byName.get(field)?.type === "text" ? `lower((${def.columns[field]!.sql})::text)` : def.columns[field]!.sql;
   const orderSql = [
-    ...sort.map((s) => `${def.columns[s.field]!.sql} ${s.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
+    ...sort.map((s) => `${sortSql(s.field)} ${s.dir === "desc" ? "DESC" : "ASC"} NULLS LAST`),
     `${def.idSql} ${sort[0]?.dir === "desc" ? "DESC" : "ASC"}`,
   ].join(", ");
   const limit = query.limit ?? 100;

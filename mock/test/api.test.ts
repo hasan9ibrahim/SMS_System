@@ -106,7 +106,7 @@ describe("lists (§13.25)", { skip }, () => {
     });
     const { rows: expected } = await db().query(
       `SELECT e.id FROM enterprises e LEFT JOIN users am ON am.id = e.account_manager_id WHERE e.deleted_at IS NULL
-        ORDER BY (am.first_name || ' ' || am.last_name) DESC NULLS LAST, e.id DESC LIMIT 50`,
+        ORDER BY lower(am.first_name || ' ' || am.last_name) DESC NULLS LAST, e.id DESC LIMIT 50`,
     );
     assert.deepEqual(
       sorted.json().rows.map((r: { id: number }) => r.id),
