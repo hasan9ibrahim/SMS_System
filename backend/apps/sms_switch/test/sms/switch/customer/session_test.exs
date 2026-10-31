@@ -566,6 +566,26 @@ defmodule Sms.Switch.Customer.SessionTest do
       assert [%{id: ^id}] = Customer.sessions()
     end
 
+    test "TLVs go only to a client bound at version 3.4 or later; a 3.3 client gets none (S-1.4)",
+         %{
+           port: port
+         } do
+      tlvs = [receipted_message_id: "1", message_state: 2]
+
+      for {version, expected} <- [{0x33, []}, {0x34, tlvs}, {0x50, tlvs}] do
+        fields = %{system_id: "acme", password: "secret", interface_version: version}
+        {client, %Pdu{status: 0}} = Client.bind(port, :bind_transceiver, fields)
+        [%{pid: pid}] = Customer.sessions()
+        task = Task.async(fn -> Session.deliver(pid, %{esm_class: 4}, tlvs) end)
+        assert {client, %Pdu{command: :deliver_sm} = dlr} = Client.recv(client)
+        Client.send_pdu(client, Pdu.response(dlr, :esme_rok, %{message_id: ""}))
+        assert {:ok, %{status: 0}} = Task.await(task)
+        assert dlr.tlvs == expected
+        Client.close(client)
+        assert_eventually(fn -> Customer.sessions() == [] end)
+      end
+    end
+
     test "a client refusing the receipt: its status comes back", %{port: port} do
       client = bound(port)
       pid = session_pid()

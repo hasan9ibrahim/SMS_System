@@ -888,6 +888,9 @@ defmodule Sms.Switch.Customer.Session do
 
       true ->
         {seq, state} = next_sequence(state)
+
+        # S-1.4: TLVs only to a client that speaks 3.4 or later; a 3.3 client reads the receipt from its text.
+        tlvs = if state.interface_version >= 0x34, do: tlvs, else: []
         pdu = Pdu.new(:deliver_sm, fields, sequence: seq, tlvs: tlvs)
 
         case Pdu.encode(pdu) do
